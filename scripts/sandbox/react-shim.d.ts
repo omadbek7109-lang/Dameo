@@ -19,6 +19,7 @@ declare module 'react' {
   export function useContext<T>(c: RC<T>): T;
   export function memo<T>(c: T): T;
   export const StrictMode: any;
+  export class Component<P = {}, S = {}> { props: P; state: S; constructor(p: P); setState(s: Partial<S>): void; }
 }
 declare namespace React {
   type ReactNode = any;

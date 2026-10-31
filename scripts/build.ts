@@ -38,7 +38,7 @@ async function build(): Promise<boolean> {
     return false;
   }
   await cp('src/styles/app.css', 'dist/assets/app.css');
-  const html = readFileSync('index.html', 'utf8');
+  const html = readFileSync('src/index.html', 'utf8');
   writeFileSync('dist/index.html', html);
   if (existsSync('public')) await cp('public', 'dist', { recursive: true });
   // SPA hosting helpers (Netlify / Cloudflare Pages style)
