@@ -1,6 +1,6 @@
 # DAMEO — Every Move Matters.
 
-**Live:** https://omadbek7109-lang.github.io/dameo/ · Backend: Supabase project `reymdxmzfgctdhowndye`
+**Live:** https://omadbek7109-lang.github.io/Dameo/ · Backend: Supabase project `reymdxmzfgctdhowndye`
 
 
 Onlayn shashka platformasi / International online checkers platform.
