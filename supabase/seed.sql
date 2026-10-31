@@ -1,0 +1,3 @@
+-- Optional: create REAL tournaments (visible to everyone). Run as an admin in the SQL editor.
+-- insert into public.tournaments (name, starts_at, capacity, format, best_of)
+-- values ('DAMEO Launch Open', now() + interval '7 days', 64, 'single_elimination', 1);

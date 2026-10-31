@@ -1,0 +1,19 @@
+/** Builds the GitHub Pages site into ./docs (relative paths, works under /<repo>/). */
+import { cpSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+const proc = Bun.spawnSync(['bun', 'run', 'scripts/build.ts'], { stdout: 'inherit', stderr: 'inherit', env: process.env });
+if (proc.exitCode !== 0) process.exit(1);
+rmSync('docs', { recursive: true, force: true });
+mkdirSync('docs');
+cpSync('dist/assets/app.css', 'docs/style.css');
+cpSync('dist/assets/main.js', 'docs/app.js');
+cpSync('dist/assets/bot/worker.js', 'docs/bot-worker.js');
+cpSync('public/favicon.svg', 'docs/favicon.svg');
+writeFileSync('docs/.nojekyll', '');
+let html = readFileSync('dist/index.html', 'utf8')
+  .replace('href="/favicon.svg"', 'href="favicon.svg"')
+  .replace('<link rel="stylesheet" href="/assets/app.css" />', '<link rel="stylesheet" href="style.css" />')
+  .replace('<script type="module" src="/assets/main.js"></script>', '<script>window.DAMEO_WORKER_URL = new URL("bot-worker.js", location.href).href;</script>\n    <script type="module" src="app.js"></script>');
+if (!html.includes('app.js')) throw new Error('index.html rewrite failed');
+writeFileSync('docs/index.html', html);
+writeFileSync('docs/404.html', html);
+console.log('docs/ ready for GitHub Pages');

@@ -1,0 +1,28 @@
+{
+  "name": "dameo",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "DAMEO \u2014 Every Move Matters. Online checkers (Russian draughts rules).",
+  "scripts": {
+    "build": "bun run scripts/build.ts",
+    "dev": "bun run scripts/build.ts --watch --serve",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "bun test src",
+    "typecheck:sandbox": "tsc -p tsconfig.sandbox.json --noEmit",
+    "sync-engine": "bun run scripts/sync-engine.ts",
+    "build:single": "bun run scripts/build.ts && bun run scripts/build-single.ts",
+    "build:pages": "bun run scripts/build-pages.ts"
+  },
+  "dependencies": {
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "react-icons": "^5.7.0"
+  },
+  "devDependencies": {
+    "typescript": "^6.0.0",
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0"
+  }
+}
