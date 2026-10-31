@@ -1,5 +1,8 @@
 # DAMEO — Every Move Matters.
 
+**Live:** https://omadbek7109-lang.github.io/dameo/ · Backend: Supabase project `reymdxmzfgctdhowndye`
+
+
 Onlayn shashka platformasi / International online checkers platform.
 Default language **Uzbek**, secondary **English**. Light & dark themes. First release is **100% free**
 (no payments, skins, subscriptions or paid tournaments exist anywhere in the code).
