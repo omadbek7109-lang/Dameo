@@ -69,7 +69,8 @@ const mapMatch = (r: MatchRow): OnlineMatch => ({
 
 export const createRoom = () => db.rpc<{ match_id: string; code: string }>('create_room');
 export const joinRoom = (code: string) => db.rpc<{ match_id: string }>('join_room', { p_code: code.trim().toUpperCase() });
-export const quickMatch = () => db.rpc<{ match_id: string | null }>('quick_match');
+/** match_id when paired; otherwise the server-side search start + server clock (for a server-anchored countdown). */
+export const quickMatch = () => db.rpc<{ match_id: string | null; searching_since?: string; server_now?: string }>('quick_match');
 export const cancelQuickMatch = () => db.rpc('cancel_quick_match');
 /** How many rated bot games are left today (5 per day; later bot games are unrated). */
 export const botGamesLeft = () => db.rpc<number>('bot_games_left');

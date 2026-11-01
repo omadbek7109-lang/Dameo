@@ -34,7 +34,7 @@ export function Home() {
   const greeting = signedIn && me ? t('home.greeting', { name: me.username }) : t('home.greetingGuest');
   const upcoming = (tours.data ?? []).filter((x) => x.status === 'upcoming').slice(0, 3);
   const modes = [
-    { to: '/play?mode=quick', icon: LuSwords, key: 'mode.quick', desc: 'mode.quickDesc', accent: true },
+    { to: '/play?mode=quick&go=1', icon: LuSwords, key: 'mode.quick', desc: 'mode.quickDesc', accent: true },
     { to: '/play?mode=friends', icon: LuUsers, key: 'mode.friends', desc: 'mode.friendsDesc' },
     { to: '/play?mode=bot', icon: LuBot, key: 'mode.bot', desc: 'mode.botDesc' },
     { to: '/play?mode=practice', icon: LuGraduationCap, key: 'mode.practice', desc: 'mode.practiceDesc' },
@@ -48,7 +48,7 @@ export function Home() {
           <h1>{t('hero.title')}</h1>
           <p className="lead">{t('hero.sub')}</p>
           <div className="hero-actions">
-            <button className="btn btn-primary btn-lg" onClick={() => navigate('/play?mode=quick')}>
+            <button className="btn btn-primary btn-lg" onClick={() => navigate('/play?mode=quick&go=1')}>
               <LuSwords /> {t('hero.playNow')}
             </button>
             <button className="btn btn-secondary btn-lg" onClick={() => navigate('/play?mode=friends')}>

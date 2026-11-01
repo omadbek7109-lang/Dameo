@@ -457,5 +457,7 @@ export const en: Record<TKey, string> = {
   'lobby.expiresIn': "The challenge expires in {n} seconds.",
   'lobby.accept': "Accept",
   'lobby.decline': "Decline",
+  'quick.startSearch': "Start searching",
+  'quick.connecting': "Connecting…",
   'notFound.title': 'Page not found',
 };

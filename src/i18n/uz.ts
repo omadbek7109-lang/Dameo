@@ -455,6 +455,8 @@ export const uz = {
   'lobby.expiresIn': "{n} soniyadan keyin taklif eskiradi.",
   'lobby.accept': "Qabul qilish",
   'lobby.decline': "Rad etish",
+  'quick.startSearch': "Qidiruvni boshlash",
+  'quick.connecting': "Serverga ulanmoqda…",
   'notFound.title': 'Sahifa topilmadi',
 } as const;
 

@@ -112,7 +112,12 @@ reset role;
 -- quick match
 set role authenticated;
 set request.jwt.claim.sub = '33333333-3333-3333-3333-333333333333';
-select pg_temp.check('first player is queued', (public.quick_match() ->> 'match_id') is null);
+create temp table q1 as select public.quick_match() as r;
+grant all on q1 to public;
+select pg_temp.check('first player is queued', (select (r ->> 'match_id') is null from q1));
+select pg_temp.check('quick_match reports search start + server clock', (select (r ->> 'searching_since') is not null and (r ->> 'server_now') is not null from q1));
+select pg_sleep(1.1);
+select pg_temp.check('search start is kept while the player keeps pinging', (select (public.quick_match() ->> 'searching_since') = (r ->> 'searching_since') from q1));
 reset role;
 set role authenticated;
 set request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';

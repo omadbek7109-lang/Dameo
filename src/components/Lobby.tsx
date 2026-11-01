@@ -21,7 +21,7 @@ import {
   type LobbyPlayer,
 } from '../services/online.ts';
 import { SbError } from '../services/supabase.ts';
-import { haptic } from '../services/telegram.ts';
+import { haptic, tg } from '../services/telegram.ts';
 import { Avatar, LevelBadge } from './Avatar.tsx';
 import { Modal } from './Modal.tsx';
 import { useToast } from './Toast.tsx';
@@ -32,11 +32,20 @@ const POLL_MS = 4000;
 type Phase = 'idle' | 'searching' | 'timeout' | 'found';
 
 /** Live matchmaking: 60 s search → offer bot or keep waiting; plus the lobby list with direct challenges. */
-export function LiveQuickPanel() {
+export function LiveQuickPanel({ autoStart = 0 }: { autoStart?: number }) {
   const { t, num } = useI18n();
   const { me } = useAuth();
   const { toast } = useToast();
-  const [phase, setPhase] = useState<Phase>('idle');
+  const [phase, setPhaseState] = useState<Phase>('idle');
+  const phaseRef = useRef<Phase>('idle');
+  const setPhase = useCallback((p: Phase) => {
+    phaseRef.current = p;
+    setPhaseState(p);
+  }, []);
+  /** search deadline in LOCAL clock ms, derived from the server's search start (null until the first answer) */
+  const deadline = useRef<number | null>(null);
+  /** cuts the polling sleep short (deadline reached, app back in foreground) */
+  const wake = useRef<() => void>(() => {});
   const [left, setLeft] = useState(SEARCH_WINDOW_S);
   const [players, setPlayers] = useState<LobbyPlayer[]>([]);
   const [stats, setStats] = useState<{ online: number; searching: number } | null>(null);
@@ -115,39 +124,106 @@ export function LiveQuickPanel() {
     [],
   );
 
-  /* ---- search for SEARCH_WINDOW_S seconds, then ask the player ---- */
+  /* ---- search for SEARCH_WINDOW_S seconds, then ask the player ----
+     The countdown is computed from a deadline anchored to the SERVER's search start
+     (quick_match → searching_since, corrected for clock skew with server_now), and is
+     re-evaluated every 250 ms, so polling delays, slow networks, background tabs or a
+     re-activated Telegram WebApp cannot make it drift or restart. */
+  const remainingNow = () => (deadline.current === null ? SEARCH_WINDOW_S : Math.max(0, Math.ceil((deadline.current - Date.now()) / 1000)));
+
   const search = async () => {
     if (!me) return;
+    // one search at a time: ignore repeated taps while searching / matched
+    if (phaseRef.current === 'searching' || phaseRef.current === 'found') return;
     const my = ++run.current;
-    setPhase('searching');
+    deadline.current = null;
     setLeft(SEARCH_WINDOW_S);
+    setPhase('searching');
     stopPair.current();
     stopPair.current = watchPairing(me.id, (id) => run.current === my && go(id));
-    const started = Date.now();
     try {
       while (run.current === my) {
+        const t0 = Date.now();
         const r = await quickMatch();
+        const t1 = Date.now();
         if (run.current !== my) return;
         if (r.match_id) return go(r.match_id);
-        const remaining = SEARCH_WINDOW_S - Math.floor((Date.now() - started) / 1000);
-        setLeft(Math.max(0, remaining));
-        if (remaining <= 0) break;
+        if (deadline.current === null) {
+          const since = r.searching_since ? Date.parse(r.searching_since) : NaN;
+          const server = r.server_now ? Date.parse(r.server_now) : NaN;
+          const skew = Number.isFinite(server) ? server - (t0 + t1) / 2 : 0; // server clock − local clock
+          let d = Number.isFinite(since) ? since + SEARCH_WINDOW_S * 1000 - skew : t0 + SEARCH_WINDOW_S * 1000;
+          d = Math.min(d, t1 + SEARCH_WINDOW_S * 1000); // never longer than the window
+          deadline.current = d;
+          setLeft(remainingNow());
+        }
+        if (Date.now() >= deadline.current) break;
         void refreshLobby();
-        await new Promise((res) => setTimeout(res, Math.min(POLL_MS, remaining * 1000)));
+        await new Promise<void>((res) => {
+          const id = setTimeout(res, Math.max(200, Math.min(POLL_MS, deadline.current! - Date.now())));
+          wake.current = () => {
+            clearTimeout(id);
+            res();
+          };
+        });
       }
       if (run.current !== my) return;
+      run.current++; // stop this search everywhere (pairing watcher, ticker)
+      stopPair.current();
       await cancelQuickMatch().catch(() => {});
+      setLeft(0);
       setPhase('timeout');
       haptic('error');
     } catch {
+      if (run.current !== my) return;
+      run.current++;
+      stopPair.current();
       setPhase('idle');
       toast('error', t('quick.failed'));
     }
   };
 
+  // countdown from the server-anchored deadline, re-evaluated 4× per second
+  useEffect(() => {
+    if (phase !== 'searching') return;
+    const tick = () => {
+      setLeft(remainingNow());
+      if (deadline.current !== null && Date.now() >= deadline.current) wake.current();
+    };
+    tick();
+    const id = setInterval(tick, 250);
+    // back from background / Telegram re-activated: recompute at once and ping the server immediately
+    const onWake = () => {
+      if (document.visibilityState === 'visible') {
+        tick();
+        wake.current();
+      }
+    };
+    document.addEventListener('visibilitychange', onWake);
+    tg?.onEvent?.('activated', onWake);
+    return () => {
+      clearInterval(id);
+      document.removeEventListener('visibilitychange', onWake);
+      tg?.offEvent?.('activated', onWake);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase]);
+
+  // Tapping the "Find opponent" card starts the search right away (no second button).
+  const lastAuto = useRef(0);
+  useEffect(() => {
+    if (autoStart > lastAuto.current && me) {
+      lastAuto.current = autoStart;
+      void search();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoStart, me?.id]);
+
   const stop = () => {
     run.current++;
     stopPair.current();
+    wake.current();
+    deadline.current = null;
     setPhase('idle');
     void cancelQuickMatch().catch(() => {});
   };
@@ -191,7 +267,7 @@ export function LiveQuickPanel() {
       <div className="match-stage" aria-live="polite" ref={stage}>
         {phase === 'idle' && (
           <button className="btn btn-primary btn-lg" onClick={search}>
-            <LuSwords /> {t('mode.findOpponent')}
+            <LuSwords /> {t('quick.startSearch')}
           </button>
         )}
         {phase === 'searching' && (
@@ -202,7 +278,7 @@ export function LiveQuickPanel() {
               <span />
               {me && <Avatar name={me.username} seed={me.avatar} size={56} />}
             </div>
-            <p className="search-title">{t('quick.searching')}</p>
+            <p className="search-title">{deadline.current === null ? t('quick.connecting') : t('quick.searching')}</p>
             <div className="countdown" role="timer" aria-label={t('quick.left', { n: left })}>
               <svg viewBox="0 0 36 36" aria-hidden="true">
                 <circle cx="18" cy="18" r="15.5" className="cd-track" />
@@ -250,7 +326,7 @@ export function LiveQuickPanel() {
               <span className="dot dot-on" /> {stats ? num(stats.online) : '…'} {t('lobby.online')}
             </span>
             <span className="online-now">
-              <LuUsers /> {stats ? num(stats.searching) : '…'} {t('lobby.searching')}
+              <LuUsers /> {num(players.length)} {t('lobby.searching')}
             </span>
           </div>
         </div>

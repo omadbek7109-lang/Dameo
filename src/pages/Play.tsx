@@ -31,6 +31,12 @@ export function Play() {
   const [panel, setPanel] = useState<PanelId>(MODES.some((m) => m.id === initial) ? initial : 'quick');
   const [rules, setRules] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
+  // tapping the "Find opponent" card (or arriving with ?go=1) starts matchmaking immediately
+  const [quickStart, setQuickStart] = useState(() => (route.query.get('go') === '1' && route.query.get('mode') === 'quick' ? 1 : 0));
+  useEffect(() => {
+    // consume ?go=1 so a page refresh does not start another search
+    if (route.query.get('go') === '1') history.replaceState(null, '', `${location.pathname}${location.search}#/play?mode=quick`);
+  }, [route.query]);
   const picked = useRef(false);
   useEffect(() => {
     // on phones, jump to the chosen mode's panel after the player taps a tile
@@ -58,7 +64,11 @@ export function Play() {
           {MODES.map((m) => {
             const Icon = m.icon;
             return (
-              <button key={m.id} role="tab" aria-selected={panel === m.id} className={`mode-tab ${panel === m.id ? 'mode-tab-active' : ''}`} onClick={() => ((picked.current = true), setPanel(m.id))}>
+              <button key={m.id} role="tab" aria-selected={panel === m.id} className={`mode-tab ${panel === m.id ? 'mode-tab-active' : ''}`} onClick={() => {
+                  picked.current = true;
+                  setPanel(m.id);
+                  if (m.id === 'quick') setQuickStart((n) => n + 1);
+                }}>
                 <span className="mode-icon">
                   <Icon />
                 </span>
@@ -71,7 +81,7 @@ export function Play() {
           })}
         </div>
         <div className="card play-panel" role="tabpanel" ref={panelRef}>
-          {panel === 'quick' && <QuickPanel />}
+          {panel === 'quick' && <QuickPanel autoStart={quickStart} />}
           {panel === 'friends' && <FriendsPanel />}
           {panel === 'bot' && <BotPanel practice={false} />}
           {panel === 'practice' && <BotPanel practice />}
@@ -91,7 +101,7 @@ function pickDemoOpponent(me: Player): Player {
 }
 export const botLevelFor = (r: number): Difficulty => (r < 1250 ? 'easy' : r < 1600 ? 'medium' : 'hard');
 
-function QuickPanel() {
+function QuickPanel({ autoStart = 0 }: { autoStart?: number }) {
   const { t, num } = useI18n();
   const { me, mode, signedIn } = useAuth();
   const { toast } = useToast();
@@ -111,7 +121,7 @@ function QuickPanel() {
   );
 
   if (mode === 'live' && !signedIn) return <SignInPrompt text={t('quick.needAccount')} />;
-  if (mode === 'live') return <LiveQuickPanel />;
+  if (mode === 'live') return <LiveQuickPanel autoStart={autoStart} />;
 
   const startDemo = () => {
     if (!me) return;
