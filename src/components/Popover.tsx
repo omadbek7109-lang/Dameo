@@ -8,7 +8,7 @@ interface Props {
   id: string;
 }
 
-/** Click-outside / Escape-aware dropdown. */
+/** Dropdown that closes on an outside tap, Escape, or any route change. */
 export function Popover({ button, children, align = 'right', onOpen, id }: Props) {
   const [open, setOpen] = useState(false);
   const wrap = useRef<HTMLDivElement>(null);
@@ -25,13 +25,17 @@ export function Popover({ button, children, align = 'right', onOpen, id }: Props
         btn.current?.focus();
       }
     };
+    // any navigation (links, back button, programmatic) closes the menu
+    const onRoute = () => setOpen(false);
     document.addEventListener('mousedown', onDown);
     document.addEventListener('touchstart', onDown);
     document.addEventListener('keydown', onKey);
+    window.addEventListener('hashchange', onRoute);
     return () => {
       document.removeEventListener('mousedown', onDown);
       document.removeEventListener('touchstart', onDown);
       document.removeEventListener('keydown', onKey);
+      window.removeEventListener('hashchange', onRoute);
     };
   }, [open]);
 

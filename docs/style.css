@@ -3317,3 +3317,18 @@ html.in-telegram body {
   align-items: center;
   gap: 4px;
 }
+
+/* ------------------------------------------- header dropdowns (user / language / notifications)
+   The panels sit inside .header, whose own backdrop-filter makes it the "backdrop root": a nested
+   backdrop-filter cannot blur the page behind the header, so the 12–22 % glass fill let the page
+   (titles, podium cards…) show straight through the menu. Give the glass an opaque base instead,
+   keep it inside the screen, and let a long panel scroll rather than run under the tab bar. */
+.popover-panel {
+  background: var(--glass-fill-strong), var(--surface);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  max-width: calc(100vw - 2 * var(--gutter));
+  max-height: calc(100dvh - var(--header-h) - var(--tg-top, 0px) - env(safe-area-inset-top, 0px) - 24px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
