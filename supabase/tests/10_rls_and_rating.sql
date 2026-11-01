@@ -269,6 +269,108 @@ do $$ begin
 exception when others then perform pg_temp.check('can NOT challenge an offline player', sqlerrm like '%offline%', sqlerrm); end $$;
 reset role;
 
+-- ---------- clocks (0008) ----------
+select pg_temp.check('old quick_match() pairs with a 3-minute clock',
+  (select time_control = 180 and white_ms = 180000 and black_ms = 180000 and turn_started_at is not null
+     from public.matches where not vs_bot and black_id is not null and code is null order by created_at limit 1));
+select pg_temp.check('accepted challenge has a 3-minute clock', (select time_control = 180 from public.matches where id = (select (r->>'match_id')::uuid from acc)));
+select pg_temp.check('room game has a 3-minute clock', (select time_control = 180 from public.matches where id = (select (r ->> 'match_id')::uuid from room)));
+set role authenticated;
+set request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
+select pg_temp.check('quick_match(60) queues', (public.quick_match(60) ->> 'match_id') is null);
+do $$ begin
+  perform public.quick_match(45);
+  perform pg_temp.check('bad time control rejected', false);
+exception when others then perform pg_temp.check('bad time control rejected', sqlerrm like '%time control%', sqlerrm); end $$;
+reset role;
+set role authenticated;
+set request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
+select pg_temp.check('different time control is NOT paired', (public.quick_match(300) ->> 'match_id') is null);
+create temp table tm as select public.quick_match(60) as r;
+grant all on tm to public;
+select pg_temp.check('same time control is paired', (select (r ->> 'match_id') is not null and (r ->> 'time_control')::int = 60 from tm));
+reset role;
+create temp table tmid as select (r ->> 'match_id')::uuid as id from tm;
+grant all on tmid to public;
+select pg_temp.check('1-minute game: 60 s each, clock running', (select time_control = 60 and white_ms = 60000 and black_ms = 60000 from public.matches where id = (select id from tmid)));
+
+set role authenticated;
+set request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
+do $$ begin
+  perform public.clock_take_turn((select id from tmid), 0);
+  perform pg_temp.check('client can NOT call clock_take_turn', false);
+exception when others then perform pg_temp.check('client can NOT call clock_take_turn', sqlstate = '42501', sqlerrm); end $$;
+select pg_temp.check('claim_timeout before the deadline does nothing', (public.claim_timeout((select id from tmid)) ->> 'ended')::boolean = false);
+reset role;
+
+set role service_role;
+select pg_temp.check('first move: White''s clock not charged', (select (public.clock_take_turn((select id from tmid), 0) ->> 'white_ms')::int = 60000));
+select pg_temp.check('same ply twice → conflict', (public.clock_take_turn((select id from tmid), 0) ->> 'error') = 'conflict');
+update public.matches set turn_started_at = clock_timestamp() - interval '5 seconds' where id = (select id from tmid);
+create temp table ct1 as select public.clock_take_turn((select id from tmid), 1) as r;
+select pg_temp.check('Black''s move charges Black ~5 s', (select (r ->> 'black_ms')::int between 54800 and 55100 from ct1), (select r::text from ct1));
+select pg_temp.check('White''s clock untouched by Black''s move', (select white_ms = 60000 and move_count = 2 from public.matches where id = (select id from tmid)));
+update public.matches set turn_started_at = clock_timestamp() - interval '10 seconds' where id = (select id from tmid);
+create temp table ct2 as select public.clock_take_turn((select id from tmid), 2) as r;
+select pg_temp.check('White''s 2nd move charges White ~10 s', (select (r ->> 'white_ms')::int between 49800 and 50100 from ct2), (select r::text from ct2));
+-- Black (to move, ply 3) takes 31 s → over the 30 s limit
+update public.matches set turn_started_at = clock_timestamp() - interval '31.5 seconds' where id = (select id from tmid);
+select pg_temp.check('move after 30 s (+1 s grace) is refused', (public.clock_take_turn((select id from tmid), 3) ->> 'error') = 'timeout');
+select pg_temp.check('… and Black loses on the move limit',
+  (select status = 'finished' and result = 'white' and timeout_kind = 'move' and rating_applied from public.matches where id = (select id from tmid)));
+select pg_temp.check('timeout loss is rated once (±5)', (select white_delta = 5 and black_delta = -5 from public.matches where id = (select id from tmid)));
+reset role;
+
+-- clock (not the 30 s limit) runs out → claim by the opponent
+set role authenticated;
+set request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
+select public.quick_match(300);
+reset role;
+set role authenticated;
+set request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
+create temp table tm2 as select (public.quick_match(300) ->> 'match_id')::uuid as id;
+grant all on tm2 to public;
+reset role;
+update public.matches set move_count = 1, black_ms = 4000, turn_started_at = clock_timestamp() - interval '6 seconds' where id = (select id from tm2);
+set role authenticated;
+set request.jwt.claim.sub = '33333333-3333-3333-3333-333333333333';
+do $$ begin
+  perform public.claim_timeout((select id from tm2));
+  perform pg_temp.check('outsider can NOT claim a timeout', false);
+exception when others then perform pg_temp.check('outsider can NOT claim a timeout', true, sqlerrm); end $$;
+reset role;
+set role authenticated;
+set request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
+select pg_temp.check('claim_timeout ends the game when the clock is out', (public.claim_timeout((select id from tm2)) ->> 'ended')::boolean);
+select pg_temp.check('… Black lost on the clock, clock shows 0',
+  (select result = 'white' and timeout_kind = 'clock' and black_ms = 0 from public.matches where id = (select id from tm2)));
+select pg_temp.check('second claim is a no-op', (public.claim_timeout((select id from tm2)) ->> 'ended')::boolean = false);
+select pg_temp.check('match_view exposes the clock', (select time_control = 300 and server_now is not null and timeout_kind = 'clock' from public.match_view where id = (select id from tm2)));
+reset role;
+
+-- sweep: an abandoned game ends without anyone claiming it
+set role authenticated;
+set request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
+select public.quick_match(180);
+reset role;
+set role authenticated;
+set request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
+create temp table tm3 as select (public.quick_match(180) ->> 'match_id')::uuid as id;
+grant all on tm3 to public;
+reset role;
+update public.matches set turn_started_at = clock_timestamp() - interval '40 seconds' where id = (select id from tm3);
+set role service_role;
+select pg_temp.check('sweep ends abandoned games', public.finish_expired_games() >= 1);
+select pg_temp.check('… White never moved → Black wins', (select result = 'black' and timeout_kind = 'move' from public.matches where id = (select id from tm3)));
+reset role;
+
+-- bot games stay untimed
+set role authenticated;
+set request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
+create temp table bm8 as select public.start_bot_match('easy') as r;
+select pg_temp.check('bot games have no clock', (select time_control is null from public.matches where id = (select (r ->> 'match_id')::uuid from bm8)));
+reset role;
+
 -- service_role (Edge Functions) must be able to read/write game tables (regression test for the 404 bug)
 set role service_role;
 select pg_temp.check('service_role can read matches', (select count(*) from public.matches) > 0);

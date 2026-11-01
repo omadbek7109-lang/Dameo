@@ -20,6 +20,7 @@ import {
   type IncomingChallenge,
   type LobbyPlayer,
 } from '../services/online.ts';
+import { DEFAULT_TIME_CONTROL, isTimeControl, TIME_CONTROLS, type TimeControl } from '../services/clock.ts';
 import { SbError } from '../services/supabase.ts';
 import { haptic, tg } from '../services/telegram.ts';
 import { Avatar, LevelBadge } from './Avatar.tsx';
@@ -30,6 +31,16 @@ export const SEARCH_WINDOW_S = 60;
 const POLL_MS = 4000;
 
 type Phase = 'idle' | 'searching' | 'timeout' | 'found';
+
+const TC_KEY = 'dameo.timeControl';
+const loadTc = (): TimeControl => {
+  try {
+    const n = Number(localStorage.getItem(TC_KEY));
+    return isTimeControl(n) ? n : DEFAULT_TIME_CONTROL;
+  } catch {
+    return DEFAULT_TIME_CONTROL;
+  }
+};
 
 /** Live matchmaking: 60 s search → offer bot or keep waiting; plus the lobby list with direct challenges. */
 export function LiveQuickPanel({ autoStart = 0 }: { autoStart?: number }) {
@@ -47,6 +58,9 @@ export function LiveQuickPanel({ autoStart = 0 }: { autoStart?: number }) {
   /** cuts the polling sleep short (deadline reached, app back in foreground) */
   const wake = useRef<() => void>(() => {});
   const [left, setLeft] = useState(SEARCH_WINDOW_S);
+  /** chosen time control (1 / 3 / 5 min); players are only paired with the same one */
+  const [tc, setTcState] = useState<TimeControl>(loadTc);
+  const tcRef = useRef<TimeControl>(tc);
   const [players, setPlayers] = useState<LobbyPlayer[]>([]);
   const [stats, setStats] = useState<{ online: number; searching: number } | null>(null);
   const [sent, setSent] = useState<{ id: string; to: LobbyPlayer; at: number } | null>(null);
@@ -131,10 +145,20 @@ export function LiveQuickPanel({ autoStart = 0 }: { autoStart?: number }) {
      re-activated Telegram WebApp cannot make it drift or restart. */
   const remainingNow = () => (deadline.current === null ? SEARCH_WINDOW_S : Math.max(0, Math.ceil((deadline.current - Date.now()) / 1000)));
 
-  const search = async () => {
+  const search = async (pick?: TimeControl) => {
     if (!me) return;
     // one search at a time: ignore repeated taps while searching / matched
     if (phaseRef.current === 'searching' || phaseRef.current === 'found') return;
+    if (pick) {
+      tcRef.current = pick;
+      setTcState(pick);
+      try {
+        localStorage.setItem(TC_KEY, String(pick));
+      } catch {
+        /* private mode */
+      }
+    }
+    const timeControl = tcRef.current;
     const my = ++run.current;
     deadline.current = null;
     setLeft(SEARCH_WINDOW_S);
@@ -144,7 +168,7 @@ export function LiveQuickPanel({ autoStart = 0 }: { autoStart?: number }) {
     try {
       while (run.current === my) {
         const t0 = Date.now();
-        const r = await quickMatch();
+        const r = await quickMatch(timeControl);
         const t1 = Date.now();
         if (run.current !== my) return;
         if (r.match_id) return go(r.match_id);
@@ -209,15 +233,14 @@ export function LiveQuickPanel({ autoStart = 0 }: { autoStart?: number }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase]);
 
-  // Tapping the "Find opponent" card starts the search right away (no second button).
+  // Tapping the "Find opponent" card opens the time choice; tapping a time starts the search at once.
   const lastAuto = useRef(0);
   useEffect(() => {
-    if (autoStart > lastAuto.current && me) {
+    if (autoStart > lastAuto.current) {
       lastAuto.current = autoStart;
-      void search();
+      if (phaseRef.current === 'idle' && window.innerWidth < 1000) stage.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoStart, me?.id]);
+  }, [autoStart]);
 
   const stop = () => {
     run.current++;
@@ -266,9 +289,19 @@ export function LiveQuickPanel({ autoStart = 0 }: { autoStart?: number }) {
 
       <div className="match-stage" aria-live="polite" ref={stage}>
         {phase === 'idle' && (
-          <button className="btn btn-primary btn-lg" onClick={search}>
-            <LuSwords /> {t('quick.startSearch')}
-          </button>
+          <div className="tc-pick">
+            <p className="search-title">{t('quick.pickTime')}</p>
+            <div className="tc-options" role="group" aria-label={t('quick.pickTime')}>
+              {TIME_CONTROLS.map((n) => (
+                <button key={n} className={`tc-option ${n === tc ? 'tc-last' : ''}`} onClick={() => void search(n)}>
+                  <LuClock />
+                  <strong>{n / 60}</strong>
+                  <span>{t('tc.minLabel')}</span>
+                </button>
+              ))}
+            </div>
+            <p className="muted small">{t('tc.rule')}</p>
+          </div>
         )}
         {phase === 'searching' && (
           <div className="searching">
@@ -279,6 +312,9 @@ export function LiveQuickPanel({ autoStart = 0 }: { autoStart?: number }) {
               {me && <Avatar name={me.username} seed={me.avatar} size={56} />}
             </div>
             <p className="search-title">{deadline.current === null ? t('quick.connecting') : t('quick.searching')}</p>
+            <span className="badge tc-badge">
+              <LuClock /> {t('tc.minutes', { n: tc / 60 })}
+            </span>
             <div className="countdown" role="timer" aria-label={t('quick.left', { n: left })}>
               <svg viewBox="0 0 36 36" aria-hidden="true">
                 <circle cx="18" cy="18" r="15.5" className="cd-track" />
@@ -300,7 +336,7 @@ export function LiveQuickPanel({ autoStart = 0 }: { autoStart?: number }) {
               <button className="btn btn-primary" onClick={playBot} disabled={busy === 'bot'}>
                 {busy === 'bot' ? <LuLoader className="spin" /> : <LuBot />} {t('quick.playBot')}
               </button>
-              <button className="btn btn-secondary" onClick={search}>
+              <button className="btn btn-secondary" onClick={() => void search()}>
                 <LuClock /> {t('quick.waitMore')}
               </button>
               <button className="btn btn-ghost" onClick={() => setPhase('idle')}>

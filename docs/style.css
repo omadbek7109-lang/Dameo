@@ -3222,3 +3222,98 @@ html.in-telegram body {
   font-family: var(--font-display);
   font-size: 1.15rem;
 }
+
+/* ---------------------------------------------------------------- game clocks */
+.clock {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--text) 6%, transparent);
+  border: 1px solid var(--border);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+  opacity: 0.75;
+  transition: background 0.2s, color 0.2s, opacity 0.2s;
+}
+.clock-main {
+  font-weight: 800;
+  font-size: 1.15rem;
+  letter-spacing: 0.02em;
+}
+.clock-move {
+  font-size: 0.78rem;
+  font-weight: 700;
+  opacity: 0.8;
+}
+.clock-active {
+  opacity: 1;
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent, #fff);
+}
+.clock-warn {
+  background: var(--danger, #d64545);
+  border-color: var(--danger, #d64545);
+  color: #fff;
+  animation: clock-pulse 1s ease-in-out infinite;
+}
+@keyframes clock-pulse {
+  50% { transform: scale(1.05); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .clock-warn { animation: none; }
+}
+
+/* ------------------------------------------------------- time control picker */
+.tc-pick {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  width: 100%;
+  text-align: center;
+}
+.tc-options {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  width: min(100%, 360px);
+}
+.tc-option {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  padding: 14px 6px;
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+  transition: transform 0.12s, border-color 0.2s, box-shadow 0.2s;
+}
+.tc-option strong {
+  font-size: 1.6rem;
+  line-height: 1;
+}
+.tc-option span {
+  font-size: 0.8rem;
+  opacity: 0.75;
+}
+.tc-option:hover,
+.tc-option:focus-visible {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 20%, transparent);
+}
+.tc-option:active {
+  transform: scale(0.96);
+}
+.tc-last {
+  border-color: color-mix(in srgb, var(--accent) 60%, var(--border));
+}
+.tc-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}

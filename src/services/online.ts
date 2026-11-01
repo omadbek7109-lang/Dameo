@@ -6,6 +6,7 @@
  *                           engine, rejects illegal moves, and applies ratings exactly once.
  * The browser never inserts moves directly and never submits a rating or a result.
  */
+import type { ClockState, TimeControl } from './clock.ts';
 import { db, subscribeChanges, type ConnectionState } from './supabase.ts';
 
 export type OnlineStatus = 'waiting' | 'active' | 'finished' | 'aborted';
@@ -26,6 +27,12 @@ export interface OnlineMatch {
   botLevel: 'easy' | 'medium' | 'hard' | null;
   /** rating change for the caller after finalisation, if any */
   ratingDelta?: number | null;
+  /** player-vs-player clock (null for bot games and old untimed games) */
+  clock: ClockState | null;
+  /** set when the game was lost on time */
+  timeoutKind: 'move' | 'clock' | null;
+  /** server clock − local clock (ms), measured when this row was fetched */
+  skewMs: number;
 }
 export interface OnlineMove {
   ply: number;
@@ -48,9 +55,26 @@ interface MatchRow {
   rated: boolean;
   vs_bot?: boolean;
   bot_level?: 'easy' | 'medium' | 'hard' | null;
+  move_count?: number;
+  time_control?: number | null;
+  white_ms?: number | null;
+  black_ms?: number | null;
+  turn_started_at?: string | null;
+  timeout_kind?: 'move' | 'clock' | null;
+  server_now?: string | null;
 }
 
-const mapMatch = (r: MatchRow): OnlineMatch => ({
+/** server time → local time, given skew = server − local */
+export const toLocalMs = (iso: string, skewMs: number) => Date.parse(iso) - skewMs;
+
+const mapMatch = (r: MatchRow, receivedAt = Date.now()): OnlineMatch => {
+  const server = r.server_now ? Date.parse(r.server_now) : NaN;
+  const skewMs = Number.isFinite(server) ? server - receivedAt : 0;
+  const clock: ClockState | null =
+    r.time_control && r.turn_started_at && r.white_ms != null && r.black_ms != null
+      ? { timeControl: r.time_control, whiteMs: r.white_ms, blackMs: r.black_ms, turnStartedAt: toLocalMs(r.turn_started_at, skewMs), moveCount: r.move_count ?? 0 }
+      : null;
+  return {
   id: r.id,
   code: r.code,
   whiteId: r.white_id,
@@ -65,12 +89,19 @@ const mapMatch = (r: MatchRow): OnlineMatch => ({
   rated: r.rated,
   vsBot: Boolean(r.vs_bot),
   botLevel: r.bot_level ?? null,
-});
+  clock,
+  timeoutKind: r.timeout_kind ?? null,
+  skewMs,
+  };
+};
 
 export const createRoom = () => db.rpc<{ match_id: string; code: string }>('create_room');
 export const joinRoom = (code: string) => db.rpc<{ match_id: string }>('join_room', { p_code: code.trim().toUpperCase() });
 /** match_id when paired; otherwise the server-side search start + server clock (for a server-anchored countdown). */
-export const quickMatch = () => db.rpc<{ match_id: string | null; searching_since?: string; server_now?: string }>('quick_match');
+export const quickMatch = (timeControl: TimeControl) =>
+  db.rpc<{ match_id: string | null; searching_since?: string; server_now?: string; time_control?: number }>('quick_match', { p_time: timeControl });
+/** Ask the server to end the game because the side to move ran out of time (the server checks the clock itself). */
+export const claimTimeout = (matchId: string) => db.rpc<{ ended: boolean; status: OnlineStatus }>('claim_timeout', { p_match: matchId });
 export const cancelQuickMatch = () => db.rpc('cancel_quick_match');
 /** How many rated bot games are left today (5 per day; later bot games are unrated). */
 export const botGamesLeft = () => db.rpc<number>('bot_games_left');
@@ -78,8 +109,9 @@ export const botGamesLeft = () => db.rpc<number>('bot_games_left');
 export const startBotMatch = (level: 'easy' | 'medium' | 'hard' | 'random') => db.rpc<{ match_id: string; level: string; rated: boolean; rated_left: number }>('start_bot_match', { p_level: level });
 
 export async function getMatch(id: string): Promise<OnlineMatch | null> {
+  const t0 = Date.now();
   const rows = await db.select<MatchRow>('match_view', { filter: { id: `eq.${id}` }, limit: 1 });
-  return rows[0] ? mapMatch(rows[0]) : null;
+  return rows[0] ? mapMatch(rows[0], (t0 + Date.now()) / 2) : null;
 }
 
 export async function getMoves(id: string): Promise<OnlineMove[]> {
@@ -91,7 +123,12 @@ export async function getMoves(id: string): Promise<OnlineMove[]> {
 }
 
 export const submitMove = (matchId: string, from: number, path: number[]) =>
-  db.invokeFunction<{ ok: boolean; error?: string; bot?: OnlineMove | null }>('match-action', { action: 'move', match_id: matchId, from, path });
+  db.invokeFunction<{ ok: boolean; error?: string; bot?: OnlineMove | null; clock?: { white_ms?: number; black_ms?: number; turn_started_at?: string } | null }>('match-action', {
+    action: 'move',
+    match_id: matchId,
+    from,
+    path,
+  });
 export const resignOnline = (matchId: string) => db.invokeFunction<{ ok: boolean }>('match-action', { action: 'resign', match_id: matchId });
 
 export function watchMatch(

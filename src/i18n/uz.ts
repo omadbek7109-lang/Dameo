@@ -457,6 +457,15 @@ export const uz = {
   'lobby.decline': "Rad etish",
   'quick.startSearch': "Qidiruvni boshlash",
   'quick.connecting': "Serverga ulanmoqda…",
+  'quick.pickTime': "O'yin vaqtini tanlang — qidiruv darhol boshlanadi",
+  'tc.minLabel': "daqiqa",
+  'tc.minutes': "{n} daqiqa",
+  'tc.rule': "Har bir yurish uchun ko'pi bilan 30 soniya. Vaqt tugasa yoki 30 soniyada yurilmasa — raqib yutadi.",
+  'online.err.timeout': "Vaqt tugadi — yurish qabul qilinmadi.",
+  'reason.timeoutMove': "30 soniya ichida yurish qilinmadi.",
+  'reason.timeoutClock': "O'yin vaqti tugadi.",
+  'game.moveTimer': "Yurish uchun {n} soniya",
+  'game.clockHint': "Har birida {n} daqiqa. Soat oqning birinchi yurishidan keyin boshlanadi, har yurishga ko'pi bilan 30 soniya.",
   'notFound.title': 'Sahifa topilmadi',
 } as const;
 

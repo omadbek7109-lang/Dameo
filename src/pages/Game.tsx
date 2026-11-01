@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { LuArrowLeft, LuBookOpen, LuCrown, LuFlag, LuHandshake, LuLightbulb, LuLoader, LuRotateCcw, LuSwords, LuUndo2, LuWifiOff } from 'react-icons/lu';
+import { LuArrowLeft, LuBookOpen, LuCrown, LuFlag, LuHandshake, LuLightbulb, LuLoader, LuRotateCcw, LuSwords, LuTimer, LuUndo2, LuWifiOff } from 'react-icons/lu';
 import { useAuth } from '../auth/AuthProvider.tsx';
 import type { Difficulty } from '../bot/ai.ts';
 import { Avatar } from '../components/Avatar.tsx';
@@ -15,8 +15,9 @@ import { countPieces, type Color, type GameResult } from '../engine/index.ts';
 import { useI18n, type TKey } from '../i18n/index.tsx';
 import { navigate, useRoute } from '../router.tsx';
 import { DEMO_PLAYERS } from '../services/demoData.ts';
-import { getMatch, getMoves, resignOnline, startBotMatch, submitMove, watchMatch, type OnlineMatch } from '../services/online.ts';
-import { haptic } from '../services/telegram.ts';
+import { clockView, formatClock, GRACE_MS } from '../services/clock.ts';
+import { claimTimeout, getMatch, getMoves, resignOnline, startBotMatch, submitMove, toLocalMs, watchMatch, type OnlineMatch } from '../services/online.ts';
+import { haptic, tg } from '../services/telegram.ts';
 import { SbError } from '../services/supabase.ts';
 import type { ConnectionState } from '../services/supabase.ts';
 import { useSettings } from '../settings/SettingsProvider.tsx';
@@ -30,6 +31,8 @@ interface PlayerInfo {
   seed?: string;
   color: Color;
   tag?: string;
+  /** game clock (timed online games) */
+  clock?: { ms: number; active: boolean; moveLeftMs: number | null; warn: boolean };
 }
 interface ResultInfo {
   outcome: 'win' | 'loss' | 'draw' | 'neutral';
@@ -159,6 +162,16 @@ function OnlineGame({ matchId }: { matchId: string }) {
       try {
         const r = await submitMove(matchId, mv.from, mv.path);
         if (!r.ok) throw new Error(r.error);
+        // my clock stops and the opponent's starts right away (the realtime row update confirms it)
+        const c = r.clock;
+        if (c?.turn_started_at && c.white_ms != null && c.black_ms != null) {
+          const plies = gRef.current.game.history.length;
+          setMatch((m) =>
+            m?.clock && m.clock.moveCount < plies
+              ? { ...m, clock: { ...m.clock, whiteMs: c.white_ms!, blackMs: c.black_ms!, turnStartedAt: toLocalMs(c.turn_started_at!, m.skewMs), moveCount: plies } }
+              : m,
+          );
+        }
         // Server bot reply comes back in the same response (realtime delivers it too; the ply check de-duplicates).
         if (r.bot && gRef.current.game.history.length === r.bot.ply) gRef.current.applyRemote(r.bot.from, r.bot.path);
       } catch (e) {
@@ -172,6 +185,7 @@ function OnlineGame({ matchId }: { matchId: string }) {
             illegal: 'game.msg.illegal',
             'not-your-piece': 'game.msg.notYours',
             conflict: 'online.err.conflict',
+            timeout: 'online.err.timeout',
             unauthorized: 'online.err.unauthorized',
             network: 'online.err.network',
           } as Record<string, TKey>
@@ -199,6 +213,53 @@ function OnlineGame({ matchId }: { matchId: string }) {
     }
   }, [matchId, resync]);
 
+  // back from background / Telegram re-activated: re-read the game and the clock from the server
+  useEffect(() => {
+    const onWake = () => {
+      if (document.visibilityState === 'visible') void load();
+    };
+    document.addEventListener('visibilitychange', onWake);
+    tg?.onEvent?.('activated', onWake);
+    return () => {
+      document.removeEventListener('visibilitychange', onWake);
+      tg?.offEvent?.('activated', onWake);
+    };
+  }, [load]);
+
+  /* ---- game clock: redrawn 4× per second from the server's numbers; the server decides timeouts ---- */
+  const [now, setNow] = useState(Date.now());
+  const ticking = Boolean(match?.clock) && match?.status === 'active';
+  useEffect(() => {
+    if (!ticking) return;
+    const id = setInterval(() => setNow(Date.now()), 250);
+    return () => clearInterval(id);
+  }, [ticking]);
+  const view = match?.clock ? clockView(match.clock, match.status === 'active' ? now : match.clock.turnStartedAt) : null;
+  // the side to move is out of time → ask the server to end the game (either player may ask; the server re-checks)
+  const claimed = useRef(-1);
+  useEffect(() => {
+    if (!view || !match?.clock || match.status !== 'active') return;
+    if (now < view.deadline + GRACE_MS + 400 || claimed.current === match.clock.moveCount) return;
+    claimed.current = match.clock.moveCount;
+    claimTimeout(matchId)
+      .then(async (r) => {
+        const fresh = await getMatch(matchId);
+        if (fresh) setMatch(fresh);
+        if (!r.ended) setTimeout(() => (claimed.current = -1), 2000); // our clock was ahead; ask again shortly
+      })
+      .catch(() => setTimeout(() => (claimed.current = -1), 2000));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [now]);
+  const lowWarned = useRef(-1);
+  useEffect(() => {
+    if (!view || !match?.clock || match.status !== 'active' || view.side !== humanColor) return;
+    if (view.moveLeftMs <= 10_000 && view.moveLeftMs > 0 && lowWarned.current !== match.clock.moveCount) {
+      lowWarned.current = match.clock.moveCount;
+      haptic('error');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [now]);
+
   useEffect(() => {
     void load();
     return watchMatch(matchId, {
@@ -223,8 +284,11 @@ function OnlineGame({ matchId }: { matchId: string }) {
     const winnerColor: Color | null = match.result === 'white' ? 'w' : match.result === 'black' ? 'b' : null;
     if (g.game.result.status === 'playing') g.finishExternal(winnerColor, match.reason === 'resign' ? 'resign' : 'no-moves');
     const outcome = winnerColor === null ? 'draw' : winnerColor === humanColor ? 'win' : 'loss';
+    const reason = match.timeoutKind
+      ? t(match.timeoutKind === 'move' ? 'reason.timeoutMove' : 'reason.timeoutClock')
+      : t(match.reason === 'resign' ? 'reason.resign' : winnerColor ? 'reason.no-moves' : 'reason.agreement');
     void refresh().then(() => {
-      setResult({ outcome, winnerColor, reason: t(match.reason === 'resign' ? 'reason.resign' : winnerColor ? 'reason.no-moves' : 'reason.agreement'), rated: match.rated, demo: false });
+      setResult({ outcome, winnerColor, reason, rated: match.rated, demo: false });
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [match]);
@@ -251,8 +315,21 @@ function OnlineGame({ matchId }: { matchId: string }) {
   const opp = match.vsBot
     ? { name: `${t('game.botName')} · ${t(`bot.${match.botLevel ?? 'medium'}` as 'bot.easy')}`, rating: undefined, tag: t('game.botTag') }
     : { name: (iAmWhite ? match.blackName : match.whiteName) ?? t('quick.opponent'), rating: (iAmWhite ? match.blackRating : match.whiteRating) ?? undefined };
-  const top: PlayerInfo = { ...opp, color: iAmWhite ? 'b' : 'w' };
-  const bottom: PlayerInfo = { name: me.username, rating: me.rating, seed: me.avatar, color: humanColor };
+  const clockFor = (c: Color): PlayerInfo['clock'] => {
+    if (!view) return undefined;
+    const active = match.status === 'active' && view.side === c;
+    const moveLeftMs = active ? view.moveLeftMs : null;
+    return { ms: c === 'w' ? view.whiteMs : view.blackMs, active, moveLeftMs, warn: active && view.moveLeftMs <= 10_000 };
+  };
+  const topColor: Color = iAmWhite ? 'b' : 'w';
+  const top: PlayerInfo = { ...opp, color: topColor, clock: clockFor(topColor) };
+  const bottom: PlayerInfo = { name: me.username, rating: me.rating, seed: me.avatar, color: humanColor, clock: clockFor(humanColor) };
+  const clockNote =
+    match.clock && match.status === 'active' && match.clock.moveCount === 0 ? (
+      <div className="notice" role="status">
+        <LuTimer /> <span>{t('game.clockHint', { n: match.clock.timeControl / 60 })}</span>
+      </div>
+    ) : undefined;
 
   return (
     <GameScreen
@@ -283,7 +360,9 @@ function OnlineGame({ matchId }: { matchId: string }) {
           <div className="notice notice-warn" role="status">
             <LuWifiOff /> <span>{t('online.reconnecting')}</span>
           </div>
-        ) : undefined
+        ) : (
+          clockNote
+        )
       }
     />
   );
@@ -358,6 +437,16 @@ function GameScreen({ g, kind, humanColor, top, bottom, canRestart, canUndo, can
           {p.rating !== undefined && ` · ${p.rating}`}
         </span>
       </div>
+      {p.clock && (
+        <div
+          className={`clock ${p.clock.active ? 'clock-active' : ''} ${p.clock.warn ? 'clock-warn' : ''}`}
+          role="timer"
+          aria-label={p.clock.moveLeftMs !== null ? `${formatClock(p.clock.ms)} · ${t('game.moveTimer', { n: Math.ceil(p.clock.moveLeftMs / 1000) })}` : formatClock(p.clock.ms)}
+        >
+          <span className="clock-main">{formatClock(p.clock.ms)}</span>
+          {p.clock.moveLeftMs !== null && <span className="clock-move">{Math.ceil(p.clock.moveLeftMs / 1000)}s</span>}
+        </div>
+      )}
       <div className="player-count" title={t('game.piecesLeft')}>
         <span className={`mini-piece ${p.color === 'w' ? 'mini-w' : 'mini-b'}`} />
         <strong>{remaining}</strong>

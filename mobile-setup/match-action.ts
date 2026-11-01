@@ -452,9 +452,21 @@ Deno.serve(async (req) => {
   if (!out.ok)
     return json({ ok: false, error: out.error ?? "illegal" }, 422);
   let ply = stored.length;
+  let clock = null;
+  if (!match.vs_bot) {
+    const { data: ct, error: ctErr } = await admin.rpc("clock_take_turn", { p_match: match_id, p_ply: ply });
+    if (ctErr || !ct)
+      return json({ ok: false, error: "server" }, 500);
+    if (!ct.ok)
+      return json({ ok: false, error: ct.error ?? "conflict" }, 409);
+    clock = ct;
+  }
   const { error: insErr } = await admin.from("match_moves").insert({ match_id, ply, from_sq: from, path });
-  if (insErr)
+  if (insErr) {
+    if (clock)
+      await admin.from("matches").update({ move_count: ply }).eq("id", match_id).eq("move_count", ply + 1).eq("status", "active");
     return json({ ok: false, error: "conflict" }, 409);
+  }
   ply++;
   let state = out.state;
   let bot = null;
@@ -472,7 +484,7 @@ Deno.serve(async (req) => {
       }
     }
   }
-  await admin.from("matches").update({ move_count: ply }).eq("id", match_id);
+  await admin.from("matches").update({ move_count: ply }).eq("id", match_id).lt("move_count", ply);
   await finishIfOver(state.result, ply);
-  return json({ ok: true, bot, result: state.result });
+  return json({ ok: true, bot, result: state.result, clock });
 });

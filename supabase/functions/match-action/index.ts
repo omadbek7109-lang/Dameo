@@ -2,6 +2,8 @@
 // - Replays the stored game with the same engine as the client and rejects illegal moves.
 // - In games against the server bot it computes and stores the bot's reply (the client never plays the bot's moves).
 // - Applies the rating (±5) exactly once via the service-role-only SQL function apply_match_result.
+// - Player-vs-player games are timed: clock_take_turn (SQL, atomic) checks the 30 s move limit and the player's
+//   clock before a move is stored, charges the mover and starts the opponent's clock. Out of time → refused + game lost.
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 import { playMove, replay } from '../_shared/engine/index.ts';
 import type { GameResult, GameState } from '../_shared/engine/index.ts';
@@ -74,8 +76,19 @@ Deno.serve(async (req) => {
   if (!out.ok) return json({ ok: false, error: out.error ?? 'illegal' }, 422);
 
   let ply = stored.length;
+  let clock: { white_ms?: number; black_ms?: number; turn_started_at?: string } | null = null;
+  if (!match.vs_bot) {
+    const { data: ct, error: ctErr } = await admin.rpc('clock_take_turn', { p_match: match_id, p_ply: ply });
+    if (ctErr || !ct) return json({ ok: false, error: 'server' }, 500);
+    if (!ct.ok) return json({ ok: false, error: ct.error ?? 'conflict' }, 409); // 'timeout' | 'conflict' | 'not-active'
+    clock = ct;
+  }
   const { error: insErr } = await admin.from('match_moves').insert({ match_id, ply, from_sq: from, path });
-  if (insErr) return json({ ok: false, error: 'conflict' }, 409); // PK (match_id, ply) blocks double submits
+  if (insErr) {
+    // PK (match_id, ply) blocks double submits; give the ply back if this request had claimed it on the clock
+    if (clock) await admin.from('matches').update({ move_count: ply }).eq('id', match_id).eq('move_count', ply + 1).eq('status', 'active');
+    return json({ ok: false, error: 'conflict' }, 409);
+  }
   ply++;
   let state: GameState = out.state;
   let bot: { ply: number; from: number; path: number[] } | null = null;
@@ -94,7 +107,8 @@ Deno.serve(async (req) => {
       }
     }
   }
-  await admin.from('matches').update({ move_count: ply }).eq('id', match_id);
+  // never move the counter backwards (the opponent may already have answered in a fast PvP game)
+  await admin.from('matches').update({ move_count: ply }).eq('id', match_id).lt('move_count', ply);
   await finishIfOver(state.result, ply);
-  return json({ ok: true, bot, result: state.result });
+  return json({ ok: true, bot, result: state.result, clock });
 });
