@@ -6,10 +6,12 @@ interface Props {
   align?: 'left' | 'right';
   onOpen?: () => void;
   id: string;
+  /** extra class on the wrapper (layout tweaks) */
+  className?: string;
 }
 
 /** Dropdown that closes on an outside tap, Escape, or any route change. */
-export function Popover({ button, children, align = 'right', onOpen, id }: Props) {
+export function Popover({ button, children, align = 'right', onOpen, id, className }: Props) {
   const [open, setOpen] = useState(false);
   const wrap = useRef<HTMLDivElement>(null);
   const btn = useRef<HTMLButtonElement>(null);
@@ -46,7 +48,7 @@ export function Popover({ button, children, align = 'right', onOpen, id }: Props
     });
   };
   return (
-    <div className="popover" ref={wrap}>
+    <div className={`popover ${className ?? ''}`} ref={wrap}>
       {button({ open, toggle, ref: btn, id })}
       {open && (
         <div id={id} className={`popover-panel popover-${align}`}>

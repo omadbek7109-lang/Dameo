@@ -103,9 +103,7 @@ export const quickMatch = (timeControl: TimeControl) =>
 /** Ask the server to end the game because the side to move ran out of time (the server checks the clock itself). */
 export const claimTimeout = (matchId: string) => db.rpc<{ ended: boolean; status: OnlineStatus }>('claim_timeout', { p_match: matchId });
 export const cancelQuickMatch = () => db.rpc('cancel_quick_match');
-/** How many rated bot games are left today (5 per day; later bot games are unrated). */
-export const botGamesLeft = () => db.rpc<number>('bot_games_left');
-/** Rated game against the server-side bot ('random' = server picks the level). */
+/** Game against the server-side bot ('random' = server picks the level). Bot games never change the rating. */
 export const startBotMatch = (level: 'easy' | 'medium' | 'hard' | 'random') => db.rpc<{ match_id: string; level: string; rated: boolean; rated_left: number }>('start_bot_match', { p_level: level });
 
 export async function getMatch(id: string): Promise<OnlineMatch | null> {

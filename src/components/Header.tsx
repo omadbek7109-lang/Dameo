@@ -90,6 +90,7 @@ export function Header() {
 
           <Popover
             id="notif-menu"
+            className="popover-notif"
             button={({ open, toggle: tg, ref, id }) => (
               <button ref={ref} className="icon-btn notif-btn" onClick={tg} aria-haspopup="dialog" aria-expanded={open} aria-controls={id} aria-label={unread > 0 ? t('notif.unread', { n: unread }) : t('notif.title')}>
                 <LuBell />

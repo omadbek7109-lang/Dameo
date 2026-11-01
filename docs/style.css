@@ -3332,3 +3332,15 @@ html.in-telegram body {
   overflow-y: auto;
   overscroll-behavior: contain;
 }
+
+/* notifications panel on phones: the bell is not at the screen edge, so anchor the (wide) panel to the
+   header's right edge instead of the bell, otherwise it ran 20–24 px off the left side at 360–390 px */
+@media (max-width: 520px) {
+  .popover-notif {
+    position: static;
+  }
+  .popover-notif > .popover-panel {
+    right: max(var(--gutter), 12px);
+    top: calc(100% + 4px);
+  }
+}

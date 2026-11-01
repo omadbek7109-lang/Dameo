@@ -163,13 +163,14 @@ do $$ begin
 exception when others then perform pg_temp.check('client can NOT create tournaments', true, sqlerrm); end $$;
 reset role;
 
--- bot games (server bot, rated ±5, human only)
+-- bot games (server bot; since 0009 they never change the rating)
 set role authenticated;
 set request.jwt.claim.role = 'authenticated';
 set request.jwt.claim.sub = '33333333-3333-3333-3333-333333333333';
 create temp table bm as select public.start_bot_match('hard') as r;
 grant all on bm to public;
 select pg_temp.check('start_bot_match creates an active bot game', (select status = 'active' and vs_bot and bot_level = 'hard' from public.matches where id = (select (r->>'match_id')::uuid from bm)));
+select pg_temp.check('bot game is unrated', (select not rated from public.matches where id = (select (r->>'match_id')::uuid from bm)) and (select (r->>'rated')::boolean = false from bm));
 select pg_temp.check('match_view names the bot', (select black_name = 'DAMEO Bot' from public.match_view where id = (select (r->>'match_id')::uuid from bm)));
 do $$ begin
   update public.matches set status = 'finished' where id = (select (r->>'match_id')::uuid from bm);
@@ -182,7 +183,8 @@ create temp table before_c as select rating from public.profiles where id = '333
 update public.matches set status = 'finished', result = 'white', result_reason = 'no-moves', ended_at = now() where id = (select (r->>'match_id')::uuid from bm);
 select public.apply_match_result((select (r->>'match_id')::uuid from bm));
 select public.apply_match_result((select (r->>'match_id')::uuid from bm));
-select pg_temp.check('beating the bot gives exactly +5 once', (select rating from public.profiles where id = '33333333-3333-3333-3333-333333333333') = (select rating from before_c) + 5);
+select pg_temp.check('beating the bot gives NO rating', (select rating from public.profiles where id = '33333333-3333-3333-3333-333333333333') = (select rating from before_c));
+select pg_temp.check('bot win adds no rating history / W-L stats', (select count(*) from public.rating_history where match_id = (select (r->>'match_id')::uuid from bm)) = 0);
 select pg_temp.check('bot game appears in match_history', (select count(*) from public.match_history where match_id = (select (r->>'match_id')::uuid from bm)) = 1);
 reset role;
 
@@ -197,13 +199,15 @@ set role service_role;
 update public.matches set move_count = 2 where id = (select (r->>'match_id')::uuid from cap);  -- player already moved
 reset role;
 create temp table before_b as select rating from public.profiles where id = '22222222-2222-2222-2222-222222222222';
+grant all on before_b to public;
 set role authenticated;
 set request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
 select public.start_bot_match('easy');  -- abandons the previous one
-select pg_temp.check('abandoning a started bot game counts as a loss (-5)', (select rating from public.profiles where id = auth.uid()) = (select rating from before_b) - 5);
+select pg_temp.check('abandoned bot game is closed as a loss but rating unchanged', (select rating from public.profiles where id = auth.uid()) = (select rating from before_b)
+  and (select status = 'finished' and result = 'black' from public.matches where id = (select (r->>'match_id')::uuid from cap)));
 select public.start_bot_match('easy'); select public.start_bot_match('easy'); select public.start_bot_match('easy');
-select pg_temp.check('5 rated bot games per day', (select public.bot_games_left()) = 0);
-select pg_temp.check('6th bot game is unrated', (select (public.start_bot_match('easy') ->> 'rated')::boolean) = false);
+select pg_temp.check('any number of bot games stays unrated', (select (public.start_bot_match('easy') ->> 'rated')::boolean) = false
+  and (select rating from public.profiles where id = auth.uid()) = (select rating from before_b));
 update public.profiles set avatar = 'https://evil.example.com/x.png' where id = auth.uid();
 reset role;
 select pg_temp.check('external avatar URL rejected', (select avatar from public.profiles where id = '22222222-2222-2222-2222-222222222222') not like '%evil%');
