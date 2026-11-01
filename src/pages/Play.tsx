@@ -12,8 +12,7 @@ import { backendConfigured } from '../services/config.ts';
 import { DEMO_PLAYERS } from '../services/demoData.ts';
 import { botGamesLeft, cancelQuickMatch, createRoom, joinRoom, quickMatch, startBotMatch, watchPairing } from '../services/online.ts';
 import { inTelegram, shareRoomInTelegram } from '../services/telegram.ts';
-
-const QUICK_HUMAN_WAIT_MS = 20_000;
+import { LiveQuickPanel } from '../components/Lobby.tsx';
 import type { Player } from '../types/models.ts';
 
 type PanelId = 'quick' | 'friends' | 'bot' | 'practice';
@@ -31,6 +30,12 @@ export function Play() {
   const initial = (route.query.get('mode') as PanelId) ?? 'quick';
   const [panel, setPanel] = useState<PanelId>(MODES.some((m) => m.id === initial) ? initial : 'quick');
   const [rules, setRules] = useState(false);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const picked = useRef(false);
+  useEffect(() => {
+    // on phones, jump to the chosen mode's panel after the player taps a tile
+    if (picked.current && window.innerWidth < 1000) panelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [panel]);
   useEffect(() => {
     const m = route.query.get('mode') as PanelId | null;
     if (m && MODES.some((x) => x.id === m)) setPanel(m);
@@ -53,7 +58,7 @@ export function Play() {
           {MODES.map((m) => {
             const Icon = m.icon;
             return (
-              <button key={m.id} role="tab" aria-selected={panel === m.id} className={`mode-tab ${panel === m.id ? 'mode-tab-active' : ''}`} onClick={() => setPanel(m.id)}>
+              <button key={m.id} role="tab" aria-selected={panel === m.id} className={`mode-tab ${panel === m.id ? 'mode-tab-active' : ''}`} onClick={() => ((picked.current = true), setPanel(m.id))}>
                 <span className="mode-icon">
                   <Icon />
                 </span>
@@ -65,7 +70,7 @@ export function Play() {
             );
           })}
         </div>
-        <div className="card play-panel" role="tabpanel">
+        <div className="card play-panel" role="tabpanel" ref={panelRef}>
           {panel === 'quick' && <QuickPanel />}
           {panel === 'friends' && <FriendsPanel />}
           {panel === 'bot' && <BotPanel practice={false} />}
@@ -91,18 +96,11 @@ function QuickPanel() {
   const { me, mode, signedIn } = useAuth();
   const { toast } = useToast();
   const [state, setState] = useState<'idle' | 'searching' | 'found'>('idle');
-  const [elapsed, setElapsed] = useState(0);
   const [opp, setOpp] = useState<Player | null>(null);
-  const [botFallback, setBotFallback] = useState(false);
+  const botFallback = false;
   const cancelled = useRef(false);
   const stopWatch = useRef<() => void>(() => {});
 
-  useEffect(() => {
-    if (state !== 'searching') return;
-    setElapsed(0);
-    const id = setInterval(() => setElapsed((s) => s + 1), 1000);
-    return () => clearInterval(id);
-  }, [state]);
 
   useEffect(
     () => () => {
@@ -113,6 +111,7 @@ function QuickPanel() {
   );
 
   if (mode === 'live' && !signedIn) return <SignInPrompt text={t('quick.needAccount')} />;
+  if (mode === 'live') return <LiveQuickPanel />;
 
   const startDemo = () => {
     if (!me) return;
@@ -130,47 +129,11 @@ function QuickPanel() {
     }, 2400);
   };
 
-  const startLive = async () => {
-    if (!me) return;
-    cancelled.current = false;
-    setState('searching');
-    setBotFallback(false);
-    const go = (id: string) => {
-      if (cancelled.current) return;
-      cancelled.current = true;
-      stopWatch.current();
-      setState('found');
-      setTimeout(() => navigate(`/game?online=${id}`), 1200);
-    };
-    try {
-      stopWatch.current = watchPairing(me.id, go);
-      const started = Date.now();
-      // Ask the matchmaker every 4 s (each call also keeps our queue entry fresh).
-      while (!cancelled.current) {
-        const r = await quickMatch();
-        if (r.match_id) return go(r.match_id);
-        if (Date.now() - started > QUICK_HUMAN_WAIT_MS) break;
-        await new Promise((res) => setTimeout(res, 4000));
-      }
-      if (cancelled.current) return;
-      // Nobody free right now: play the server bot instead (clearly labelled as a bot).
-      await cancelQuickMatch().catch(() => {});
-      setBotFallback(true);
-      const b = await startBotMatch('random');
-      go(b.match_id);
-    } catch {
-      stopWatch.current();
-      setState('idle');
-      toast('error', t('quick.failed'));
-    }
-  };
-
   const cancel = async () => {
     cancelled.current = true;
     stopWatch.current();
     setState('idle');
     setOpp(null);
-    if (mode === 'live') await cancelQuickMatch().catch(() => {});
   };
 
   return (
@@ -185,8 +148,8 @@ function QuickPanel() {
       )}
       <div className="match-stage" aria-live="polite">
         {state === 'idle' && (
-          <button className="btn btn-primary btn-lg" onClick={mode === 'demo' ? startDemo : startLive}>
-            <LuSwords /> {mode === 'demo' ? t('quick.startDemo') : t('mode.findOpponent')}
+          <button className="btn btn-primary btn-lg" onClick={startDemo}>
+            <LuSwords /> {t('quick.startDemo')}
           </button>
         )}
         {state === 'searching' && (
@@ -197,12 +160,7 @@ function QuickPanel() {
               <span />
               {me && <Avatar name={me.username} seed={me.avatar} size={56} />}
             </div>
-            <p className="search-title">{mode === 'demo' ? t('quick.searchingDemo') : t('quick.searching')}</p>
-            {mode === 'live' && (
-              <p className="muted small">
-                {t('quick.elapsed', { n: elapsed })} · {t('quick.botAfter', { n: Math.max(0, Math.ceil(QUICK_HUMAN_WAIT_MS / 1000) - elapsed) })}
-              </p>
-            )}
+            <p className="search-title">{t('quick.searchingDemo')}</p>
             <button className="btn btn-ghost" onClick={cancel}>
               {t('common.cancel')}
             </button>

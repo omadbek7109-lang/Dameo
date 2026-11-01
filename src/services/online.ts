@@ -130,3 +130,41 @@ export function watchPairing(userId: string, onPaired: (matchId: string) => void
   );
   return () => sub.close();
 }
+
+/* ------------------------------ lobby & challenges ------------------------------ */
+
+export interface LobbyPlayer {
+  id: string;
+  username: string;
+  avatar: string;
+  rating: number;
+  waiting_seconds: number;
+}
+export interface IncomingChallenge {
+  id: string;
+  from_id: string;
+  username: string;
+  avatar: string;
+  rating: number;
+  created_at: string;
+}
+/** Players searching for a game right now (pinging quick_match within the last 15 s). */
+export const lobby = () => db.rpc<LobbyPlayer[]>('lobby');
+export const lobbyStats = () => db.rpc<{ online: number; searching: number }>('lobby_stats');
+export const sendChallenge = (to: string) => db.rpc<{ challenge_id: string }>('send_challenge', { p_to: to });
+export const cancelChallenge = (id: string) => db.rpc('cancel_challenge', { p_id: id });
+export const respondChallenge = (id: string, accept: boolean) => db.rpc<{ match_id: string | null }>('respond_challenge', { p_id: id, p_accept: accept });
+export const incomingChallenges = () => db.rpc<IncomingChallenge[]>('incoming_challenges');
+/** A challenge expires 60 s after it is sent (enforced by the server). */
+export const CHALLENGE_TTL_MS = 60_000;
+
+/** Challenges I sent: fires on status changes (accepted / declined / cancelled). */
+export function watchSentChallenges(userId: string, cb: (row: { id: string; status: string; match_id: string | null }) => void): () => void {
+  const sub = subscribeChanges(`public:challenges-from:${userId}`, [{ table: 'challenges', event: 'UPDATE', filter: `from_id=eq.${userId}` }], (e) => cb(e.record));
+  return () => sub.close();
+}
+/** Challenges addressed to me: fires when someone challenges me (or a challenge to me changes). */
+export function watchIncomingChallenges(userId: string, cb: () => void): () => void {
+  const sub = subscribeChanges(`public:challenges-to:${userId}`, [{ table: 'challenges', filter: `to_id=eq.${userId}` }], () => cb());
+  return () => sub.close();
+}

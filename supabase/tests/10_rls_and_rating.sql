@@ -115,6 +115,11 @@ set request.jwt.claim.sub = '33333333-3333-3333-3333-333333333333';
 select pg_temp.check('first player is queued', (public.quick_match() ->> 'match_id') is null);
 reset role;
 set role authenticated;
+set request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
+select pg_temp.check('lobby shows the searching player', (select count(*) from public.lobby() where username is not null) = 1);
+select pg_temp.check('lobby_stats counts searching', (public.lobby_stats() ->> 'searching')::int = 1);
+reset role;
+set role authenticated;
 set request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
 select pg_temp.check('second player is paired', (public.quick_match() ->> 'match_id') is not null);
 reset role;
@@ -207,6 +212,56 @@ do $$ begin
 exception when others then perform pg_temp.check('can NOT upload into another player''s folder', true, sqlerrm); end $$;
 insert into storage.objects (bucket_id, name) values ('avatars', '22222222-2222-2222-2222-222222222222/avatar.webp');
 select pg_temp.check('can upload into own folder', (select count(*) from storage.objects) = 1);
+reset role;
+
+-- challenges (0006)
+reset role;
+update public.profiles set last_seen = now();
+set role authenticated;
+set request.jwt.claim.role = 'authenticated';
+set request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
+create temp table ch1 as select public.send_challenge('22222222-2222-2222-2222-222222222222') as r;
+grant all on ch1 to public;
+select pg_temp.check('sender sees own challenge', (select count(*) from public.challenges where id = (select (r->>'challenge_id')::uuid from ch1)) = 1);
+do $$ begin
+  perform public.respond_challenge((select (r->>'challenge_id')::uuid from ch1), true);
+  perform pg_temp.check('sender can NOT accept own challenge', false);
+exception when others then perform pg_temp.check('sender can NOT accept own challenge', true, sqlerrm); end $$;
+reset role;
+set role authenticated;
+set request.jwt.claim.sub = '33333333-3333-3333-3333-333333333333';
+select pg_temp.check('third player can NOT see the challenge', (select count(*) from public.challenges) = 0);
+reset role;
+set role authenticated;
+set request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
+select pg_temp.check('receiver sees incoming challenge', (select count(*) from public.incoming_challenges()) = 1);
+select pg_temp.check('decline returns no match', (public.respond_challenge((select (r->>'challenge_id')::uuid from ch1), false) ->> 'match_id') is null);
+select pg_temp.check('decline marks the challenge declined', (select status from public.challenges where id = (select (r->>'challenge_id')::uuid from ch1)) = 'declined');
+reset role;
+select pg_sleep(3.1);
+set role authenticated;
+set request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
+create temp table ch2 as select public.send_challenge('22222222-2222-2222-2222-222222222222') as r;
+grant all on ch2 to public;
+reset role;
+set role authenticated;
+set request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
+create temp table acc as select public.respond_challenge((select (r->>'challenge_id')::uuid from ch2), true) as r;
+grant all on acc to public;
+select pg_temp.check('accept creates an active rated game between the two', (select status = 'active' and rated and '11111111-1111-1111-1111-111111111111' in (white_id, black_id) and '22222222-2222-2222-2222-222222222222' in (white_id, black_id) from public.matches where id = (select (r->>'match_id')::uuid from acc)));
+do $$ begin
+  perform public.respond_challenge((select (r->>'challenge_id')::uuid from ch2), true);
+  perform pg_temp.check('challenge can NOT be accepted twice', false);
+exception when others then perform pg_temp.check('challenge can NOT be accepted twice', true, sqlerrm); end $$;
+reset role;
+update public.profiles set last_seen = now() - interval '1 hour' where id = '33333333-3333-3333-3333-333333333333';
+set role authenticated;
+set request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
+select pg_sleep(3.1);
+do $$ begin
+  perform public.send_challenge('33333333-3333-3333-3333-333333333333');
+  perform pg_temp.check('can NOT challenge an offline player', false);
+exception when others then perform pg_temp.check('can NOT challenge an offline player', sqlerrm like '%offline%', sqlerrm); end $$;
 reset role;
 
 -- service_role (Edge Functions) must be able to read/write game tables (regression test for the 404 bug)

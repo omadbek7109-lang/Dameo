@@ -3148,3 +3148,77 @@ html.in-telegram body {
   width: 64px;
   height: 64px;
 }
+
+/* ------------------------------------------------ lobby & challenges */
+.lobby {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.lobby-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.lobby-head h3 {
+  font-size: 1rem;
+}
+.lobby-stats {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+.lobby-empty {
+  padding: 8px 2px;
+}
+.lobby .notice {
+  align-items: center;
+}
+.lobby .notice span {
+  flex: 1;
+}
+.countdown {
+  position: relative;
+  width: 64px;
+  height: 64px;
+  display: grid;
+  place-items: center;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 1.2rem;
+  font-variant-numeric: tabular-nums;
+}
+.countdown svg {
+  position: absolute;
+  inset: 0;
+  transform: rotate(-90deg);
+}
+.cd-track {
+  fill: none;
+  stroke: var(--border);
+  stroke-width: 3;
+}
+.cd-fill {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-dasharray: 97.4;
+  transition: stroke-dashoffset 0.9s linear;
+}
+.challenge-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 6px;
+}
+.challenge-name {
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+}

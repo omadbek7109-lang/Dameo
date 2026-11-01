@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { useAuth } from './auth/AuthProvider.tsx';
 import { Header, BottomNav } from './components/Header.tsx';
 import { SplashLoader } from './components/States.tsx';
+import { ChallengeInbox } from './components/Lobby.tsx';
 import { useI18n } from './i18n/index.tsx';
 import { Friends } from './pages/Friends.tsx';
 import { Game } from './pages/Game.tsx';
@@ -89,6 +90,7 @@ export function App() {
         <span>© DAMEO · {t('brand.tagline')}</span>
         <span className="muted">{t('footer.free')}</span>
       </footer>
+      <ChallengeInbox />
       <BottomNav />
     </div>
   );
