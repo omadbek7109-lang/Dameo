@@ -7,7 +7,9 @@ export interface Route {
 }
 
 function parse(): Route {
-  const raw = window.location.hash.replace(/^#/, '') || '/';
+  let raw = window.location.hash.replace(/^#/, '') || '/';
+  // Telegram Mini Apps launch with "#tgWebAppData=...&tgWebAppVersion=..." — that is not a route.
+  if (raw.startsWith('tgWebApp') || (!raw.startsWith('/') && raw.includes('='))) raw = '/';
   const [p, q = ''] = raw.split('?');
   const path = p.startsWith('/') ? p : `/${p}`;
   return { path, segments: path.split('/').filter(Boolean), query: new URLSearchParams(q) };

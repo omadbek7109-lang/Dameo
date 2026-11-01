@@ -1,6 +1,7 @@
 import { Component, StrictMode, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App.tsx';
+import { initTelegram, startJoinCode } from './services/telegram.ts';
 import { AuthProvider } from './auth/AuthProvider.tsx';
 import { AuthDialogProvider } from './components/AuthDialog.tsx';
 import { ToastProvider } from './components/Toast.tsx';
@@ -21,6 +22,14 @@ class CrashGuard extends Component<{ children: ReactNode }, { error: Error | nul
     return this.state.error ? null : this.props.children;
   }
 }
+
+// Telegram launches with "#tgWebAppData=..."; the SDK has already read it, so start the router at the home page.
+if (/^#tgWebApp/.test(window.location.hash)) history.replaceState(null, '', window.location.pathname + window.location.search + '#/');
+{
+  const join = startJoinCode();
+  if (join) history.replaceState(null, '', window.location.pathname + window.location.search + `#/play?mode=friends&join=${join}`);
+}
+initTelegram(document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark');
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

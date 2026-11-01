@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { readString, writeString } from '../services/localStore.ts';
+import { setTelegramColors } from '../services/telegram.ts';
 
 export type Theme = 'light' | 'dark';
 interface ThemeCtx {
@@ -21,6 +22,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const root = document.documentElement;
     root.setAttribute('data-theme', theme);
+    setTelegramColors(theme);
     document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme === 'dark' ? '#0a1020' : '#f3f5fa');
   }, [theme]);
 

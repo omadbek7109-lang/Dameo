@@ -1,24 +1,25 @@
 // Edge Function `match-action` (Deno). The ONLY way moves, resignations and results reach the database.
-// It replays the stored game with the same engine the client uses, so illegal moves are rejected
-// and ratings are applied (once) by the service-role-only SQL function apply_match_result.
-// SUPABASE_SERVICE_ROLE_KEY is injected by the platform into the function environment — never into the browser.
+// - Replays the stored game with the same engine as the client and rejects illegal moves.
+// - In games against the server bot it computes and stores the bot's reply (the client never plays the bot's moves).
+// - Applies the rating (±5) exactly once via the service-role-only SQL function apply_match_result.
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 import { playMove, replay } from '../_shared/engine/index.ts';
-import type { GameResult } from '../_shared/engine/index.ts';
+import type { GameResult, GameState } from '../_shared/engine/index.ts';
+import { chooseMove, type Difficulty } from '../_shared/bot/ai.ts';
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { ...cors, 'Content-Type': 'application/json' } });
+const BOT_TIME: Record<Difficulty, number> = { easy: 150, medium: 450, hard: 700 };
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
   if (req.method !== 'POST') return json({ ok: false, error: 'method' }, 405);
 
   const url = Deno.env.get('SUPABASE_URL')!;
-  const authHeader = req.headers.get('Authorization') ?? '';
-  const userClient = createClient(url, Deno.env.get('SUPABASE_ANON_KEY')!, { global: { headers: { Authorization: authHeader } } });
+  const userClient = createClient(url, Deno.env.get('SUPABASE_ANON_KEY')!, { global: { headers: { Authorization: req.headers.get('Authorization') ?? '' } } });
   const { data: userData, error: authErr } = await userClient.auth.getUser();
   if (authErr || !userData.user) return json({ ok: false, error: 'unauthorized' }, 401);
   const uid = userData.user.id;
@@ -40,7 +41,6 @@ Deno.serve(async (req) => {
   const myColor = uid === match.white_id ? 'w' : 'b';
 
   const finish = async (result: 'white' | 'black' | 'draw', reason: string, moveCount: number) => {
-    // conditional update => idempotent; rating is applied once even if called twice
     const { data: upd } = await admin
       .from('matches')
       .update({ status: 'finished', result, result_reason: reason, move_count: moveCount, ended_at: new Date().toISOString() })
@@ -49,6 +49,10 @@ Deno.serve(async (req) => {
       .select('id');
     if (upd && upd.length > 0 && match.rated) await admin.rpc('apply_match_result', { p_match: match_id });
   };
+  const finishIfOver = async (r: GameResult, plies: number) => {
+    if (r.status === 'won') await finish(r.winner === 'w' ? 'white' : 'black', r.reason, plies);
+    else if (r.status === 'draw') await finish('draw', r.reason, plies);
+  };
 
   if (action === 'resign') {
     const { count } = await admin.from('match_moves').select('*', { count: 'exact', head: true }).eq('match_id', match_id);
@@ -56,7 +60,6 @@ Deno.serve(async (req) => {
     return json({ ok: true });
   }
 
-  // ---- move ----
   const from = Number(body.from);
   const path: number[] = Array.isArray(body.path) ? body.path.map(Number) : [];
   if (!Number.isInteger(from) || path.length === 0 || path.length > 32 || path.some((n) => !Number.isInteger(n) || n < 0 || n > 63)) {
@@ -64,19 +67,34 @@ Deno.serve(async (req) => {
   }
   const { data: rows } = await admin.from('match_moves').select('ply, from_sq, path').eq('match_id', match_id).order('ply', { ascending: true });
   const stored = (rows ?? []).map((r: any) => ({ from: r.from_sq, path: r.path as number[] }));
-  const state = replay(stored);
-  if (!state.ok) return json({ ok: false, error: 'corrupt-game' }, 500);
-  if (state.state.turn !== myColor) return json({ ok: false, error: 'not-your-turn' }, 409);
-  const out = playMove(state.state, from, path);
+  const replayed = replay(stored);
+  if (!replayed.ok) return json({ ok: false, error: 'corrupt-game' }, 500);
+  if (replayed.state.turn !== myColor) return json({ ok: false, error: 'not-your-turn' }, 409);
+  const out = playMove(replayed.state, from, path);
   if (!out.ok) return json({ ok: false, error: out.error ?? 'illegal' }, 422);
 
-  const ply = stored.length;
+  let ply = stored.length;
   const { error: insErr } = await admin.from('match_moves').insert({ match_id, ply, from_sq: from, path });
   if (insErr) return json({ ok: false, error: 'conflict' }, 409); // PK (match_id, ply) blocks double submits
-  await admin.from('matches').update({ move_count: ply + 1 }).eq('id', match_id);
+  ply++;
+  let state: GameState = out.state;
+  let bot: { ply: number; from: number; path: number[] } | null = null;
 
-  const r: GameResult = out.state.result;
-  if (r.status === 'won') await finish(r.winner === 'w' ? 'white' : 'black', r.reason, ply + 1);
-  else if (r.status === 'draw') await finish('draw', r.reason, ply + 1);
-  return json({ ok: true });
+  if (match.vs_bot && state.result.status === 'playing') {
+    const m = chooseMove(state, match.bot_level as Difficulty, { timeMs: BOT_TIME[match.bot_level as Difficulty] ?? 400 });
+    if (m) {
+      const applied = playMove(state, m.from, m.path);
+      if (applied.ok) {
+        const { error } = await admin.from('match_moves').insert({ match_id, ply, from_sq: m.from, path: m.path });
+        if (!error) {
+          bot = { ply, from: m.from, path: m.path };
+          ply++;
+          state = applied.state;
+        }
+      }
+    }
+  }
+  await admin.from('matches').update({ move_count: ply }).eq('id', match_id);
+  await finishIfOver(state.result, ply);
+  return json({ ok: true, bot, result: state.result });
 });

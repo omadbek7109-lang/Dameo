@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { LuBot, LuCheck, LuCopy, LuGraduationCap, LuLoader, LuLink, LuSwords, LuUsers, LuWifiOff, LuBookOpen } from 'react-icons/lu';
+import { LuBot, LuCheck, LuCopy, LuSend, LuGraduationCap, LuLoader, LuLink, LuSwords, LuUsers, LuWifiOff, LuBookOpen } from 'react-icons/lu';
 import { useAuth } from '../auth/AuthProvider.tsx';
 import type { Difficulty } from '../bot/ai.ts';
 import { Avatar } from '../components/Avatar.tsx';
@@ -10,7 +10,10 @@ import { useI18n, type TKey } from '../i18n/index.tsx';
 import { navigate, useRoute } from '../router.tsx';
 import { backendConfigured } from '../services/config.ts';
 import { DEMO_PLAYERS } from '../services/demoData.ts';
-import { cancelQuickMatch, createRoom, joinRoom, quickMatch, watchPairing } from '../services/online.ts';
+import { cancelQuickMatch, createRoom, joinRoom, quickMatch, startBotMatch, watchPairing } from '../services/online.ts';
+import { inTelegram, shareRoomInTelegram } from '../services/telegram.ts';
+
+const QUICK_HUMAN_WAIT_MS = 20_000;
 import type { Player } from '../types/models.ts';
 
 type PanelId = 'quick' | 'friends' | 'bot' | 'practice';
@@ -90,6 +93,7 @@ function QuickPanel() {
   const [state, setState] = useState<'idle' | 'searching' | 'found'>('idle');
   const [elapsed, setElapsed] = useState(0);
   const [opp, setOpp] = useState<Player | null>(null);
+  const [botFallback, setBotFallback] = useState(false);
   const cancelled = useRef(false);
   const stopWatch = useRef<() => void>(() => {});
 
@@ -130,17 +134,30 @@ function QuickPanel() {
     if (!me) return;
     cancelled.current = false;
     setState('searching');
+    setBotFallback(false);
+    const go = (id: string) => {
+      if (cancelled.current) return;
+      cancelled.current = true;
+      stopWatch.current();
+      setState('found');
+      setTimeout(() => navigate(`/game?online=${id}`), 1200);
+    };
     try {
-      stopWatch.current = watchPairing(me.id, (id) => {
-        if (cancelled.current) return;
-        setState('found');
-        setTimeout(() => navigate(`/game?online=${id}`), 1200);
-      });
-      const r = await quickMatch();
-      if (r.match_id && !cancelled.current) {
-        setState('found');
-        setTimeout(() => navigate(`/game?online=${r.match_id}`), 1200);
+      stopWatch.current = watchPairing(me.id, go);
+      const started = Date.now();
+      // Ask the matchmaker every 4 s (each call also keeps our queue entry fresh).
+      while (!cancelled.current) {
+        const r = await quickMatch();
+        if (r.match_id) return go(r.match_id);
+        if (Date.now() - started > QUICK_HUMAN_WAIT_MS) break;
+        await new Promise((res) => setTimeout(res, 4000));
       }
+      if (cancelled.current) return;
+      // Nobody free right now: play the server bot instead (clearly labelled as a bot).
+      await cancelQuickMatch().catch(() => {});
+      setBotFallback(true);
+      const b = await startBotMatch('random');
+      go(b.match_id);
     } catch {
       stopWatch.current();
       setState('idle');
@@ -181,7 +198,11 @@ function QuickPanel() {
               {me && <Avatar name={me.username} seed={me.avatar} size={56} />}
             </div>
             <p className="search-title">{mode === 'demo' ? t('quick.searchingDemo') : t('quick.searching')}</p>
-            {mode === 'live' && <p className="muted small">{t('quick.elapsed', { n: elapsed })}</p>}
+            {mode === 'live' && (
+              <p className="muted small">
+                {t('quick.elapsed', { n: elapsed })} · {t('quick.botAfter', { n: Math.max(0, Math.ceil(QUICK_HUMAN_WAIT_MS / 1000) - elapsed) })}
+              </p>
+            )}
             <button className="btn btn-ghost" onClick={cancel}>
               {t('common.cancel')}
             </button>
@@ -200,12 +221,12 @@ function QuickPanel() {
               <span className="vs-badge">VS</span>
               <div className="vs-side">
                 {opp ? <Avatar name={opp.username} seed={opp.avatar} size={64} /> : <Avatar name="?" size={64} />}
-                <strong>{opp?.username ?? t('quick.opponent')}</strong>
+                <strong>{opp?.username ?? (botFallback ? t('game.botName') : t('quick.opponent'))}</strong>
                 {opp && <span className="muted small">{num(opp.rating)}</span>}
               </div>
             </div>
             <p className="search-title">
-              <LuCheck /> {t('quick.found')}
+              <LuCheck /> {botFallback ? t('quick.foundBot') : t('quick.found')}
             </p>
             {mode === 'demo' && <p className="muted small">{t('quick.demoOpponent')}</p>}
           </div>
@@ -229,6 +250,20 @@ function FriendsPanel() {
   const stop = useRef<() => void>(() => {});
 
   useEffect(() => () => stop.current(), []);
+
+  // Opened from an invitation link (?join=CODE or Telegram startapp): join automatically once signed in.
+  const autoJoined = useRef(false);
+  useEffect(() => {
+    const c = route.query.get('join');
+    if (!c || autoJoined.current || mode !== 'live' || !signedIn || !me) return;
+    autoJoined.current = true;
+    setBusy('join');
+    joinRoom(c)
+      .then((r) => navigate(`/game?online=${r.match_id}`))
+      .catch(() => toast('error', t('room.joinFailed')))
+      .finally(() => setBusy(null));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [route.query, mode, signedIn, me?.id]);
 
   if (mode === 'demo') {
     return (
@@ -313,6 +348,11 @@ function FriendsPanel() {
               <button className="btn btn-secondary" onClick={copy}>
                 {copied ? <LuCheck /> : <LuCopy />} {t('room.copyInvite')}
               </button>
+              {inTelegram && (
+                <button className="btn btn-primary" onClick={() => shareRoomInTelegram(code, t('room.inviteText', { code })) || copy()}>
+                  <LuSend /> {t('room.shareTelegram')}
+                </button>
+              )}
             </>
           ) : (
             <button className="btn btn-primary" onClick={create} disabled={busy !== null}>
@@ -339,28 +379,49 @@ function FriendsPanel() {
 
 function BotPanel({ practice }: { practice: boolean }) {
   const { t } = useI18n();
-  const [level, setLevel] = useState<Difficulty>(practice ? 'easy' : 'medium');
+  const { mode, signedIn } = useAuth();
+  const { toast } = useToast();
+  // With the backend, "Play against bot" is a RATED game whose bot runs on the server (±5).
+  // Practice always stays local and unrated.
+  const serverBot = !practice && mode === 'live';
+  const [level, setLevel] = useState<Difficulty | 'random'>(practice ? 'easy' : serverBot ? 'random' : 'medium');
   const [side, setSide] = useState<'w' | 'b' | 'r'>('w');
-  const levels: Array<{ id: Difficulty; title: TKey; desc: TKey }> = [
+  const [busy, setBusy] = useState(false);
+  const levels: Array<{ id: Difficulty | 'random'; title: TKey; desc: TKey }> = [
+    ...(serverBot ? [{ id: 'random' as const, title: 'bot.random' as TKey, desc: 'bot.randomDesc' as TKey }] : []),
     { id: 'easy', title: 'bot.easy', desc: 'bot.easyDesc' },
     { id: 'medium', title: 'bot.medium', desc: 'bot.mediumDesc' },
     { id: 'hard', title: 'bot.hard', desc: 'bot.hardDesc' },
   ];
-  const start = () => {
+  if (serverBot && !signedIn) return <SignInPrompt text={t('bot.needAccount')} />;
+
+  const start = async () => {
+    if (serverBot) {
+      setBusy(true);
+      try {
+        const r = await startBotMatch(level);
+        navigate(`/game?online=${r.match_id}`);
+      } catch {
+        toast('error', t('bot.startFailed'));
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
     const s = side === 'r' ? (Math.random() < 0.5 ? 'w' : 'b') : side;
-    navigate(`/game?mode=${practice ? 'practice' : 'bot'}&level=${level}&side=${s}`);
+    navigate(`/game?mode=${practice ? 'practice' : 'bot'}&level=${level === 'random' ? 'medium' : level}&side=${s}`);
   };
   return (
     <div>
       <h2>{practice ? t('mode.practice') : t('mode.bot')}</h2>
       <p className="muted">{practice ? t('practice.desc') : t('mode.botDesc')}</p>
       <div className="notice">
-        <span className="badge">{t('common.unrated')}</span>
-        <span>{practice ? t('practice.unrated') : t('bot.unrated')}</span>
+        {serverBot ? <span className="badge badge-free">{t('bot.ratedBadge')}</span> : <span className="badge">{t('common.unrated')}</span>}
+        <span>{practice ? t('practice.unrated') : serverBot ? t('bot.rated') : t('bot.unrated')}</span>
       </div>
       <fieldset className="fieldset">
         <legend>{t('bot.difficulty')}</legend>
-        <div className="radio-cards">
+        <div className={`radio-cards ${levels.length === 4 ? 'radio-cards-4' : ''}`}>
           {levels.map((l) => (
             <label key={l.id} className={`radio-card ${level === l.id ? 'radio-card-on' : ''}`}>
               <input type="radio" name="level" checked={level === l.id} onChange={() => setLevel(l.id)} />
@@ -370,18 +431,20 @@ function BotPanel({ practice }: { practice: boolean }) {
           ))}
         </div>
       </fieldset>
-      <fieldset className="fieldset">
-        <legend>{t('bot.side')}</legend>
-        <div className="seg" role="radiogroup">
-          {(['w', 'b', 'r'] as const).map((s) => (
-            <button key={s} role="radio" aria-checked={side === s} className={`seg-btn ${side === s ? 'seg-on' : ''}`} onClick={() => setSide(s)}>
-              {t(s === 'w' ? 'side.white' : s === 'b' ? 'side.black' : 'side.random')}
-            </button>
-          ))}
-        </div>
-      </fieldset>
-      <button className="btn btn-primary btn-lg" onClick={start}>
-        <LuSwords /> {t('game.start')}
+      {!serverBot && (
+        <fieldset className="fieldset">
+          <legend>{t('bot.side')}</legend>
+          <div className="seg" role="radiogroup">
+            {(['w', 'b', 'r'] as const).map((sd) => (
+              <button key={sd} role="radio" aria-checked={side === sd} className={`seg-btn ${side === sd ? 'seg-on' : ''}`} onClick={() => setSide(sd)}>
+                {t(sd === 'w' ? 'side.white' : sd === 'b' ? 'side.black' : 'side.random')}
+              </button>
+            ))}
+          </div>
+        </fieldset>
+      )}
+      <button className="btn btn-primary btn-lg" onClick={start} disabled={busy}>
+        {busy ? <LuLoader className="spin" /> : <LuSwords />} {t('game.start')}
       </button>
     </div>
   );

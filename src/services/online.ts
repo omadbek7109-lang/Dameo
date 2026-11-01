@@ -22,6 +22,8 @@ export interface OnlineMatch {
   result: 'white' | 'black' | 'draw' | null;
   reason: string | null;
   rated: boolean;
+  vsBot: boolean;
+  botLevel: 'easy' | 'medium' | 'hard' | null;
   /** rating change for the caller after finalisation, if any */
   ratingDelta?: number | null;
 }
@@ -44,6 +46,8 @@ interface MatchRow {
   result: OnlineMatch['result'];
   result_reason: string | null;
   rated: boolean;
+  vs_bot?: boolean;
+  bot_level?: 'easy' | 'medium' | 'hard' | null;
 }
 
 const mapMatch = (r: MatchRow): OnlineMatch => ({
@@ -59,12 +63,16 @@ const mapMatch = (r: MatchRow): OnlineMatch => ({
   result: r.result,
   reason: r.result_reason,
   rated: r.rated,
+  vsBot: Boolean(r.vs_bot),
+  botLevel: r.bot_level ?? null,
 });
 
 export const createRoom = () => db.rpc<{ match_id: string; code: string }>('create_room');
 export const joinRoom = (code: string) => db.rpc<{ match_id: string }>('join_room', { p_code: code.trim().toUpperCase() });
 export const quickMatch = () => db.rpc<{ match_id: string | null }>('quick_match');
 export const cancelQuickMatch = () => db.rpc('cancel_quick_match');
+/** Rated game against the server-side bot ('random' = server picks the level). */
+export const startBotMatch = (level: 'easy' | 'medium' | 'hard' | 'random') => db.rpc<{ match_id: string; level: string }>('start_bot_match', { p_level: level });
 
 export async function getMatch(id: string): Promise<OnlineMatch | null> {
   const rows = await db.select<MatchRow>('match_view', { filter: { id: `eq.${id}` }, limit: 1 });
@@ -80,7 +88,7 @@ export async function getMoves(id: string): Promise<OnlineMove[]> {
 }
 
 export const submitMove = (matchId: string, from: number, path: number[]) =>
-  db.invokeFunction<{ ok: boolean; error?: string }>('match-action', { action: 'move', match_id: matchId, from, path });
+  db.invokeFunction<{ ok: boolean; error?: string; bot?: OnlineMove | null }>('match-action', { action: 'move', match_id: matchId, from, path });
 export const resignOnline = (matchId: string) => db.invokeFunction<{ ok: boolean }>('match-action', { action: 'resign', match_id: matchId });
 
 export function watchMatch(

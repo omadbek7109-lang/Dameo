@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { readString, writeString } from '../services/localStore.ts';
+import { telegramLanguage } from '../services/telegram.ts';
 import { en } from './en.ts';
 import { uz, type TKey } from './uz.ts';
 
@@ -33,7 +34,8 @@ export function translate(lang: Lang, key: TKey, params?: Params): string {
 
 function initialLang(): Lang {
   const saved = readString('dameo.lang');
-  return saved === 'en' || saved === 'uz' ? saved : 'uz'; // Uzbek is the default
+  if (saved === 'en' || saved === 'uz') return saved;
+  return telegramLanguage() ?? 'uz'; // Uzbek is the default
 }
 
 export function I18nProvider({ children }: { children: ReactNode }) {

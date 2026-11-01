@@ -7,7 +7,8 @@ import { startPresence } from '../services/leaderboard.ts';
 import { LOCAL_ID, clearLocal, loadLocal, localAsPlayer, saveLocal, type LocalProfile } from '../services/localProfile.ts';
 import { loadLiveProfile, updateLiveProfile } from '../services/profiles.ts';
 import { ratingDelta, type Score } from '../services/rating.ts';
-import { auth, getSession, onAuthChange, subscribeChanges, type SbSession } from '../services/supabase.ts';
+import { adoptSession, auth, db, getSession, onAuthChange, subscribeChanges, type SbSession } from '../services/supabase.ts';
+import { inTelegram, rememberBotUsername, tg } from '../services/telegram.ts';
 import type { AppNotification, MatchSummary, Player, RatingPoint } from '../types/models.ts';
 
 export type AuthMode = 'demo' | 'live';
@@ -27,6 +28,8 @@ interface AuthCtx {
   mode: AuthMode;
   ready: boolean;
   signedIn: boolean;
+  /** set when automatic Telegram sign-in failed */
+  tgError: string | null;
   me: Player | null;
   rank: number | null;
   matches: MatchSummary[];
@@ -60,6 +63,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [liveHistory, setLiveHistory] = useState<RatingPoint[]>([]);
   const [liveNotes, setLiveNotes] = useState<AppNotification[]>([]);
   const [ready, setReady] = useState(mode === 'demo');
+  // Inside Telegram: sign in automatically with the Telegram account (verified by the telegram-auth function).
+  const needsTg = (): boolean => {
+    if (mode !== 'live' || !inTelegram || !tg) return false;
+    const cur = getSession();
+    const tgId = tg.initDataUnsafe?.user?.id;
+    return !cur || (tgId != null && Number(cur.user?.user_metadata?.tg_id) !== tgId);
+  };
+  const [tgPending, setTgPending] = useState<boolean>(needsTg);
+  const [tgError, setTgError] = useState<string | null>(null);
+  useEffect(() => {
+    if (!tgPending || !tg) return;
+    let cancelled = false;
+    db.invokeFunction<{ ok: boolean; error?: string; session?: any; bot_username?: string | null }>('telegram-auth', { initData: tg.initData })
+      .then((r) => {
+        if (cancelled) return;
+        if (r?.ok && r.session) {
+          rememberBotUsername(r.bot_username ?? null);
+          adoptSession(r.session);
+        } else setTgError(r?.error ?? 'unknown');
+      })
+      .catch((e: any) => !cancelled && setTgError(String(e?.message ?? e)))
+      .finally(() => !cancelled && setTgPending(false));
+    return () => {
+      cancelled = true;
+    };
+  }, [tgPending]);
   const localRef = useRef(local);
   localRef.current = local;
 
@@ -202,7 +231,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const me = mode === 'demo' ? (local ? localAsPlayer(local) : null) : liveMe;
     return {
       mode,
-      ready,
+      ready: ready && !tgPending,
+      tgError,
       signedIn: mode === 'demo' ? true : Boolean(session),
       me,
       rank,
@@ -222,7 +252,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       markAllRead,
       resetLocal,
     };
-  }, [mode, ready, session, local, liveMe, rank, liveMatches, liveHistory, liveNotes, mutateLocal, recordDemoResult, signIn, signUp, signOut, updateProfile, refresh, notify, markAllRead, resetLocal]);
+  }, [mode, ready, tgPending, tgError, session, local, liveMe, rank, liveMatches, liveHistory, liveNotes, mutateLocal, recordDemoResult, signIn, signUp, signOut, updateProfile, refresh, notify, markAllRead, resetLocal]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

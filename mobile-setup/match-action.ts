@@ -1,4 +1,4 @@
-// DAMEO Edge Function "match-action" — single file (engine inlined). Paste into Supabase → Edge Functions → editor.
+// DAMEO Edge Function "match-action" — single-file bundle (generated from supabase/functions/match-action).
 // supabase/functions/match-action/index.ts
 import { createClient } from "jsr:@supabase/supabase-js@2";
 // supabase/functions/_shared/engine/rules.ts
@@ -264,20 +264,140 @@ function replay(moves) {
   }
   return { ok: true, state: s };
 }
+// supabase/functions/_shared/bot/ai.ts
+var MAN = 100;
+var KING = 320;
+var WIN = 1e5;
+function evaluate2(board, me) {
+  let score = 0;
+  for (let i = 0;i < 64; i++) {
+    const cell = board[i];
+    if (cell === 0)
+      continue;
+    const color = colorOf(cell);
+    const [r, c] = rc(i);
+    let v;
+    if (isKing(cell)) {
+      v = KING;
+      v += 6 - (Math.abs(3.5 - r) + Math.abs(3.5 - c));
+    } else {
+      const progress = color === "w" ? 7 - r : r;
+      v = MAN + progress * 5;
+      if (progress === 0)
+        v += 12;
+      if (c >= 2 && c <= 5 && progress >= 2 && progress <= 5)
+        v += 3;
+    }
+    score += color === me ? v : -v;
+  }
+  return score;
+}
+function orderMoves(moves) {
+  return moves.map((m) => ({ m, k: m.captures.length * 10 + (m.promotes ? 8 : 0) })).sort((a, b) => b.k - a.k).map((x) => x.m);
+}
+
+class Searcher {
+  deadline;
+  nodes = 0;
+  aborted = false;
+  constructor(deadline) {
+    this.deadline = deadline;
+  }
+  negamax(board, color, depth, alpha, beta, ply) {
+    if ((++this.nodes & 1023) === 0 && Date.now() > this.deadline)
+      this.aborted = true;
+    if (this.aborted)
+      return 0;
+    const moves = legalMovesFor(board, color);
+    if (moves.length === 0)
+      return -WIN + ply;
+    if (depth <= 0 && !(moves[0].captures.length > 0 && ply < 24))
+      return evaluate2(board, color);
+    let best = -Infinity;
+    for (const m of orderMoves(moves)) {
+      const next = applyToBoard(board, m);
+      const v = -this.negamax(next, color === "w" ? "b" : "w", depth - 1, -beta, -alpha, ply + 1);
+      if (this.aborted)
+        return 0;
+      if (v > best)
+        best = v;
+      if (best > alpha)
+        alpha = best;
+      if (alpha >= beta)
+        break;
+    }
+    return best;
+  }
+}
+function scoreRoot(board, color, moves, depth, s) {
+  const out = [];
+  let alpha = -Infinity;
+  for (const m of orderMoves(moves)) {
+    const v = -s.negamax(applyToBoard(board, m), color === "w" ? "b" : "w", depth - 1, -Infinity, -alpha + 0, 1);
+    if (s.aborted)
+      return null;
+    out.push({ m, v });
+    if (v > alpha)
+      alpha = v;
+  }
+  return out;
+}
+function chooseMove(state, level, opts = {}) {
+  const rnd = opts.random ?? Math.random;
+  const color = state.turn;
+  const moves = legalMovesFor(state.board, color);
+  if (moves.length === 0)
+    return null;
+  if (moves.length === 1)
+    return moves[0];
+  if (level === "easy") {
+    if (rnd() < 0.7)
+      return moves[Math.floor(rnd() * moves.length)];
+    const s = new Searcher(Infinity);
+    const scored = scoreRoot(state.board, color, moves, 1, s);
+    scored.sort((a, b) => b.v - a.v);
+    return scored[0].m;
+  }
+  if (level === "medium") {
+    const s = new Searcher(Date.now() + (opts.timeMs ?? 600));
+    const scored = scoreRoot(state.board, color, moves, 3, s);
+    if (!scored)
+      return moves[Math.floor(rnd() * moves.length)];
+    const top = Math.max(...scored.map((x) => x.v));
+    const near = scored.filter((x) => top - x.v <= 8);
+    return near[Math.floor(rnd() * near.length)].m;
+  }
+  const deadline = Date.now() + (opts.timeMs ?? 700);
+  let best = orderMoves(moves)[0];
+  for (let depth = 2;depth <= 12; depth++) {
+    const s = new Searcher(deadline);
+    const scored = scoreRoot(state.board, color, moves, depth, s);
+    if (!scored)
+      break;
+    scored.sort((a, b) => b.v - a.v);
+    best = scored[0].m;
+    if (scored[0].v > WIN / 2)
+      break;
+    if (Date.now() > deadline)
+      break;
+  }
+  return best;
+}
+
 // supabase/functions/match-action/index.ts
 var cors = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type"
 };
 var json = (body, status = 200) => new Response(JSON.stringify(body), { status, headers: { ...cors, "Content-Type": "application/json" } });
+var BOT_TIME = { easy: 150, medium: 450, hard: 700 };
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS")
     return new Response("ok", { headers: cors });
   if (req.method !== "POST")
     return json({ ok: false, error: "method" }, 405);
   const url = Deno.env.get("SUPABASE_URL");
-  const authHeader = req.headers.get("Authorization") ?? "";
-  const userClient = createClient(url, Deno.env.get("SUPABASE_ANON_KEY"), { global: { headers: { Authorization: authHeader } } });
+  const userClient = createClient(url, Deno.env.get("SUPABASE_ANON_KEY"), { global: { headers: { Authorization: req.headers.get("Authorization") ?? "" } } });
   const { data: userData, error: authErr } = await userClient.auth.getUser();
   if (authErr || !userData.user)
     return json({ ok: false, error: "unauthorized" }, 401);
@@ -305,6 +425,12 @@ Deno.serve(async (req) => {
     if (upd && upd.length > 0 && match.rated)
       await admin.rpc("apply_match_result", { p_match: match_id });
   };
+  const finishIfOver = async (r, plies) => {
+    if (r.status === "won")
+      await finish(r.winner === "w" ? "white" : "black", r.reason, plies);
+    else if (r.status === "draw")
+      await finish("draw", r.reason, plies);
+  };
   if (action === "resign") {
     const { count } = await admin.from("match_moves").select("*", { count: "exact", head: true }).eq("match_id", match_id);
     await finish(myColor === "w" ? "black" : "white", "resign", count ?? 0);
@@ -317,23 +443,36 @@ Deno.serve(async (req) => {
   }
   const { data: rows } = await admin.from("match_moves").select("ply, from_sq, path").eq("match_id", match_id).order("ply", { ascending: true });
   const stored = (rows ?? []).map((r) => ({ from: r.from_sq, path: r.path }));
-  const state = replay(stored);
-  if (!state.ok)
+  const replayed = replay(stored);
+  if (!replayed.ok)
     return json({ ok: false, error: "corrupt-game" }, 500);
-  if (state.state.turn !== myColor)
+  if (replayed.state.turn !== myColor)
     return json({ ok: false, error: "not-your-turn" }, 409);
-  const out = playMove(state.state, from, path);
+  const out = playMove(replayed.state, from, path);
   if (!out.ok)
     return json({ ok: false, error: out.error ?? "illegal" }, 422);
-  const ply = stored.length;
+  let ply = stored.length;
   const { error: insErr } = await admin.from("match_moves").insert({ match_id, ply, from_sq: from, path });
   if (insErr)
     return json({ ok: false, error: "conflict" }, 409);
-  await admin.from("matches").update({ move_count: ply + 1 }).eq("id", match_id);
-  const r = out.state.result;
-  if (r.status === "won")
-    await finish(r.winner === "w" ? "white" : "black", r.reason, ply + 1);
-  else if (r.status === "draw")
-    await finish("draw", r.reason, ply + 1);
-  return json({ ok: true });
+  ply++;
+  let state = out.state;
+  let bot = null;
+  if (match.vs_bot && state.result.status === "playing") {
+    const m = chooseMove(state, match.bot_level, { timeMs: BOT_TIME[match.bot_level] ?? 400 });
+    if (m) {
+      const applied = playMove(state, m.from, m.path);
+      if (applied.ok) {
+        const { error } = await admin.from("match_moves").insert({ match_id, ply, from_sq: m.from, path: m.path });
+        if (!error) {
+          bot = { ply, from: m.from, path: m.path };
+          ply++;
+          state = applied.state;
+        }
+      }
+    }
+  }
+  await admin.from("matches").update({ move_count: ply }).eq("id", match_id);
+  await finishIfOver(state.result, ply);
+  return json({ ok: true, bot, result: state.result });
 });

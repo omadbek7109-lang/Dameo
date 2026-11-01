@@ -3,6 +3,7 @@ import type { Difficulty } from '../bot/ai.ts';
 import { requestBotMove, requestHint } from '../bot/botClient.ts';
 import { colorOf, initialBoard, initialState, legalMoves, playMove, resign as resignState, agreeDraw, type Color, type GameState, type Move } from '../engine/index.ts';
 import type { TKey } from '../i18n/index.tsx';
+import { haptic } from '../services/telegram.ts';
 
 export type GameKind = 'bot' | 'practice' | 'local' | 'demo-rated' | 'online';
 
@@ -56,7 +57,10 @@ export function useCheckers(cfg: GameConfig, hooks: { onHumanMove?: (m: Move) =>
 
   const say = useCallback((key: TKey, tone: UiMessage['tone'] = 'error') => {
     setMessage({ key, tone, n: Date.now() });
-    if (tone === 'error') setShake((s) => s + 1);
+    if (tone === 'error') {
+      setShake((s) => s + 1);
+      haptic('error');
+    }
   }, []);
 
   const commitMove = useCallback((from: number, path: number[], pushUndo: boolean): boolean => {
@@ -75,6 +79,7 @@ export function useCheckers(cfg: GameConfig, hooks: { onHumanMove?: (m: Move) =>
     setHint(null);
     setLastMove({ from, to: out.move.to });
     setMessage(null);
+    haptic(out.move.captures.length > 0 ? 'capture' : 'move');
     return true;
   }, []);
 

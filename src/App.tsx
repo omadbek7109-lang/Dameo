@@ -29,7 +29,7 @@ function NotFound() {
 
 export function App() {
   const route = useRoute();
-  const { ready } = useAuth();
+  const { ready, tgError } = useAuth();
   const { t } = useI18n();
   const top = route.segments[0] ?? '';
 
@@ -75,6 +75,13 @@ export function App() {
       </a>
       <div className="ambient" aria-hidden="true" />
       <Header />
+      {tgError && (
+        <div className="page" style={{ paddingBottom: 0 }}>
+          <div className="notice notice-warn" role="alert">
+            {tgError === 'bot-token-missing' ? t('auth.tgTokenMissing') : t('auth.tgFailed', { err: tgError })}
+          </div>
+        </div>
+      )}
       <main id="main" tabIndex={-1} key={route.path} className="main page-enter">
         {page}
       </main>

@@ -15,7 +15,8 @@ import { countPieces, type Color, type GameResult } from '../engine/index.ts';
 import { useI18n, type TKey } from '../i18n/index.tsx';
 import { navigate, useRoute } from '../router.tsx';
 import { DEMO_PLAYERS } from '../services/demoData.ts';
-import { getMatch, getMoves, resignOnline, submitMove, watchMatch, type OnlineMatch } from '../services/online.ts';
+import { getMatch, getMoves, resignOnline, startBotMatch, submitMove, watchMatch, type OnlineMatch } from '../services/online.ts';
+import { haptic } from '../services/telegram.ts';
 import type { ConnectionState } from '../services/supabase.ts';
 import { useSettings } from '../settings/SettingsProvider.tsx';
 import { botLevelFor } from './Play.tsx';
@@ -48,7 +49,7 @@ const reasonKey = (r: GameResult): TKey => {
 export function Game() {
   const route = useRoute();
   const online = route.query.get('online');
-  if (online) return <OnlineGame matchId={online} />;
+  if (online) return <OnlineGame key={online} matchId={online} />;
   return <LocalGame key={route.path + route.query.toString()} />;
 }
 
@@ -150,14 +151,20 @@ function OnlineGame({ matchId }: { matchId: string }) {
     loadMoves(moves);
   }, [matchId]);
 
+  const [waitingServer, setWaitingServer] = useState(false);
   const g = useCheckers(cfg, {
     onHumanMove: async (mv) => {
+      setWaitingServer(true);
       try {
         const r = await submitMove(matchId, mv.from, mv.path);
         if (!r.ok) throw new Error(r.error);
+        // Server bot reply comes back in the same response (realtime delivers it too; the ply check de-duplicates).
+        if (r.bot && gRef.current.game.history.length === r.bot.ply) gRef.current.applyRemote(r.bot.from, r.bot.path);
       } catch {
         toast('error', t('online.moveRejected'));
-        await resync(g.loadMoves).catch(() => {});
+        await resync(gRef.current.loadMoves).catch(() => {});
+      } finally {
+        setWaitingServer(false);
       }
     },
   });
@@ -225,7 +232,9 @@ function OnlineGame({ matchId }: { matchId: string }) {
     );
   }
   const iAmWhite = humanColor === 'w';
-  const opp = { name: (iAmWhite ? match.blackName : match.whiteName) ?? t('quick.opponent'), rating: (iAmWhite ? match.blackRating : match.whiteRating) ?? undefined };
+  const opp = match.vsBot
+    ? { name: `${t('game.botName')} · ${t(`bot.${match.botLevel ?? 'medium'}` as 'bot.easy')}`, rating: undefined, tag: t('game.botTag') }
+    : { name: (iAmWhite ? match.blackName : match.whiteName) ?? t('quick.opponent'), rating: (iAmWhite ? match.blackRating : match.whiteRating) ?? undefined };
   const top: PlayerInfo = { ...opp, color: iAmWhite ? 'b' : 'w' };
   const bottom: PlayerInfo = { name: me.username, rating: me.rating, seed: me.avatar, color: humanColor };
 
@@ -243,8 +252,16 @@ function OnlineGame({ matchId }: { matchId: string }) {
       onResign={() => resignOnline(matchId).catch(() => toast('error', t('online.resignFailed')))}
       onRestart={() => {}}
       result={finalResult}
-      onPlayAgain={() => navigate('/play?mode=quick')}
+      onPlayAgain={
+        match.vsBot
+          ? () =>
+              startBotMatch(match.botLevel ?? 'random')
+                .then((r) => navigate(`/game?online=${r.match_id}`))
+                .catch(() => toast('error', t('bot.startFailed')))
+          : () => navigate('/play?mode=quick')
+      }
       onExit={() => navigate('/play')}
+      serverThinking={waitingServer && match.vsBot}
       banner={
         conn !== 'open' ? (
           <div className="notice notice-warn" role="status">
@@ -274,9 +291,10 @@ interface ScreenProps {
   onPlayAgain: () => void;
   onExit: () => void;
   banner?: ReactNode;
+  serverThinking?: boolean;
 }
 
-function GameScreen({ g, kind, humanColor, top, bottom, canRestart, canUndo, canHint, canDraw, onResign, onRestart, result, onPlayAgain, onExit, banner }: ScreenProps) {
+function GameScreen({ g, kind, humanColor, top, bottom, canRestart, canUndo, canHint, canDraw, onResign, onRestart, result, onPlayAgain, onExit, banner, serverThinking }: ScreenProps) {
   const { t } = useI18n();
   const { settings } = useSettings();
   const [confirm, setConfirm] = useState<null | 'resign' | 'restart' | 'draw'>(null);
@@ -308,7 +326,7 @@ function GameScreen({ g, kind, humanColor, top, bottom, canRestart, canUndo, can
       ? t(g.game.turn === 'w' ? 'game.turnWhite' : 'game.turnBlack')
       : g.humanTurn
         ? t('game.yourTurn')
-        : g.thinking
+        : g.thinking || serverThinking
           ? t('game.thinking')
           : t('game.opponentTurn');
 
@@ -364,7 +382,7 @@ function GameScreen({ g, kind, humanColor, top, bottom, canRestart, canUndo, can
 
         <aside className="game-side card">
           <div className={`turn-pill ${over ? 'turn-over' : ''}`}>
-            {g.thinking && <LuLoader className="spin" />} {turnText}
+            {(g.thinking || serverThinking) && <LuLoader className="spin" />} {turnText}
           </div>
           <h3 className="side-title">{t('game.moves')}</h3>
           <ol className="history" ref={histRef} aria-label={t('game.moves')}>
@@ -449,6 +467,9 @@ function GameScreen({ g, kind, humanColor, top, bottom, canRestart, canUndo, can
 function ResultDialog({ open, onClose, result, onPlayAgain, onExit, kind }: { open: boolean; onClose: () => void; result: ResultInfo; onPlayAgain: () => void; onExit: () => void; kind: GameKind }) {
   const { t, num } = useI18n();
   const win = result.outcome === 'win';
+  useEffect(() => {
+    if (open) haptic(win ? 'win' : 'error');
+  }, [open, win]);
   const title = result.outcome === 'win' ? t('result.victory') : result.outcome === 'loss' ? t('result.defeat') : result.outcome === 'draw' ? t('result.drawn') : t(result.winnerColor === 'w' ? 'result.whiteWins' : 'result.blackWins');
   const hasRating = result.rated && result.before !== undefined && result.after !== undefined;
   const shown = useCountUp(result.before ?? 0, result.after ?? 0, 1200, hasRating);

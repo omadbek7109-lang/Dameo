@@ -242,5 +242,6 @@ describe('server engine copy', () => {
     for (const f of ['types.ts', 'rules.ts', 'index.ts']) {
       expect(readFileSync(`supabase/functions/_shared/engine/${f}`, 'utf8')).toBe(readFileSync(`src/engine/${f}`, 'utf8'));
     }
+    expect(readFileSync('supabase/functions/_shared/bot/ai.ts', 'utf8')).toBe(readFileSync('src/bot/ai.ts', 'utf8'));
   });
 });

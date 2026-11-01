@@ -6,6 +6,14 @@
     <meta name="theme-color" content="#0a1020" />
     <title>DAMEO — Every Move Matters.</title>
     <meta name="description" content="DAMEO — online shashka (checkers) platformasi. Every Move Matters." />
+    <script>
+      // Load the Telegram SDK only inside Telegram (it must run before the app reads the launch data).
+      (function () {
+        var tg = /tgWebApp/.test(location.hash) || /Telegram/i.test(navigator.userAgent);
+        try { tg = tg || !!sessionStorage.getItem('__telegram__initParams'); } catch (e) {}
+        if (tg) document.write('<script src="https://telegram.org/js/telegram-web-app.js?59"><\/script>');
+      })();
+    </script>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -46,7 +54,10 @@
         }
         window.__dameoBootError = show;
         window.addEventListener('error', function (e) {
-          if (e.target && (e.target.tagName === 'SCRIPT' || e.target.tagName === 'LINK')) show('Fayl topilmadi: ' + (e.target.src || e.target.href));
+          if (e.target && (e.target.tagName === 'SCRIPT' || e.target.tagName === 'LINK')) {
+            var src = e.target.src || e.target.href || '';
+            if (src.indexOf(location.origin) === 0) show('Fayl topilmadi: ' + src); // ignore third-party (fonts, Telegram SDK)
+          }
           else show(String(e.message || e.error));
         }, true);
         window.addEventListener('unhandledrejection', function (e) { if (!document.getElementById('root').childElementCount) show(String(e.reason)); });

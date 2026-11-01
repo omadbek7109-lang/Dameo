@@ -41,6 +41,10 @@ function setSession(s: SbSession | null) {
 }
 
 export const getSession = () => session;
+/** Adopt a session issued by our own Edge Function (Telegram login). */
+export function adoptSession(data: any) {
+  setSession(normalizeSession(data));
+}
 export function onAuthChange(fn: (s: SbSession | null) => void): () => void {
   authListeners.add(fn);
   return () => authListeners.delete(fn);

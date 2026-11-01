@@ -115,7 +115,7 @@ export const uz = {
   'home.recentlyActive': "Yaqinda faol bo'lganlar",
 
   'mode.quick': 'Raqib qidirish',
-  'mode.quickDesc': "Reytingi yaqin raqib bilan tezkor o'yin.",
+  'mode.quickDesc': "Odam raqib qidiriladi; 20 soniyada topilmasa — bot bilan.",
   'mode.friends': "Do'st bilan o'ynash",
   'mode.friendsDesc': "Maxfiy xona yarating yoki kod bilan qo'shiling.",
   'mode.bot': "Bot bilan o'ynash",
@@ -163,7 +163,7 @@ export const uz = {
   'bot.mediumDesc': "3 yurish oldinga hisoblaydi.",
   'bot.hardDesc': "Chuqur qidiruv (minimax + alfa-beta).",
   'bot.side': 'Tomon',
-  'bot.unrated': "Bot bilan o'yinlar reytingga ta'sir qilmaydi.",
+  'bot.unrated': "Bu o'yin reytingga ta'sir qilmaydi.",
   'practice.desc': "Xotirjam mashq qiling: mumkin yurishlar ajratib ko'rsatiladi, maslahat va bekor qilish mavjud.",
   'practice.unrated': "Mashq reytingga ta'sir qilmaydi.",
   'side.white': 'Oq',
@@ -283,7 +283,7 @@ export const uz = {
   'level.expert': 'Ekspert',
   'level.master': 'Usta',
   'rating.how': 'Reyting qanday hisoblanadi?',
-  'rating.explain': "Boshlang'ich reyting 1200. Tasdiqlangan reytingli o'yinlardan keyin Elo formulasi qo'llanadi: yangi = eski + K × (natija − kutilgan). Natija: g'alaba 1, durang 0,5, mag'lubiyat 0. Dastlabki 20 o'yinda K = 40, keyin 24. Mashq, bot va bitta qurilmadagi o'yinlar reytingni o'zgartirmaydi.",
+  'rating.explain': "Boshlang'ich reyting 1200. Har bir tasdiqlangan onlayn o'yindan keyin: g'alaba +5, mag'lubiyat −5, durang 0. Odamga qarshi ham, server botiga qarshi ham hisoblanadi. Mashq va bitta qurilmadagi o'yinlar reytingga ta'sir qilmaydi.",
   'chart.summary': "Reyting {n} nuqta: {from} dan {to} gacha",
 
   'ach.firstWin': "Birinchi g'alaba",
@@ -389,6 +389,19 @@ export const uz = {
   'settings.aboutText': "DAMEO — Every Move Matters. Strategik, zamonaviy va xalqaro onlayn shashka platformasi.",
   'settings.free': "Birinchi versiya to'liq bepul: pullik ko'rinishlar, obunalar va pullik turnirlar yo'q.",
 
+  'quick.botAfter': "{n} soniyadan keyin bot bilan",
+  'quick.foundBot': "Bo'sh o'yinchi yo'q — DAMEO Bot bilan o'ynaysiz",
+  'game.botName': "DAMEO Bot",
+  'game.botTag': "Bot",
+  'room.shareTelegram': "Telegramda yuborish",
+  'bot.needAccount': "Reytingli bot o'yini uchun tizimga kiring.",
+  'bot.startFailed': "Bot o'yinini boshlab bo'lmadi.",
+  'bot.ratedBadge': "±5 reyting",
+  'bot.rated': "Bot server tomonida o'ynaydi: g'alaba +5, mag'lubiyat −5.",
+  'bot.random': "Tasodifiy",
+  'bot.randomDesc': "Darajani server tanlaydi.",
+  'auth.tgFailed': "Telegram orqali kirib bo'lmadi ({err}).",
+  'auth.tgTokenMissing': "Server sozlanmagan: Supabase'ga TELEGRAM_BOT_TOKEN qo'shilmagan.",
   'notFound.title': 'Sahifa topilmadi',
 } as const;
 

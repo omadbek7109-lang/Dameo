@@ -63,10 +63,10 @@ update public.matches set rated = true where id = (select (r ->> 'match_id')::uu
 update public.matches set status = 'finished', result = 'white', result_reason = 'no-moves', ended_at = now()
  where id = (select (r ->> 'match_id')::uuid from room);
 select public.apply_match_result((select (r ->> 'match_id')::uuid from room));
-select pg_temp.check('winner +20 (K=40, equal ratings)', (select rating from public.profiles where id = '11111111-1111-1111-1111-111111111111') = 1220);
-select pg_temp.check('loser -20', (select rating from public.profiles where id = '22222222-2222-2222-2222-222222222222') = 1180);
+select pg_temp.check('winner +5', (select rating from public.profiles where id = '11111111-1111-1111-1111-111111111111') = 1205);
+select pg_temp.check('loser -5', (select rating from public.profiles where id = '22222222-2222-2222-2222-222222222222') = 1195);
 select public.apply_match_result((select (r ->> 'match_id')::uuid from room));
-select pg_temp.check('second call is a no-op (no duplicate rating update)', (select rating from public.profiles where id = '11111111-1111-1111-1111-111111111111') = 1220
+select pg_temp.check('second call is a no-op (no duplicate rating update)', (select rating from public.profiles where id = '11111111-1111-1111-1111-111111111111') = 1205
   and (select count(*) from public.rating_history where match_id is not null) = 2);
 select pg_temp.check('wins/losses/rated_games updated once',
   (select wins = 1 and losses = 0 and rated_games = 1 from public.profiles where id = '11111111-1111-1111-1111-111111111111'));
@@ -84,7 +84,7 @@ set request.jwt.claim.role = 'authenticated';
 select pg_temp.check('leaderboard ranks by rating', (select username from public.leaderboard order by rank limit 1) = 'alice' and (select rank from public.leaderboard where id = auth.uid()) = 3);
 select pg_temp.check('leaderboard_page search', (select count(*) from public.leaderboard_page('all', 'bo', 10, 0)) = 1);
 select pg_temp.check('leaderboard_page total_count', (select total_count from public.leaderboard_page('all', '', 1, 0)) = 3);
-select pg_temp.check('match_history shows a loss with -20', (select result = 'loss' and delta = -20 from public.match_history where user_id = auth.uid()));
+select pg_temp.check('match_history shows a loss with -5', (select result = 'loss' and delta = -5 from public.match_history where user_id = auth.uid()));
 
 -- friends flow
 select public.send_friend_request('11111111-1111-1111-1111-111111111111');
@@ -151,6 +151,29 @@ do $$ begin
   insert into public.tournaments (name, starts_at, capacity) values ('Fake', now(), 4);
   perform pg_temp.check('client can NOT create tournaments', false);
 exception when others then perform pg_temp.check('client can NOT create tournaments', true, sqlerrm); end $$;
+reset role;
+
+-- bot games (server bot, rated ±5, human only)
+set role authenticated;
+set request.jwt.claim.role = 'authenticated';
+set request.jwt.claim.sub = '33333333-3333-3333-3333-333333333333';
+create temp table bm as select public.start_bot_match('hard') as r;
+grant all on bm to public;
+select pg_temp.check('start_bot_match creates an active bot game', (select status = 'active' and vs_bot and bot_level = 'hard' from public.matches where id = (select (r->>'match_id')::uuid from bm)));
+select pg_temp.check('match_view names the bot', (select black_name = 'DAMEO Bot' from public.match_view where id = (select (r->>'match_id')::uuid from bm)));
+do $$ begin
+  update public.matches set status = 'finished' where id = (select (r->>'match_id')::uuid from bm);
+  perform pg_temp.check('player can NOT finish own bot game', (select status from public.matches where id = (select (r->>'match_id')::uuid from bm)) = 'active');
+exception when others then perform pg_temp.check('player can NOT finish own bot game', true, sqlerrm); end $$;
+reset role;
+set role service_role;
+set request.jwt.claim.role = 'service_role';
+create temp table before_c as select rating from public.profiles where id = '33333333-3333-3333-3333-333333333333';
+update public.matches set status = 'finished', result = 'white', result_reason = 'no-moves', ended_at = now() where id = (select (r->>'match_id')::uuid from bm);
+select public.apply_match_result((select (r->>'match_id')::uuid from bm));
+select public.apply_match_result((select (r->>'match_id')::uuid from bm));
+select pg_temp.check('beating the bot gives exactly +5 once', (select rating from public.profiles where id = '33333333-3333-3333-3333-333333333333') = (select rating from before_c) + 5);
+select pg_temp.check('bot game appears in match_history', (select count(*) from public.match_history where match_id = (select (r->>'match_id')::uuid from bm)) = 1);
 reset role;
 
 -- anon: public reads only
