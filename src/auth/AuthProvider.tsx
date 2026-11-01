@@ -39,8 +39,6 @@ interface AuthCtx {
   local: LocalProfile | null;
   mutateLocal: (fn: (p: LocalProfile) => LocalProfile) => void;
   recordDemoResult: (r: DemoResultInput) => { delta: number; before: number; after: number };
-  signIn: (email: string, password: string) => Promise<void>;
-  signUp: (email: string, password: string, username: string) => Promise<{ needsConfirmation: boolean }>;
   signOut: () => Promise<void>;
   updateProfile: (patch: { username?: string; avatar?: string }) => Promise<void>;
   refresh: () => Promise<void>;
@@ -200,10 +198,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [mutateLocal],
   );
 
-  const signIn = useCallback(async (email: string, password: string) => {
-    await auth.signIn(email, password);
-  }, []);
-  const signUp = useCallback((email: string, password: string, username: string) => auth.signUp(email, password, username), []);
   const signOut = useCallback(async () => {
     await auth.signOut();
   }, []);
@@ -243,8 +237,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       local,
       mutateLocal,
       recordDemoResult,
-      signIn,
-      signUp,
       signOut,
       updateProfile,
       refresh,
@@ -252,7 +244,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       markAllRead,
       resetLocal,
     };
-  }, [mode, ready, tgPending, tgError, session, local, liveMe, rank, liveMatches, liveHistory, liveNotes, mutateLocal, recordDemoResult, signIn, signUp, signOut, updateProfile, refresh, notify, markAllRead, resetLocal]);
+  }, [mode, ready, tgPending, tgError, session, local, liveMe, rank, liveMatches, liveHistory, liveNotes, mutateLocal, recordDemoResult, signOut, updateProfile, refresh, notify, markAllRead, resetLocal]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

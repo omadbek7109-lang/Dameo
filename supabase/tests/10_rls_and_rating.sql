@@ -176,6 +176,39 @@ select pg_temp.check('beating the bot gives exactly +5 once', (select rating fro
 select pg_temp.check('bot game appears in match_history', (select count(*) from public.match_history where match_id = (select (r->>'match_id')::uuid from bm)) = 1);
 reset role;
 
+-- bot cap & abandon penalty & avatars (0004)
+set role authenticated;
+set request.jwt.claim.role = 'authenticated';
+set request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
+create temp table cap as select public.start_bot_match('easy') as r;
+grant all on cap to public;
+reset role;
+set role service_role;
+update public.matches set move_count = 2 where id = (select (r->>'match_id')::uuid from cap);  -- player already moved
+reset role;
+create temp table before_b as select rating from public.profiles where id = '22222222-2222-2222-2222-222222222222';
+set role authenticated;
+set request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
+select public.start_bot_match('easy');  -- abandons the previous one
+select pg_temp.check('abandoning a started bot game counts as a loss (-5)', (select rating from public.profiles where id = auth.uid()) = (select rating from before_b) - 5);
+select public.start_bot_match('easy'); select public.start_bot_match('easy'); select public.start_bot_match('easy');
+select pg_temp.check('5 rated bot games per day', (select public.bot_games_left()) = 0);
+select pg_temp.check('6th bot game is unrated', (select (public.start_bot_match('easy') ->> 'rated')::boolean) = false);
+update public.profiles set avatar = 'https://evil.example.com/x.png' where id = auth.uid();
+reset role;
+select pg_temp.check('external avatar URL rejected', (select avatar from public.profiles where id = '22222222-2222-2222-2222-222222222222') not like '%evil%');
+set role authenticated;
+set request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
+update public.profiles set avatar = 'https://t.me/i/userpic/320/abcDEF.svg' where id = auth.uid();
+select pg_temp.check('telegram userpic accepted', (select avatar from public.profiles where id = auth.uid()) like 'https://t.me/%');
+do $$ begin
+  insert into storage.objects (bucket_id, name) values ('avatars', '11111111-1111-1111-1111-111111111111/avatar.webp');
+  perform pg_temp.check('can NOT upload into another player''s folder', false);
+exception when others then perform pg_temp.check('can NOT upload into another player''s folder', true, sqlerrm); end $$;
+insert into storage.objects (bucket_id, name) values ('avatars', '22222222-2222-2222-2222-222222222222/avatar.webp');
+select pg_temp.check('can upload into own folder', (select count(*) from storage.objects) = 1);
+reset role;
+
 -- anon: public reads only
 set role anon;
 reset request.jwt.claim.sub;

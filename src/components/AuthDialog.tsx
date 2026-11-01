@@ -1,13 +1,16 @@
-import { createContext, useCallback, useContext, useMemo, useState, type FormEvent, type ReactNode } from 'react';
-import { LuLoader, LuLock, LuMail, LuUser } from 'react-icons/lu';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { LuLoader, LuRotateCcw, LuSend } from 'react-icons/lu';
 import { useAuth } from '../auth/AuthProvider.tsx';
-import { useT, type TKey } from '../i18n/index.tsx';
-import { validateUsername } from '../services/localProfile.ts';
-import { SbError } from '../services/supabase.ts';
+import { useT } from '../i18n/index.tsx';
 import { navigate } from '../router.tsx';
+import { db } from '../services/supabase.ts';
+import { botUsername, inTelegram, rememberBotUsername } from '../services/telegram.ts';
 import { Modal } from './Modal.tsx';
-import { useToast } from './Toast.tsx';
 
+/**
+ * DAMEO accounts are Telegram accounts only. Inside Telegram the player is signed in automatically;
+ * in a normal browser this dialog sends them to the bot.
+ */
 interface Ctx {
   openAuth: () => void;
 }
@@ -26,39 +29,41 @@ export function AuthDialogProvider({ children }: { children: ReactNode }) {
   );
 }
 
-function errorKey(e: unknown): TKey {
-  if (e instanceof SbError) {
-    if (e.status === 400 || e.status === 401) return 'auth.err.credentials';
-    if (e.status === 422 || e.status === 409) return 'auth.err.exists';
-    if (e.status === 429) return 'auth.err.rate';
-  }
-  if (e instanceof TypeError) return 'auth.err.network';
-  return 'auth.err.generic';
+function TelegramLogo() {
+  return (
+    <svg className="tg-logo" viewBox="0 0 64 64" aria-hidden="true">
+      <circle cx="32" cy="32" r="32" fill="#2AABEE" />
+      <path d="M14.5 31.2l29.2-11.3c1.4-.5 2.6.3 2.1 2.5l-5 23.5c-.4 1.7-1.4 2.1-2.8 1.3l-7.6-5.6-3.7 3.5c-.4.4-.8.8-1.6.8l.6-7.8 14.2-12.8c.6-.5-.1-.9-1-.3L21.4 36l-7.5-2.3c-1.6-.5-1.7-1.6.6-2.5z" fill="#fff" />
+    </svg>
+  );
 }
 
 function AuthDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const t = useT();
-  const { mode, signIn, signUp } = useAuth();
-  const { toast } = useToast();
-  const [tab, setTab] = useState<'in' | 'up'>('in');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [username, setUsername] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState<TKey | null>(null);
+  const { mode, tgError } = useAuth();
+  const [bot, setBot] = useState<string | null>(botUsername());
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!open || bot || mode !== 'live') return;
+    setLoading(true);
+    db.invokeFunction<{ ok: boolean; bot_username?: string | null }>('telegram-auth', { info: true })
+      .then((r) => {
+        if (r?.bot_username) {
+          rememberBotUsername(r.bot_username);
+          setBot(r.bot_username);
+        }
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [open, bot, mode]);
 
   if (mode === 'demo') {
     return (
       <Modal open={open} onClose={onClose} title={t('auth.demoTitle')}>
         <p className="muted">{t('auth.demoBody')}</p>
         <div className="row-actions">
-          <button
-            className="btn btn-primary"
-            onClick={() => {
-              onClose();
-              navigate('/profile');
-            }}
-          >
+          <button className="btn btn-primary" onClick={() => (onClose(), navigate('/profile'))}>
             {t('auth.editDemoProfile')}
           </button>
           <button className="btn btn-ghost" onClick={onClose}>
@@ -69,80 +74,33 @@ function AuthDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
     );
   }
 
-  const submit = async (e: FormEvent) => {
-    e.preventDefault();
-    setErr(null);
-    if (!/^\S+@\S+\.\S+$/.test(email)) return setErr('validation.email');
-    if (password.length < 8) return setErr('validation.password');
-    if (tab === 'up') {
-      const u = validateUsername(username);
-      if (u) return setErr(u);
-    }
-    setBusy(true);
-    try {
-      if (tab === 'in') {
-        await signIn(email, password);
-        toast('success', t('auth.signedIn'));
-        onClose();
-      } else {
-        const r = await signUp(email, password, username.trim());
-        if (r.needsConfirmation) {
-          toast('info', t('auth.confirmEmail'));
-          setTab('in');
-        } else {
-          toast('success', t('auth.signedUp'));
-          onClose();
-        }
-      }
-    } catch (ex) {
-      setErr(errorKey(ex));
-    } finally {
-      setBusy(false);
-    }
-  };
-
   return (
-    <Modal open={open} onClose={onClose} title={tab === 'in' ? t('auth.signIn') : t('auth.signUp')} locked={busy}>
-      <div className="tabs tabs-sm" role="tablist">
-        {(['in', 'up'] as const).map((k) => (
-          <button key={k} role="tab" aria-selected={tab === k} className={`tab ${tab === k ? 'tab-active' : ''}`} onClick={() => (setTab(k), setErr(null))}>
-            {t(k === 'in' ? 'auth.signIn' : 'auth.signUp')}
-          </button>
-        ))}
+    <Modal open={open} onClose={onClose} title={t('auth.tgTitle')}>
+      <div className="tg-login">
+        <TelegramLogo />
+        {inTelegram ? (
+          <>
+            <p className="muted">{tgError ? t('auth.tgRetryBody') : t('auth.tgSigningIn')}</p>
+            <button className="btn btn-primary" onClick={() => location.reload()}>
+              <LuRotateCcw /> {t('common.retry')}
+            </button>
+          </>
+        ) : (
+          <>
+            <p className="muted">{t('auth.tgOnlyBody')}</p>
+            {loading ? (
+              <LuLoader className="spin" />
+            ) : bot ? (
+              <a className="btn btn-primary btn-lg" href={`https://t.me/${bot}?startapp=web`} target="_blank" rel="noopener noreferrer">
+                <LuSend /> {t('auth.openInTelegram')}
+              </a>
+            ) : (
+              <p className="small muted">{t('auth.tgBotUnknown')}</p>
+            )}
+            <p className="small muted">{t('auth.tgPracticeHint')}</p>
+          </>
+        )}
       </div>
-      <form onSubmit={submit} className="form" noValidate>
-        {tab === 'up' && (
-          <label className="field">
-            <span>{t('auth.username')}</span>
-            <span className="input-wrap">
-              <LuUser />
-              <input value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="username" maxLength={20} />
-            </span>
-          </label>
-        )}
-        <label className="field">
-          <span>{t('auth.email')}</span>
-          <span className="input-wrap">
-            <LuMail />
-            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" inputMode="email" />
-          </span>
-        </label>
-        <label className="field">
-          <span>{t('auth.password')}</span>
-          <span className="input-wrap">
-            <LuLock />
-            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete={tab === 'in' ? 'current-password' : 'new-password'} />
-          </span>
-        </label>
-        {err && (
-          <div className="form-error" role="alert">
-            {t(err)}
-          </div>
-        )}
-        <button className="btn btn-primary btn-block" disabled={busy}>
-          {busy && <LuLoader className="spin" />} {t(tab === 'in' ? 'auth.signIn' : 'auth.signUp')}
-        </button>
-      </form>
     </Modal>
   );
 }

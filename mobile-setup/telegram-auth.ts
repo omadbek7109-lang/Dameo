@@ -28,6 +28,16 @@ function cleanName(u) {
   return n;
 }
 var botUsername = null;
+async function getBotUsername(token) {
+  if (!botUsername) {
+    try {
+      const me = await (await fetch(`https://api.telegram.org/bot${token}/getMe`)).json();
+      botUsername = me?.result?.username ?? null;
+    } catch {}
+  }
+  return botUsername;
+}
+var TG_PHOTO = /^https:\/\/t\.me\/i\/userpic\/[0-9]{1,4}\/[A-Za-z0-9_.=-]{1,200}$/;
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS")
     return new Response("ok", { headers: cors });
@@ -36,12 +46,15 @@ Deno.serve(async (req) => {
   const token = Deno.env.get("TELEGRAM_BOT_TOKEN");
   if (!token)
     return json({ ok: false, error: "bot-token-missing" }, 500);
-  let initData = "";
+  let body;
   try {
-    initData = String((await req.json()).initData ?? "");
+    body = await req.json();
   } catch {
     return json({ ok: false, error: "bad-json" }, 400);
   }
+  if (body?.info)
+    return json({ ok: true, bot_username: await getBotUsername(token) });
+  const initData = String(body?.initData ?? "");
   const params = new URLSearchParams(initData);
   const hash = params.get("hash") ?? "";
   params.delete("hash");
@@ -77,8 +90,12 @@ Deno.serve(async (req) => {
     if (error && !/already/i.test(error.message))
       return json({ ok: false, error: "create-failed", detail: error.message }, 500);
     const userId = created?.user?.id;
-    if (userId)
-      await admin.from("profiles").update({ tg_id: tgUser.id }).eq("id", userId);
+    if (userId) {
+      const patch = { tg_id: tgUser.id };
+      if (typeof tgUser.photo_url === "string" && TG_PHOTO.test(tgUser.photo_url))
+        patch.avatar = tgUser.photo_url;
+      await admin.from("profiles").update(patch).eq("id", userId);
+    }
   }
   const anon = createClient(url, Deno.env.get("SUPABASE_ANON_KEY"), { auth: { persistSession: false } });
   const { data: signed, error: signErr } = await anon.auth.signInWithPassword({ email, password });
@@ -86,16 +103,10 @@ Deno.serve(async (req) => {
     return json({ ok: false, error: "signin-failed", detail: signErr?.message }, 500);
   if (existing == null)
     await admin.from("profiles").update({ tg_id: tgUser.id }).eq("id", signed.user.id);
-  if (!botUsername) {
-    try {
-      const me = await (await fetch(`https://api.telegram.org/bot${token}/getMe`)).json();
-      botUsername = me?.result?.username ?? null;
-    } catch {}
-  }
   const s = signed.session;
   return json({
     ok: true,
-    bot_username: botUsername,
+    bot_username: await getBotUsername(token),
     session: { access_token: s.access_token, refresh_token: s.refresh_token, expires_at: s.expires_at, expires_in: s.expires_in, user: s.user }
   });
 });

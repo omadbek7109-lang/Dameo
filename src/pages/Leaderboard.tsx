@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { LuChevronLeft, LuChevronRight, LuCrown, LuSearch } from 'react-icons/lu';
 import { useAuth } from '../auth/AuthProvider.tsx';
-import { Avatar } from '../components/Avatar.tsx';
+import { Avatar, LevelBadge } from '../components/Avatar.tsx';
 import { EmptyState, ErrorState, Spinner } from '../components/States.tsx';
 import { DemoNotice, Delta, SignInPrompt, winRate } from '../components/ui.tsx';
 import { useI18n } from '../i18n/index.tsx';
@@ -112,6 +112,7 @@ export function Leaderboard() {
               <span className="podium-crown">{p.rank === 1 && <LuCrown />}</span>
               <Avatar name={p.username} seed={p.avatar} size={p.rank === 1 ? 76 : 60} ring={p.rank === 1 ? 'gold' : p.rank === 2 ? 'silver' : 'bronze'} />
               <span className="podium-name">{p.username}</span>
+              <LevelBadge rating={p.rating} label={(n) => t('level.short', { n })} />
               <span className="podium-rating">{num(p.rating)}</span>
               <span className="podium-rank">{p.rank}</span>
             </Link>
@@ -192,6 +193,7 @@ function LbRow({ p, meId }: { p: RankedPlayer; meId?: string }) {
         <span className="lb-name">
           <span className="row-title">
             {p.username}
+            <LevelBadge rating={p.rating} label={(n) => t('level.short', { n })} />
             {p.id === meId && <span className="badge badge-you">{t('common.you')}</span>}
             {p.demo && p.id !== meId && <span className="badge badge-demo">{t('demo.badge')}</span>}
           </span>

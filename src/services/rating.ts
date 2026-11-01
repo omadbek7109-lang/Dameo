@@ -17,10 +17,3 @@ export function ratingDelta(player: number, _opponent: number, score: Score, _ra
   return Math.max(RATING_FLOOR, player + change) - player;
 }
 
-export function levelForRating(rating: number): 'beginner' | 'amateur' | 'advanced' | 'expert' | 'master' {
-  if (rating < 1100) return 'beginner';
-  if (rating < 1350) return 'amateur';
-  if (rating < 1600) return 'advanced';
-  if (rating < 1900) return 'expert';
-  return 'master';
-}

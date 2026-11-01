@@ -1,6 +1,7 @@
 import type { MatchSummary, Player, RatingPoint } from '../types/models.ts';
 import { fromRow } from './leaderboard.ts';
-import { db } from './supabase.ts';
+import { SUPABASE_URL } from './config.ts';
+import { db, storageUpload } from './supabase.ts';
 
 export interface LiveProfileBundle {
   player: Player;
@@ -42,4 +43,38 @@ export async function loadPublicProfile(userId: string): Promise<LiveProfileBund
 
 export async function updateLiveProfile(userId: string, patch: { username?: string; avatar?: string }): Promise<void> {
   await db.update('profiles', { id: `eq.${userId}` }, patch);
+}
+
+/** Shrink a picked image to a 256×256 square WebP (centre crop) before upload. */
+export async function prepareAvatar(file: File): Promise<Blob> {
+  if (!/^image\//.test(file.type)) throw new Error('not-image');
+  const url = URL.createObjectURL(file);
+  try {
+    const img = await new Promise<HTMLImageElement>((res, rej) => {
+      const i = new Image();
+      i.onload = () => res(i);
+      i.onerror = () => rej(new Error('decode'));
+      i.src = url;
+    });
+    const side = Math.min(img.naturalWidth, img.naturalHeight);
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = 256;
+    const ctx = canvas.getContext('2d')!;
+    ctx.drawImage(img, (img.naturalWidth - side) / 2, (img.naturalHeight - side) / 2, side, side, 0, 0, 256, 256);
+    const blob = await new Promise<Blob | null>((res) => canvas.toBlob(res, 'image/webp', 0.85));
+    if (blob && blob.type === 'image/webp') return blob;
+    const jpeg = await new Promise<Blob | null>((res) => canvas.toBlob(res, 'image/jpeg', 0.85));
+    if (!jpeg) throw new Error('encode');
+    return jpeg;
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+/** Upload to avatars/<uid>/avatar.<ext> (RLS lets each player write only their own folder). Returns the public URL. */
+export async function uploadAvatar(userId: string, blob: Blob): Promise<string> {
+  const ext = blob.type === 'image/webp' ? 'webp' : 'jpg';
+  const path = `${userId}/avatar.${ext}`;
+  await storageUpload('avatars', path, blob);
+  return `${SUPABASE_URL}/storage/v1/object/public/avatars/${path}?v=${Date.now()}`;
 }

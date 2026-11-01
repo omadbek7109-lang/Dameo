@@ -4,6 +4,8 @@ import { useAuth } from '../auth/AuthProvider.tsx';
 import { LANGS, useI18n, type TKey } from '../i18n/index.tsx';
 import { Link, useRoute } from '../router.tsx';
 import { useTheme } from '../theme/ThemeProvider.tsx';
+import { inTelegram } from '../services/telegram.ts';
+import { LevelBadge } from './Avatar.tsx';
 import { Avatar } from './Avatar.tsx';
 import { useAuthDialog } from './AuthDialog.tsx';
 import { Logo } from './Logo.tsx';
@@ -141,7 +143,7 @@ export function Header() {
                   <div className="menu-head">
                     <strong>{me.username}</strong>
                     <span className="muted small">
-                      {t('common.rating')}: {me.rating}
+                      {t('common.rating')}: {me.rating} <LevelBadge rating={me.rating} label={(n) => t('level.short', { n })} />
                     </span>
                   </div>
                   <Link to="/profile" className="menu-item" role="menuitem" onClick={close}>
@@ -150,7 +152,7 @@ export function Header() {
                   <Link to="/settings" className="menu-item" role="menuitem" onClick={close}>
                     <LuSettings /> {t('nav.settings')}
                   </Link>
-                  {mode === 'live' && (
+                  {mode === 'live' && !inTelegram && (
                     <button
                       className="menu-item"
                       role="menuitem"

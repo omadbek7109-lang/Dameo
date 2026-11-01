@@ -211,6 +211,24 @@ export const db = {
   },
 };
 
+/* ---------------------------- Storage ---------------------------- */
+
+export async function storageUpload(bucket: string, path: string, blob: Blob): Promise<void> {
+  await ensureFreshToken();
+  const res = await fetch(`${SUPABASE_URL}/storage/v1/object/${bucket}/${path}`, {
+    method: 'POST',
+    headers: {
+      apikey: SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${session?.access_token ?? SUPABASE_ANON_KEY}`,
+      'Content-Type': blob.type,
+      'x-upsert': 'true',
+      'cache-control': '3600',
+    },
+    body: blob,
+  });
+  if (!res.ok) throw await parseError(res);
+}
+
 /* --------------------------- Realtime --------------------------- */
 
 export interface ChangeEvent<T = any> {

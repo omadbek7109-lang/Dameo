@@ -10,7 +10,7 @@ import { useI18n, type TKey } from '../i18n/index.tsx';
 import { navigate, useRoute } from '../router.tsx';
 import { backendConfigured } from '../services/config.ts';
 import { DEMO_PLAYERS } from '../services/demoData.ts';
-import { cancelQuickMatch, createRoom, joinRoom, quickMatch, startBotMatch, watchPairing } from '../services/online.ts';
+import { botGamesLeft, cancelQuickMatch, createRoom, joinRoom, quickMatch, startBotMatch, watchPairing } from '../services/online.ts';
 import { inTelegram, shareRoomInTelegram } from '../services/telegram.ts';
 
 const QUICK_HUMAN_WAIT_MS = 20_000;
@@ -387,6 +387,11 @@ function BotPanel({ practice }: { practice: boolean }) {
   const [level, setLevel] = useState<Difficulty | 'random'>(practice ? 'easy' : serverBot ? 'random' : 'medium');
   const [side, setSide] = useState<'w' | 'b' | 'r'>('w');
   const [busy, setBusy] = useState(false);
+  const [left, setLeft] = useState<number | null>(null);
+  useEffect(() => {
+    if (!serverBot || !signedIn) return;
+    botGamesLeft().then(setLeft, () => setLeft(null));
+  }, [serverBot, signedIn]);
   const levels: Array<{ id: Difficulty | 'random'; title: TKey; desc: TKey }> = [
     ...(serverBot ? [{ id: 'random' as const, title: 'bot.random' as TKey, desc: 'bot.randomDesc' as TKey }] : []),
     { id: 'easy', title: 'bot.easy', desc: 'bot.easyDesc' },
@@ -416,9 +421,10 @@ function BotPanel({ practice }: { practice: boolean }) {
       <h2>{practice ? t('mode.practice') : t('mode.bot')}</h2>
       <p className="muted">{practice ? t('practice.desc') : t('mode.botDesc')}</p>
       <div className="notice">
-        {serverBot ? <span className="badge badge-free">{t('bot.ratedBadge')}</span> : <span className="badge">{t('common.unrated')}</span>}
-        <span>{practice ? t('practice.unrated') : serverBot ? t('bot.rated') : t('bot.unrated')}</span>
+        {serverBot && left !== 0 ? <span className="badge badge-free">{t('bot.ratedBadge')}</span> : <span className="badge">{t('common.unrated')}</span>}
+        <span>{practice ? t('practice.unrated') : serverBot ? (left === 0 ? t('bot.limitReached') : t('bot.rated')) : t('bot.unrated')}</span>
       </div>
+      {serverBot && left !== null && left > 0 && <p className="muted small">{t('bot.ratedLeft', { n: left })}</p>}
       <fieldset className="fieldset">
         <legend>{t('bot.difficulty')}</legend>
         <div className={`radio-cards ${levels.length === 4 ? 'radio-cards-4' : ''}`}>

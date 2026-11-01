@@ -34,6 +34,15 @@ sample player / tournament / live match is labelled **DEMO** in the UI.
 | Friends | Search, requests, accept/reject, list with online status, invite to game (delivered via realtime notification) |
 | UX | Uzbek/English (centralised dictionaries + `useI18n` hook, key parity enforced by tests), persisted theme & language, mobile bottom nav, 360px tested, reduced-motion support, keyboard & screen-reader labels |
 
+## Accounts, levels and rating
+
+- **Accounts are Telegram accounts.** Inside the Telegram Mini App players are signed in automatically
+  (`telegram-auth` verifies Telegram's signed `initData` with the bot token). There is no e-mail sign-up.
+- **Rating:** start 1200; win +5, loss −5, draw 0 (human vs human and vs the server bot).
+- **Bot farming limit:** only 5 bot games per day (Tashkent time) are rated; leaving a started bot game counts as a loss.
+- **Levels:** Level 1 = 0–1299, then one level per 100 points (Level 2 = 1300–1399 … Level 9 = 2000–2099), Level 10 = 2100+.
+- **Profile:** name, uploaded photo (Supabase Storage `avatars`, own folder only), Telegram photo or colour — all optional.
+
 ## Ruleset (documented, not mixed)
 
 DAMEO uses **Russian draughts (shashki)** — see `src/engine/rules.ts`:

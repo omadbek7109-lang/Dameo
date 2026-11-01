@@ -1,6 +1,7 @@
 import { LuBot, LuGraduationCap, LuRadio, LuSwords, LuUsers } from 'react-icons/lu';
 import { useAuth } from '../auth/AuthProvider.tsx';
-import { Avatar } from '../components/Avatar.tsx';
+import { Avatar, LevelBadge } from '../components/Avatar.tsx';
+import { levelOf } from '../services/levels.ts';
 import { HeroBoard } from '../components/HeroBoard.tsx';
 import { EmptyState, ErrorState, Spinner } from '../components/States.tsx';
 import { DemoNotice, Delta, SectionHead, SeeAll, winRate } from '../components/ui.tsx';
@@ -111,7 +112,10 @@ export function Home() {
                     <span className={`rank-chip ${p.rank <= 3 ? `rank-${p.rank}` : ''}`}>{p.rank}</span>
                     <Avatar name={p.username} seed={p.avatar} size={34} online={isOnline(p)} />
                     <span className="row-main">
-                      <span className="row-title">{p.username}</span>
+                      <span className="row-title">
+                        {p.username}
+                        <LevelBadge rating={p.rating} label={(n) => t('level.short', { n })} />
+                      </span>
                       <span className="row-sub">
                         {num(p.wins)} {t('common.winsShort')} · {winRate(p.wins, p.losses, p.draws)}%
                       </span>

@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
-import { LuFlame, LuGamepad2, LuHandshake, LuLoader, LuLock, LuPencil, LuStar, LuTrendingUp, LuTrophy, LuBot } from 'react-icons/lu';
+import { LuCamera, LuFlame, LuGamepad2, LuHandshake, LuLoader, LuLock, LuPencil, LuStar, LuTrendingUp, LuTrophy, LuBot } from 'react-icons/lu';
 import type { IconType } from 'react-icons';
 import { useAuth } from '../auth/AuthProvider.tsx';
-import { Avatar } from '../components/Avatar.tsx';
+import { Avatar, LevelBadge, isPhoto } from '../components/Avatar.tsx';
 import { Modal } from '../components/Modal.tsx';
 import { RatingChart } from '../components/RatingChart.tsx';
 import { EmptyState, ErrorState, Spinner } from '../components/States.tsx';
@@ -15,7 +15,9 @@ import { computeAchievements, type AchievementId } from '../services/achievement
 import { DEMO_PLAYERS, isOnline } from '../services/demoData.ts';
 import { fetchLeaderboard } from '../services/leaderboard.ts';
 import { validateUsername } from '../services/localProfile.ts';
-import { levelForRating } from '../services/rating.ts';
+import { levelOf } from '../services/levels.ts';
+import { prepareAvatar, uploadAvatar } from '../services/profiles.ts';
+import { tg } from '../services/telegram.ts';
 import { loadPublicProfile } from '../services/profiles.ts';
 import { SbError } from '../services/supabase.ts';
 import type { MatchSummary, Player, RatingPoint } from '../types/models.ts';
@@ -76,7 +78,7 @@ function ProfileView({ view }: { view: View }) {
   const [editing, setEditing] = useState(false);
   const games = p.wins + p.losses + p.draws;
   const online = own ? true : isOnline(p);
-  const level = levelForRating(p.rating);
+  const lv = levelOf(p.rating);
   const achievements = useMemo(() => computeAchievements(p, matches, history), [p, matches, history]);
   const unlocked = achievements.filter((a) => a.unlocked).length;
 
@@ -94,7 +96,7 @@ function ProfileView({ view }: { view: View }) {
           </h1>
           <div className="chips">
             <span className="chip">ID: {p.id === 'local' ? 'LOCAL' : p.id.replace(/-/g, '').slice(0, 8).toUpperCase()}</span>
-            <span className={`chip chip-level level-${level}`}>{t(`level.${level}` as 'level.beginner')}</span>
+            <LevelBadge rating={p.rating} label={(n) => t('level.short', { n })} />
             <span className={`chip ${online ? 'chip-on' : ''}`}>
               <span className={`dot ${online ? 'dot-on' : 'dot-off'}`} /> {online ? t('common.online') : `${t('common.offline')} · ${relative(p.lastSeen)}`}
             </span>
@@ -116,6 +118,16 @@ function ProfileView({ view }: { view: View }) {
             <span className="pr-value">{rank ? `#${num(rank)}` : '—'}</span>
             <span className="pr-label">{t('common.rank')}</span>
           </div>
+        </div>
+      </section>
+
+      <section className="card level-card" aria-label={t('level.title')}>
+        <div>
+          <div className="level-num">{t('level.name', { n: lv.level })}</div>
+          <div className="muted small">{lv.next === null ? t('level.max') : t('level.toNext', { n: lv.next - p.rating, next: lv.level + 1 })}</div>
+        </div>
+        <div className="level-bar" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(lv.progress * 100)} aria-label={t('level.title')}>
+          <span style={{ width: `${Math.round(lv.progress * 100)}%` }} />
         </div>
       </section>
 
@@ -185,60 +197,114 @@ function ProfileView({ view }: { view: View }) {
 
 function EditProfile({ open, onClose, player }: { open: boolean; onClose: () => void; player: Player }) {
   const { t } = useI18n();
-  const { updateProfile } = useAuth();
+  const { updateProfile, me } = useAuth();
   const { toast } = useToast();
+  // Everything here is optional: the player can change only the name, only the picture, or nothing.
   const [name, setName] = useState(player.username);
-  const [hue, setHue] = useState<number>(Number(player.avatar.split(':')[0]) || 212);
+  const [avatar, setAvatar] = useState(player.avatar);
+  const [file, setFile] = useState<Blob | null>(null);
+  const [preview, setPreview] = useState<string | null>(null);
   const [err, setErr] = useState<TKey | null>(null);
   const [busy, setBusy] = useState(false);
+  const tgPhoto = tg?.initDataUnsafe?.user && (tg.initDataUnsafe.user as { photo_url?: string }).photo_url;
 
   useEffect(() => {
     if (open) {
       setName(player.username);
-      setHue(Number(player.avatar.split(':')[0]) || 212);
+      setAvatar(player.avatar);
+      setFile(null);
+      setPreview(null);
       setErr(null);
     }
   }, [open, player.username, player.avatar]);
+  useEffect(() => () => void (preview && URL.revokeObjectURL(preview)), [preview]);
+
+  const currentHue = Number(isPhoto(avatar) ? NaN : avatar.split(':')[0]);
+  const changed = name.trim() !== player.username || avatar !== player.avatar || file !== null;
+
+  const pick = async (f: File | undefined) => {
+    if (!f) return;
+    setErr(null);
+    try {
+      const blob = await prepareAvatar(f);
+      setFile(blob);
+      setPreview(URL.createObjectURL(blob));
+    } catch {
+      setErr('profile.err.photo');
+    }
+  };
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
-    const bad = validateUsername(name);
-    if (bad) return setErr(bad);
+    if (!changed) return onClose();
+    const trimmed = name.trim();
+    if (trimmed !== player.username) {
+      const bad = validateUsername(trimmed);
+      if (bad) return setErr(bad);
+    }
     setBusy(true);
     try {
-      const seed = `${hue}:${player.avatar.split(':')[1] ?? '0'}`;
-      await updateProfile({ username: name.trim(), avatar: seed });
+      let nextAvatar = avatar;
+      if (file && me) nextAvatar = await uploadAvatar(me.id, file);
+      const patch: { username?: string; avatar?: string } = {};
+      if (trimmed !== player.username) patch.username = trimmed;
+      if (nextAvatar !== player.avatar) patch.avatar = nextAvatar;
+      await updateProfile(patch);
       toast('success', t('profile.saved'));
       onClose();
     } catch (ex) {
-      setErr(ex instanceof SbError && (ex.status === 409 || ex.code === '23505') ? 'profile.err.taken' : 'profile.err.save');
+      setErr(ex instanceof SbError && (ex.status === 409 || ex.code === '23505') ? 'profile.err.taken' : file ? 'profile.err.upload' : 'profile.err.save');
     } finally {
       setBusy(false);
     }
   };
 
+  const shown = preview ?? avatar;
   return (
     <Modal open={open} onClose={onClose} title={t('profile.edit')} locked={busy}>
       <form onSubmit={submit} className="form" noValidate>
-        <div className="edit-preview">
-          <Avatar name={name || '?'} seed={`${hue}:0`} size={72} />
+        <div className="edit-photo">
+          <Avatar name={name || '?'} seed={shown} size={88} />
+          <div className="edit-photo-actions">
+            <label className="btn btn-secondary btn-sm file-btn">
+              <LuCamera /> {t('profile.uploadPhoto')}
+              <input type="file" accept="image/*" onChange={(e) => pick(e.target.files?.[0])} />
+            </label>
+            {tgPhoto && /^https:\/\/t\.me\/i\/userpic\//.test(tgPhoto) && (
+              <button type="button" className="btn btn-ghost btn-sm" onClick={() => (setFile(null), setPreview(null), setAvatar(tgPhoto))}>
+                {t('profile.useTelegramPhoto')}
+              </button>
+            )}
+          </div>
         </div>
+        <fieldset className="fieldset">
+          <legend>{t('profile.orColor')}</legend>
+          <div className="swatches">
+            {HUES.map((h) => (
+              <button
+                type="button"
+                key={h}
+                className={`swatch ${!preview && currentHue === h ? 'swatch-on' : ''}`}
+                style={{ ['--h' as string]: h }}
+                onClick={() => (setFile(null), setPreview(null), setAvatar(`${h}:0`))}
+                aria-label={`${t('profile.avatarColor')} ${h}`}
+                aria-pressed={!preview && currentHue === h}
+              />
+            ))}
+          </div>
+        </fieldset>
         <label className="field">
           <span>{t('auth.username')}</span>
           <input className="input" value={name} onChange={(e) => setName(e.target.value)} maxLength={20} autoComplete="off" />
         </label>
-        <fieldset className="fieldset">
-          <legend>{t('profile.avatarColor')}</legend>
-          <div className="swatches">
-            {HUES.map((h) => (
-              <button type="button" key={h} className={`swatch ${hue === h ? 'swatch-on' : ''}`} style={{ ['--h' as string]: h }} onClick={() => setHue(h)} aria-label={`${t('profile.avatarColor')} ${h}`} aria-pressed={hue === h} />
-            ))}
+        <p className="muted small">{t('profile.optionalHint')}</p>
+        {err && (
+          <div className="form-error" role="alert">
+            {t(err)}
           </div>
-        </fieldset>
-        <p className="muted small">{t('profile.privacy')}</p>
-        {err && <div className="form-error" role="alert">{t(err)}</div>}
+        )}
         <div className="row-actions">
-          <button className="btn btn-primary" disabled={busy}>
+          <button className="btn btn-primary" disabled={busy || !changed}>
             {busy && <LuLoader className="spin" />} {t('common.save')}
           </button>
           <button type="button" className="btn btn-ghost" onClick={onClose} disabled={busy}>
