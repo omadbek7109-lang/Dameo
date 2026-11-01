@@ -209,6 +209,15 @@ insert into storage.objects (bucket_id, name) values ('avatars', '22222222-2222-
 select pg_temp.check('can upload into own folder', (select count(*) from storage.objects) = 1);
 reset role;
 
+-- service_role (Edge Functions) must be able to read/write game tables (regression test for the 404 bug)
+set role service_role;
+select pg_temp.check('service_role can read matches', (select count(*) from public.matches) > 0);
+do $$ begin
+  insert into public.match_moves (match_id, ply, from_sq, path) select id, 99, 42, '{35}' from public.matches limit 1;
+  perform pg_temp.check('service_role can insert moves', true);
+exception when others then perform pg_temp.check('service_role can insert moves', false, sqlerrm); end $$;
+reset role;
+
 -- anon: public reads only
 set role anon;
 reset request.jwt.claim.sub;

@@ -17,6 +17,7 @@ import { navigate, useRoute } from '../router.tsx';
 import { DEMO_PLAYERS } from '../services/demoData.ts';
 import { getMatch, getMoves, resignOnline, startBotMatch, submitMove, watchMatch, type OnlineMatch } from '../services/online.ts';
 import { haptic } from '../services/telegram.ts';
+import { SbError } from '../services/supabase.ts';
 import type { ConnectionState } from '../services/supabase.ts';
 import { useSettings } from '../settings/SettingsProvider.tsx';
 import { botLevelFor } from './Play.tsx';
@@ -160,8 +161,23 @@ function OnlineGame({ matchId }: { matchId: string }) {
         if (!r.ok) throw new Error(r.error);
         // Server bot reply comes back in the same response (realtime delivers it too; the ply check de-duplicates).
         if (r.bot && gRef.current.game.history.length === r.bot.ply) gRef.current.applyRemote(r.bot.from, r.bot.path);
-      } catch {
-        toast('error', t('online.moveRejected'));
+      } catch (e) {
+        // Say exactly why the server refused the move, then re-sync the board from the server's copy.
+        const code = e instanceof SbError ? e.message : e instanceof TypeError ? 'network' : 'server';
+        const key = (
+          {
+            'not-your-turn': 'online.err.notYourTurn',
+            'not-active': 'online.err.notActive',
+            'must-capture': 'game.msg.mustCapture',
+            illegal: 'game.msg.illegal',
+            'not-your-piece': 'game.msg.notYours',
+            conflict: 'online.err.conflict',
+            unauthorized: 'online.err.unauthorized',
+            network: 'online.err.network',
+          } as Record<string, TKey>
+        )[code] ?? 'online.moveRejected';
+        toast('error', t(key));
+        console.warn('[DAMEO] move rejected by server:', code);
         await resync(gRef.current.loadMoves).catch(() => {});
       } finally {
         setWaitingServer(false);

@@ -227,7 +227,7 @@ export const uz = {
   'reason.repetition': "Pozitsiya uch marta takrorlandi.",
   'reason.kings-only': "Faqat damalar qoldi va 15 yurish davomida urish bo'lmadi.",
   'reason.agreement': "Kelishuv bo'yicha durang.",
-  'online.moveRejected': "Server yurishni qabul qilmadi. Pozitsiya yangilandi.",
+  'online.moveRejected': "Server xatosi tufayli yurish saqlanmadi. Pozitsiya yangilandi.",
   'online.resignFailed': "Taslim bo'lishni yuborib bo'lmadi.",
   'online.reconnecting': "Aloqa uzildi — qayta ulanmoqda…",
   'online.finalizing': "Natija server tomonidan tasdiqlanmoqda…",
@@ -422,6 +422,11 @@ export const uz = {
   'profile.err.upload': "Rasmni yuklab bo'lmadi. Qayta urinib ko'ring.",
   'bot.limitReached': "Bugungi 5 ta reytingli bot o'yini tugadi — keyingilari reytingsiz. Ertaga yangilanadi.",
   'bot.ratedLeft': "Bugun yana {n} ta reytingli bot o'yini qoldi (kuniga 5 ta).",
+  'online.err.notYourTurn': "Hozir raqib navbati — kuting.",
+  'online.err.notActive': "Bu o'yin tugagan yoki bekor qilingan.",
+  'online.err.conflict': "Yurish allaqachon yuborilgan. Pozitsiya yangilandi.",
+  'online.err.unauthorized': "Sessiya eskirgan. Ilovani qayta oching.",
+  'online.err.network': "Internet aloqasi yo'q. Pozitsiya yangilandi.",
   'notFound.title': 'Sahifa topilmadi',
 } as const;
 
