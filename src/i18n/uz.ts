@@ -538,6 +538,7 @@ export const uz = {
   'collection.girls': "Girls Collection",
   'collection.boys': "Boys Collection",
   'collection.chess': "Chess uslubi",
+  'collection.signature': "DAMEO kolleksiyasi",
   'collection.trend': "Trend Collection",
   'collection.premium': "Premium Collection",
   'collection.fx': "Yurish animatsiyalari",

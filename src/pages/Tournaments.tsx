@@ -18,7 +18,8 @@ const TABS: Array<{ id: TournamentStatus; key: TKey }> = [
   { id: 'completed', key: 'tour.completed' },
 ];
 
-export function Tournaments() {
+/** `embedded`: shown as the third tab of the rating page (no page frame / title). */
+export function Tournaments({ embedded = false }: { embedded?: boolean } = {}) {
   const { t } = useI18n();
   const { me, mode, signedIn, local, mutateLocal } = useAuth();
   const { openAuth } = useAuthDialog();
@@ -51,7 +52,8 @@ export function Tournaments() {
   };
 
   return (
-    <div className="page">
+    <div className={embedded ? 'tour-embedded' : 'page'}>
+      {!embedded && (
       <div className="page-head">
         <div>
           <h1 className="h1">{t('nav.tournaments')}</h1>
@@ -59,6 +61,7 @@ export function Tournaments() {
         </div>
         <span className="badge badge-free badge-lg">{t('tour.allFree')}</span>
       </div>
+      )}
       <DemoNotice text={t('demo.tourNotice')} />
 
       {mode === 'live' && <WeeklyTournament />}

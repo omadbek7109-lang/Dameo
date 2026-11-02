@@ -23,6 +23,7 @@ import { moveSound, playSound } from '../services/sound.ts';
 import { MatchChat } from '../components/MatchChat.tsx';
 import { SbError } from '../services/supabase.ts';
 import type { ConnectionState } from '../services/supabase.ts';
+import { useMatchSkin } from '../cosmetics/CosmeticsProvider.tsx';
 import { useSettings } from '../settings/SettingsProvider.tsx';
 import { botLevelFor } from './Play.tsx';
 
@@ -71,6 +72,8 @@ function LocalGame() {
   const demoOpp = useMemo(() => DEMO_PLAYERS.find((p) => p.id === q.get('opp')), [q]);
   const level: Difficulty = kind === 'demo-rated' ? botLevelFor(demoOpp?.rating ?? 1200) : ((['easy', 'medium', 'hard'].includes(q.get('level') ?? '') ? q.get('level') : 'medium') as Difficulty);
   const humanColor: Color = kind === 'demo-rated' ? 'w' : q.get('side') === 'b' ? 'b' : 'w';
+  // vs the computer: my set only on my pieces, the bot keeps the standard ones (practice / pass-and-play: all mine)
+  const skin = useMatchSkin(kind === 'bot' || kind === 'demo-rated' ? { white: humanColor === 'w' ? 'me' : null, black: humanColor === 'b' ? 'me' : null } : null);
   const cfg: GameConfig = useMemo(() => ({ kind, difficulty: level, humanColor }), [kind, level, humanColor]);
 
   const g = useCheckers(cfg);
@@ -144,6 +147,7 @@ function LocalGame() {
       result={result}
       onPlayAgain={kind === 'demo-rated' ? () => navigate('/play?mode=quick') : restart}
       onExit={() => navigate('/play')}
+      skin={skin}
     />
   );
 }
@@ -159,6 +163,9 @@ function OnlineGame({ matchId }: { matchId: string }) {
   const [conn, setConn] = useState<ConnectionState>('connecting');
   const [result, setResult] = useState<ResultInfo | null>(null);
   const humanColor: Color = match && me && match.blackId === me.id ? 'b' : 'w';
+  const skin = useMatchSkin(
+    match ? { white: match.whiteId, black: match.vsBot ? null : (match.blackId ?? null), whiteRating: match.whiteRating, blackRating: match.blackRating } : null,
+  );
   const cfg: GameConfig = useMemo(() => ({ kind: 'online', humanColor }), [humanColor]);
 
   const resync = useCallback(async (loadMoves: (m: Array<{ from: number; path: number[] }>) => void) => {
@@ -376,6 +383,7 @@ function OnlineGame({ matchId }: { matchId: string }) {
       }
       onExit={() => navigate('/play')}
       serverThinking={waitingServer && match.vsBot}
+      skin={skin}
       extraControls={
         pvp ? (
           <>
@@ -449,9 +457,11 @@ interface ScreenProps {
   /** chat / offers (online PvP) */
   aside?: ReactNode;
   onRematch?: () => void;
+  /** per-player cosmetics of this game (undefined = my own cosmetics on both sides) */
+  skin?: { cls: string; fx: { w?: string; b?: string } };
 }
 
-function GameScreen({ g, kind, humanColor, top, bottom, canRestart, canUndo, canHint, canDraw, onResign, onRestart, result, onPlayAgain, onExit, banner, serverThinking, extraControls, aside, onRematch }: ScreenProps) {
+function GameScreen({ g, kind, humanColor, top, bottom, canRestart, canUndo, canHint, canDraw, onResign, onRestart, result, onPlayAgain, onExit, banner, serverThinking, extraControls, aside, onRematch, skin }: ScreenProps) {
   const { t } = useI18n();
   const { settings } = useSettings();
   const [confirm, setConfirm] = useState<null | 'resign' | 'restart' | 'draw'>(null);
@@ -540,6 +550,8 @@ function GameScreen({ g, kind, humanColor, top, bottom, canRestart, canUndo, can
             disabled={over}
             shake={g.shake}
             onSquare={g.clickSquare}
+            skin={skin?.cls}
+            fx={skin?.fx}
           />
           {bar(bottom, g.game.turn === bottom.color, bottom.color === 'w' ? counts.w : counts.b)}
           <p className={`msg-line ${g.message?.tone === 'error' ? 'msg-error' : ''}`} role="status" aria-live="polite" key={g.message?.n ?? 0}>

@@ -1,4 +1,4 @@
-import { LuBell, LuCheck, LuGlobe, LuMenu, LuMoon, LuSun, LuTrophy, LuUser, LuUsers, LuHouse, LuSwords, LuMedal } from 'react-icons/lu';
+import { LuBell, LuCheck, LuGlobe, LuMenu, LuMoon, LuSun, LuTrophy, LuUser, LuUsers, LuHouse, LuSwords } from 'react-icons/lu';
 import type { IconType } from 'react-icons';
 import { useAuth } from '../auth/AuthProvider.tsx';
 import { LANGS, useI18n, type TKey } from '../i18n/index.tsx';
@@ -18,8 +18,8 @@ import { useCosmetics } from '../cosmetics/CosmeticsProvider.tsx';
 export const NAV: Array<{ to: string; key: TKey; short?: TKey; icon: IconType; match: (p: string) => boolean }> = [
   { to: '/', key: 'nav.home', icon: LuHouse, match: (p) => p === '/' },
   { to: '/play', key: 'nav.play', icon: LuSwords, match: (p) => p.startsWith('/play') || p.startsWith('/game') },
-  { to: '/leaderboard', key: 'nav.leaderboard', short: 'nav.leaderboard.short', icon: LuTrophy, match: (p) => p.startsWith('/leaderboard') },
-  { to: '/tournaments', key: 'nav.tournaments', short: 'nav.tournaments.short', icon: LuMedal, match: (p) => p.startsWith('/tournaments') },
+  // tournaments live inside the rating page (its third tab)
+  { to: '/leaderboard', key: 'nav.leaderboard', short: 'nav.leaderboard.short', icon: LuTrophy, match: (p) => p.startsWith('/leaderboard') || p.startsWith('/tournaments') },
   { to: '/friends', key: 'nav.friends', icon: LuUsers, match: (p) => p.startsWith('/friends') },
   { to: '/profile', key: 'nav.profile', icon: LuUser, match: (p) => p.startsWith('/profile') },
 ];

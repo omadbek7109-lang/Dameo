@@ -170,7 +170,7 @@ export function Home() {
 
       <div className="grid-3">
         <section className="card">
-          <SectionHead title={t('home.upcoming')} action={<SeeAll to="/tournaments" label={t('common.seeAll')} />} />
+          <SectionHead title={t('home.upcoming')} action={<SeeAll to="/leaderboard?tab=tournaments" label={t('common.seeAll')} />} />
           {tours.loading ? (
             <Spinner />
           ) : tours.error ? (
@@ -181,7 +181,7 @@ export function Home() {
             <ul className="rows">
               {upcoming.map((x) => (
                 <li key={x.id}>
-                  <Link to="/tournaments" className="row">
+                  <Link to="/leaderboard?tab=tournaments" className="row">
                     <span className="row-main">
                       <span className="row-title">{x.name}</span>
                       <span className="row-sub">{dateTime(x.startsAt)}</span>

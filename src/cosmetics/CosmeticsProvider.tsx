@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useAuth } from '../auth/AuthProvider.tsx';
 import { cosmeticsOf, myNotifications, walletMe, type Cosmetic } from '../services/shop.ts';
-import { fxOf, registerSkins, skinClasses, type Slot } from '../services/skins.ts';
+import { fxOf, matchSkin, registerSkins, skinClasses, type Loadout, type Slot } from '../services/skins.ts';
 import { readJSON, writeJSON } from '../services/localStore.ts';
 import { subscribeChanges } from '../services/supabase.ts';
 
@@ -120,4 +120,57 @@ export function CosmeticsProvider({ children }: { children: ReactNode }) {
 /** Optional: components outside the provider (tests, previews) simply get no cosmetics. */
 export function useCosmetics(): Ctx | null {
   return useContext(C);
+}
+
+/* ---------------------------------------------------------------- two-player games */
+// other players' loadouts, shared by every board on the page (5 min is plenty for a game)
+const others = new Map<string, { at: number; p: Promise<Loadout | null> }>();
+function loadoutOf(id: string): Promise<Loadout | null> {
+  const hit = others.get(id);
+  if (hit && Date.now() - hit.at < 5 * 60_000) return hit.p;
+  const p = cosmeticsOf(id)
+    .then((c) => {
+      if (c) registerSkins((['piece', 'board', 'effect'] as Slot[]).flatMap((s) => (c[s] ? [{ slug: c[s]!.slug, slot: s, style: c[s]!.style }] : [])));
+      return c ?? null;
+    })
+    .catch(() => {
+      others.delete(id);
+      return null;
+    });
+  others.set(id, { at: Date.now(), p });
+  return p;
+}
+
+/**
+ * Board classes for a game between two players (`'me'` or the signed-in user's id = my own loadout; null = bot / nobody).
+ * Returns undefined when `players` is null — the board then simply uses my own cosmetics (practice, pass-and-play).
+ */
+export function useMatchSkin(
+  players: { white: string | null; black: string | null; whiteRating?: number | null; blackRating?: number | null } | null,
+): { cls: string; fx: { w?: string; b?: string } } | undefined {
+  const ctx = useCosmetics();
+  const { me } = useAuth();
+  const myId = me?.id ?? null;
+  const [loaded, setLoaded] = useState<Record<string, Loadout | null>>({});
+  const isMe = (id: string | null) => id === 'me' || (!!id && id === myId);
+  const w = players?.white ?? null;
+  const b = players?.black ?? null;
+  useEffect(() => {
+    let alive = true;
+    for (const id of [w, b]) {
+      if (!id || isMe(id)) continue;
+      void loadoutOf(id).then((l) => alive && setLoaded((cur) => (cur[id] === l ? cur : { ...cur, [id]: l })));
+    }
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [w, b, myId]);
+  const mine: Loadout | null = ctx ? ctx.equipped : null;
+  const pick = (id: string | null): Loadout | null => (!id ? null : isMe(id) ? mine : (loaded[id] ?? null));
+  const lw = pick(w);
+  const lb = pick(b);
+  const wr = players?.whiteRating ?? null;
+  const br = players?.blackRating ?? null;
+  return useMemo(() => (players ? matchSkin(lw, lb, wr, br) : undefined), [!!players, lw, lb, wr, br]);
 }

@@ -21,7 +21,7 @@ export function PositionBoard({ moves }: { moves: Array<[number, number[]]> | Ar
   return (
     <div className="pos-board" aria-hidden="true">
       <Board board={st.board} ids={ids} flipped={false} selected={null} targets={[]} pathMarks={[]} mustMove={[]} hint={null}
-        lastMove={last ? { from: last.from, to: last.path[last.path.length - 1] } : null} showLegal={false} disabled shake={0} onSquare={noop} />
+        lastMove={last ? { from: last.from, to: last.path[last.path.length - 1] } : null} showLegal={false} disabled shake={0} onSquare={noop} skin="" />
     </div>
   );
 }

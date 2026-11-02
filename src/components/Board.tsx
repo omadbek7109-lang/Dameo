@@ -20,15 +20,20 @@ interface Props {
   onSquare: (i: number) => void;
   /** skin classes override (shop previews); default = the player's equipped cosmetics */
   skin?: string;
+  /** per-side move effect classes (real games: each player's effect plays only on their own moves) */
+  fx?: { w?: string; b?: string };
 }
 
 const FILES = 'abcdefgh';
 
-function BoardImpl({ board, ids, flipped, selected, targets, pathMarks, mustMove, hint, lastMove, showLegal, disabled, shake, onSquare, skin }: Props) {
+function BoardImpl({ board, ids, flipped, selected, targets, pathMarks, mustMove, hint, lastMove, showLegal, disabled, shake, onSquare, skin, fx }: Props) {
   const t = useT();
   const cosmetics = useCosmetics();
   const skinClass = skin ?? cosmetics?.boardClass ?? '';
   const hasFx = /(^| )fx-/.test(skinClass);
+  // effect for the last move: the mover's own effect (per side) or, without `fx`, the wrapper's
+  const moverCell = lastMove ? board[lastMove.to] : 0;
+  const lastFx: string | null = !lastMove ? null : fx ? ((moverCell > 0 ? fx.w : moverCell < 0 ? fx.b : undefined) ?? null) : hasFx ? '' : null;
   const pos = (i: number) => {
     const [r, c] = rc(i);
     return { x: flipped ? 7 - c : c, y: flipped ? 7 - r : r };
@@ -80,7 +85,14 @@ function BoardImpl({ board, ids, flipped, selected, targets, pathMarks, mustMove
             <button key={i} className={cls} style={style} onClick={() => onSquare(i)} aria-label={label(i)} role="gridcell" aria-selected={selected === i}>
               {isTarget && <span className="mark" />}
               {isPath && <span className="mark mark-path" />}
-              {hasFx && lastMove && lastMove.to === i && <span className="fx-burst" key={`${lastMove.from}-${lastMove.to}`} aria-hidden="true" />}
+              {lastFx !== null && lastMove && lastMove.to === i &&
+                (lastFx ? (
+                  <span className={`fx-host ${lastFx}`} key={`${lastMove.from}-${lastMove.to}`} aria-hidden="true">
+                    <span className="fx-burst" />
+                  </span>
+                ) : (
+                  <span className="fx-burst" key={`${lastMove.from}-${lastMove.to}`} aria-hidden="true" />
+                ))}
             </button>
           );
         })}

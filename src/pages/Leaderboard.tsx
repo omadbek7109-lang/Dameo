@@ -5,17 +5,24 @@ import { Avatar, LevelBadge } from '../components/Avatar.tsx';
 import { EmptyState, ErrorState, Spinner } from '../components/States.tsx';
 import { DemoNotice, Delta, SignInPrompt, winRate } from '../components/ui.tsx';
 import { useI18n } from '../i18n/index.tsx';
-import { Link } from '../router.tsx';
+import { Link, navigate, useRoute } from '../router.tsx';
+import { Tournaments } from './Tournaments.tsx';
 import { isOnline } from '../services/demoData.ts';
 import { fetchLeaderboard, subscribeLeaderboard, type LeaderboardPage, type RankedPlayer, type Scope } from '../services/leaderboard.ts';
 import type { ConnectionState } from '../services/supabase.ts';
 
 const PAGE_SIZE = 10;
 
-export function Leaderboard() {
+type View = 'all' | 'top100' | 'tournaments';
+
+export function Leaderboard({ initialTab }: { initialTab?: View } = {}) {
   const { t, num, relative } = useI18n();
   const { me, mode, signedIn, friendIds } = useAuth();
-  const [scope, setScope] = useState<Scope>('all');
+  const { query } = useRoute();
+  const qTab = query.get('tab');
+  const view: View = initialTab ?? (qTab === 'tournaments' || qTab === 'top100' ? qTab : 'all');
+  const scope: Scope = view === 'top100' ? 'top100' : 'all';
+  const setView = (v: View) => navigate(v === 'all' ? '/leaderboard' : `/leaderboard?tab=${v}`);
   const [input, setInput] = useState('');
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(0);
@@ -36,7 +43,7 @@ export function Leaderboard() {
     return () => clearTimeout(id);
   }, [input]);
 
-  const needsAccount = mode === 'live' && scope === 'friends' && !signedIn;
+  const needsAccount = false; // the friends scope moved out of the rating tabs
 
   const load = useCallback(
     async (silent: boolean) => {
@@ -84,10 +91,10 @@ export function Leaderboard() {
     <span className="live-pill live-pill-off"><span className="dot dot-off" /> {t('lb.reconnecting')}</span>
   );
 
-  const tabs: Array<{ id: Scope; label: string }> = [
+  const tabs: Array<{ id: View; label: string }> = [
     { id: 'all', label: t('lb.all') },
-    { id: 'friends', label: t('nav.friends') },
     { id: 'top100', label: t('lb.top100') },
+    { id: 'tournaments', label: t('nav.tournaments') },
   ];
 
   const order = podium.length === 3 ? [podium[1], podium[0], podium[2]] : podium;
@@ -123,18 +130,24 @@ export function Leaderboard() {
       <div className="toolbar">
         <div className="tabs" role="tablist">
           {tabs.map((x) => (
-            <button key={x.id} role="tab" aria-selected={scope === x.id} className={`tab ${scope === x.id ? 'tab-active' : ''}`} onClick={() => (setScope(x.id), setPage(0))}>
+            <button key={x.id} role="tab" aria-selected={view === x.id} className={`tab ${view === x.id ? 'tab-active' : ''}`} onClick={() => (setView(x.id), setPage(0))}>
               {x.label}
             </button>
           ))}
         </div>
-        <label className="search">
-          <LuSearch aria-hidden="true" />
-          <span className="sr-only">{t('lb.search')}</span>
-          <input value={input} onChange={(e) => setInput(e.target.value)} placeholder={t('lb.search')} type="search" />
-        </label>
+        {view !== 'tournaments' && (
+          <label className="search">
+            <LuSearch aria-hidden="true" />
+            <span className="sr-only">{t('lb.search')}</span>
+            <input value={input} onChange={(e) => setInput(e.target.value)} placeholder={t('lb.search')} type="search" />
+          </label>
+        )}
       </div>
 
+      {view === 'tournaments' ? (
+        <Tournaments embedded />
+      ) : (
+      <>
       {data?.me && !data.rows.some((r) => r.id === data.me!.id) && (
         <div className="my-pos">
           <span className="muted small">{t('lb.yourPosition')}</span>
@@ -149,7 +162,7 @@ export function Leaderboard() {
       ) : error ? (
         <ErrorState onRetry={() => load(false)} />
       ) : data && data.rows.length === 0 ? (
-        <EmptyState title={scope === 'friends' && !search ? t('lb.noFriends') : t('lb.noResults')} hint={scope === 'friends' && !search ? t('lb.noFriendsHint') : undefined} />
+        <EmptyState title={t('lb.noResults')} />
       ) : (
         <>
           <div className="lb-head" aria-hidden="true">
@@ -177,6 +190,8 @@ export function Leaderboard() {
             </button>
           </div>
         </>
+      )}
+      </>
       )}
     </div>
   );

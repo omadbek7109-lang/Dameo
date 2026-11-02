@@ -7,7 +7,7 @@
  * Only gradients / box-shadows / transforms are used — no images to download, cheap on phones.
  */
 export type Slot = 'piece' | 'board' | 'effect';
-export type PiecePattern = 'none' | 'rings' | 'stripes' | 'carbon' | 'dots' | 'facets' | 'conic' | 'galaxy' | 'flames' | 'frost' | 'petals' | 'waves' | 'scales' | 'glitch';
+export type PiecePattern = 'none' | 'rings' | 'stripes' | 'carbon' | 'dots' | 'facets' | 'conic' | 'galaxy' | 'flames' | 'frost' | 'petals' | 'waves' | 'scales' | 'glitch' | 'marble' | 'brushed';
 export type PieceAnim = 'none' | 'shimmer' | 'sparkle' | 'pulse' | 'hue' | 'glitch';
 export interface PieceSide {
   c1: string;
@@ -60,7 +60,7 @@ const cssString = (s: unknown) => (typeof s === 'string' && s.length > 0 && s.le
 export const safeSlug = (s: string) => s.replace(/[^a-z0-9-]/g, '');
 const oneOf = <T extends string>(v: unknown, list: readonly T[], d: T): T => (list.includes(v as T) ? (v as T) : d);
 
-const PIECE_PATTERNS = ['none', 'rings', 'stripes', 'carbon', 'dots', 'facets', 'conic', 'galaxy', 'flames', 'frost', 'petals', 'waves', 'scales', 'glitch'] as const;
+const PIECE_PATTERNS = ['none', 'rings', 'stripes', 'carbon', 'dots', 'facets', 'conic', 'galaxy', 'flames', 'frost', 'petals', 'waves', 'scales', 'glitch', 'marble', 'brushed'] as const;
 const PIECE_ANIMS = ['none', 'shimmer', 'sparkle', 'pulse', 'hue', 'glitch'] as const;
 const SQ_PATTERNS = ['none', 'sheen', 'wood', 'marble', 'carbon', 'grid', 'stars', 'nebula', 'velvet', 'circuit', 'petals'] as const;
 const FRAMES = ['plain', 'gold', 'wood', 'neon', 'metal'] as const;
@@ -101,6 +101,16 @@ function piecePattern(p: PiecePattern, a: number): string[] {
       return [`repeating-radial-gradient(circle at 0% 100%, ${w(a)} 0 2px, transparent 2px 7px)`];
     case 'scales':
       return [`radial-gradient(circle at 50% 0, transparent 40%, ${w(a)} 41% 47%, transparent 48%) 0 0 / 8px 8px`];
+    case 'marble':
+      // grey veins read on both light and dark stone
+      return [
+        `linear-gradient(118deg, transparent 36%, rgba(128,128,128,${a}) 38.5%, transparent 41%)`,
+        `linear-gradient(64deg, transparent 57%, rgba(150,150,150,${(a * 0.8).toFixed(2)}) 58.5%, transparent 60.5%)`,
+        `linear-gradient(152deg, transparent 18%, rgba(110,110,110,${(a * 0.6).toFixed(2)}) 19.5%, transparent 21%)`,
+        `radial-gradient(ellipse at 70% 75%, ${w(a * 0.5)}, transparent 45%)`,
+      ];
+    case 'brushed':
+      return [`repeating-radial-gradient(circle at 50% 50%, ${w(a)} 0 1px, transparent 1px 3px)`];
     case 'glitch':
       return [`linear-gradient(0deg, transparent 28%, rgba(0,255,255,${a}) 28% 33%, transparent 33% 61%, rgba(255,0,80,${a}) 61% 66%, transparent 66%)`];
     default:
@@ -108,7 +118,8 @@ function piecePattern(p: PiecePattern, a: number): string[] {
   }
 }
 
-function pieceSideCss(scope: string, cls: 'piece-w' | 'piece-b', s: Partial<PieceSide>, white: boolean): string {
+/** `scopes`: wrapper classes this side's look applies under (the full set class + the one-side class). */
+function pieceSideCss(scopes: string[], cls: 'piece-w' | 'piece-b', s: Partial<PieceSide>, white: boolean): string {
   const c1 = col(s.c1, white ? '#ffffff' : '#4b5a84');
   const c2 = col(s.c2, white ? '#e3eafa' : '#151c34');
   const c3 = col(s.c3, white ? '#aebbd9' : '#080c1a');
@@ -121,11 +132,12 @@ function pieceSideCss(scope: string, cls: 'piece-w' | 'piece-b', s: Partial<Piec
   const shadow = [`0 3px 0 rgba(0,0,0,.28)`, `0 6px 10px rgba(0,0,0,.3)`, `inset 0 0 0 2px ${ring}`];
   if (edge) shadow.push(`0 0 0 2px ${edge}`);
   if (glow) shadow.push(`0 0 12px ${glow}`);
-  const sel = `.${scope} .${cls} .piece-disc`;
-  let css = `${sel}{--ring-c:${ring};background:${layers.join(',')};box-shadow:${shadow.join(',')};${glow ? `--glow:${glow};` : ''}}`;
-  if (s.motif) css += `${sel}::before{content:${cssString(s.motif)};}`;
-  if (s.crown) css += `.${scope} .${cls} .piece-crown{color:${col(s.crown, '#e8bb4d')};}`;
-  if (anim !== 'none') css += `${sel}{animation:var(--pa-${anim});}` + `.${scope} .${cls} .pfx{${pfxFor(anim)}}`;
+  const sel = (tail: string) => scopes.map((sc) => `.${sc} .${cls} ${tail}`).join(',');
+  const disc = sel('.piece-disc');
+  let css = `${disc}{--ring-c:${ring};background:${layers.join(',')};box-shadow:${shadow.join(',')};${glow ? `--glow:${glow};` : ''}}`;
+  if (s.motif) css += `${sel('.piece-disc::before')}{content:${cssString(s.motif)};}`;
+  if (s.crown) css += `${sel('.piece-crown')}{color:${col(s.crown, '#e8bb4d')};}`;
+  if (anim !== 'none') css += `${disc}{animation:var(--pa-${anim});}` + `${sel('.pfx')}{${pfxFor(anim)}}`;
   return css;
 }
 // overlay layer inside the disc for animated light effects
@@ -201,7 +213,8 @@ export function skinCss(item: SkinRef): string {
   const st = (item.style ?? {}) as Record<string, unknown>;
   if (item.slot === 'piece') {
     const ps = st as Partial<PieceStyle>;
-    return pieceSideCss(`sk-p-${slug}`, 'piece-w', ps.w ?? {}, true) + pieceSideCss(`sk-p-${slug}`, 'piece-b', ps.b ?? {}, false);
+    // sk-p-*: both colours (shop previews, own practice games); sk-pw-* / sk-pb-*: only the owner's side in a real game
+    return pieceSideCss([`sk-p-${slug}`, `sk-pw-${slug}`], 'piece-w', ps.w ?? {}, true) + pieceSideCss([`sk-p-${slug}`, `sk-pb-${slug}`], 'piece-b', ps.b ?? {}, false);
   }
   if (item.slot === 'board') return boardCss(`sk-b-${slug}`, st as Partial<BoardStyle>);
   const fx = st as Partial<EffectStyle>;
@@ -229,5 +242,29 @@ export function skinClasses(c: { piece?: string | null; board?: string | null; e
   if (c.board) out.push(`sk-b-${safeSlug(c.board)}`);
   if (c.effect) out.push(`fx-${c.effect.fx}`, `fxs-${safeSlug(c.effect.slug)}`);
   return out.join(' ');
+}
+/**
+ * Cosmetics of a two-player game:
+ *  - pieces: every player sees each side in its OWNER's set (a player without a set keeps the standard pieces),
+ *  - board: one board for both — if both players own one, the higher-rated player's board (white on a tie);
+ *    if only one owns a board, that board, whatever the ratings; otherwise the standard board,
+ *  - move effect: plays only on the moves of the player who owns it.
+ * Pure and deterministic, so both players and spectators see the same board.
+ */
+export interface Loadout {
+  piece?: { slug: string } | null;
+  board?: { slug: string } | null;
+  effect?: { slug: string; style: unknown } | null;
+}
+export function matchSkin(w: Loadout | null, b: Loadout | null, whiteRating?: number | null, blackRating?: number | null): { cls: string; fx: { w?: string; b?: string } } {
+  const out: string[] = [];
+  if (w?.piece) out.push(`sk-pw-${safeSlug(w.piece.slug)}`);
+  if (b?.piece) out.push(`sk-pb-${safeSlug(b.piece.slug)}`);
+  const wb = w?.board ?? null;
+  const bb = b?.board ?? null;
+  const board = wb && bb ? ((blackRating ?? 0) > (whiteRating ?? 0) ? bb : wb) : (wb ?? bb);
+  if (board) out.push(`sk-b-${safeSlug(board.slug)}`);
+  const fx = (l: Loadout | null) => (l?.effect ? `fx-${fxOf(l.effect.style)} fxs-${safeSlug(l.effect.slug)}` : undefined);
+  return { cls: out.join(' '), fx: { w: fx(w), b: fx(b) } };
 }
 export const fxOf = (style: unknown): FxKind => oneOf((style as EffectStyle | undefined)?.fx, FX_KINDS, 'sparkle');

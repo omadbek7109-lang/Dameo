@@ -11,7 +11,6 @@ import { Leaderboard } from './pages/Leaderboard.tsx';
 import { Play } from './pages/Play.tsx';
 import { Profile } from './pages/Profile.tsx';
 import { Settings } from './pages/Settings.tsx';
-import { Tournaments } from './pages/Tournaments.tsx';
 import { Shop } from './pages/Shop.tsx';
 import { Inventory } from './pages/Inventory.tsx';
 import { Wallet } from './pages/Wallet.tsx';
@@ -63,7 +62,7 @@ export function App() {
       page = <Leaderboard />;
       break;
     case 'tournaments':
-      page = <Tournaments />;
+      page = <Leaderboard initialTab="tournaments" />;
       break;
     case 'friends':
       page = <Friends />;

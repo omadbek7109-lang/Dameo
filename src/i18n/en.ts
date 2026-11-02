@@ -540,6 +540,7 @@ export const en: Record<TKey, string> = {
   'collection.girls': "Girls Collection",
   'collection.boys': "Boys Collection",
   'collection.chess': "Chess style",
+  'collection.signature': "DAMEO Collection",
   'collection.trend': "Trend Collection",
   'collection.premium': "Premium Collection",
   'collection.fx': "Move animations",

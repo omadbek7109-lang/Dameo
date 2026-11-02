@@ -1,3 +1,4 @@
+import { useMatchSkin } from '../cosmetics/CosmeticsProvider.tsx';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { LuArrowLeft, LuChevronFirst, LuChevronLast, LuChevronLeft, LuChevronRight, LuEye, LuFlag, LuRadio } from 'react-icons/lu';
 import { useAuth } from '../auth/AuthProvider.tsx';
@@ -84,6 +85,7 @@ export function Watch() {
   }, [id, load, loadChat]);
 
   const isPlayer = !!me && !!match && (me.id === match.whiteId || me.id === match.blackId);
+  const skin = useMatchSkin(match ? { white: match.whiteId, black: match.vsBot ? null : (match.blackId ?? null), whiteRating: match.whiteRating, blackRating: match.blackRating } : null);
   const active = match?.status === 'active';
   // a player watching their own running game belongs on the game screen
   useEffect(() => {
@@ -171,7 +173,7 @@ export function Watch() {
         <div className="game-main">
           {bar('b')}
           <Board board={st.board} ids={ids} flipped={false} selected={null} targets={[]} pathMarks={[]} mustMove={[]} hint={null}
-            lastMove={last ? { from: last.from, to: last.path[last.path.length - 1] } : null} showLegal={false} disabled shake={0} onSquare={noop} />
+            lastMove={last ? { from: last.from, to: last.path[last.path.length - 1] } : null} showLegal={false} disabled shake={0} onSquare={noop} skin={skin?.cls} fx={skin?.fx} />
           {bar('w')}
           {resultText && <p className="watch-result">{resultText}</p>}
           <div className="watch-steps" role="group" aria-label={t('watch.steps')}>

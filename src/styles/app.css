@@ -3910,6 +3910,12 @@ html.in-telegram body {
   z-index: 4;
   --fx-c: #ffd54f;
 }
+.fx-host {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 4;
+}
 [class*='fxs-'] .fx-burst {
   --fx-c: inherit;
 }
@@ -4489,3 +4495,10 @@ html.light .sheet {
 .setting-col { display: grid; gap: 8px; }
 .setting-col input[type='range'] { width: 100%; accent-color: var(--accent); }
 .setting-link { text-decoration: none; color: inherit; }
+
+/* tournaments shown as the third tab of the rating page */
+.tour-embedded {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
