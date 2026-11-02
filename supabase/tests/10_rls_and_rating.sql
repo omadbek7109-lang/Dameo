@@ -496,6 +496,379 @@ select pg_temp.check('next tournament starts when this one ends', (select (r ->>
 reset role;
 select pg_temp.check('still one tournament for the current week', (select count(*) from public.weekly_tournaments where week_start = (public._weekly_bounds(now())).week_start) = 1);
 
+-- ---------- DAMEO Coins, Stars payments, Shop, Inventory, Admin (0011/0012) ----------
+insert into auth.users (id, email, raw_user_meta_data) values
+  ('eeeeeeee-0000-4000-8000-000000000001', 'e1@x.io', '{"username":"buyer_one"}'),
+  ('eeeeeeee-0000-4000-8000-000000000002', 'e2@x.io', '{"username":"owner_super"}'),
+  ('eeeeeeee-0000-4000-8000-000000000003', 'e3@x.io', '{"username":"staff_mod"}'),
+  ('eeeeeeee-0000-4000-8000-000000000004', 'e4@x.io', '{"username":"bad_player"}');
+update public.profiles set tg_id = 7550418397 where id = 'eeeeeeee-0000-4000-8000-000000000002';
+update public.profiles set tg_id = 111000111 where id = 'eeeeeeee-0000-4000-8000-000000000001';
+select pg_temp.check('1-2 new player gets a wallet with 0 coins', (select balance = 0 from public.user_wallets where user_id = 'eeeeeeee-0000-4000-8000-000000000001'));
+select pg_temp.check('every existing player has a wallet', (select count(*) from public.profiles p left join public.user_wallets w on w.user_id = p.id where w.user_id is null) = 0);
+select pg_temp.check('catalog seeded (pieces, boards, animations)', (select count(*) filter (where slot = 'piece') >= 28 and count(*) filter (where slot = 'board') >= 12 and count(*) filter (where slot = 'effect') >= 5 from public.shop_items));
+
+set role authenticated;
+set request.jwt.claim.sub = 'eeeeeeee-0000-4000-8000-000000000001';
+do $$ begin
+  update public.user_wallets set balance = 999999 where user_id = auth.uid();
+  perform pg_temp.check('client can NOT change own balance', (select balance from public.user_wallets where user_id = auth.uid()) = 0);
+exception when others then perform pg_temp.check('client can NOT change own balance', true, sqlerrm); end $$;
+do $$ begin
+  perform public.payment_complete(gen_random_uuid(), 'fakecharge', null, 25, 111000111, '{}');
+  perform pg_temp.check('client can NOT credit a payment', false);
+exception when others then perform pg_temp.check('client can NOT credit a payment', sqlstate = '42501', sqlerrm); end $$;
+do $$ begin
+  perform public.admin_dashboard();
+  perform pg_temp.check('16 normal player can NOT open the admin panel', false);
+exception when others then perform pg_temp.check('16 normal player can NOT open the admin panel', sqlerrm like '%forbidden%', sqlerrm); end $$;
+select pg_temp.check('admin_me says: no role', (public.admin_me() ->> 'role') is null);
+do $$ begin
+  perform public.shop_buy('gold-classic', 'key-poor-0001');
+  perform pg_temp.check('11 purchase refused without enough coins', false);
+exception when others then perform pg_temp.check('11 purchase refused without enough coins', sqlerrm like '%insufficient%', sqlerrm); end $$;
+select pg_temp.check('… and nothing was given', (select count(*) from public.user_inventory where user_id = auth.uid()) = 0);
+reset role;
+
+-- 3-5 Telegram Stars top-up (what the payments + telegram-bot Edge Functions do with the service role)
+set role service_role;
+create temp table ord as select public.payment_create('eeeeeeee-0000-4000-8000-000000000001', 'coins_25k') as r;
+grant all on ord to public;
+select pg_temp.check('3 order created as pending', (select status = 'pending' and coins = 25000 and stars = 120 from public.payment_orders where id = (select (r->>'order_id')::uuid from ord)));
+select pg_temp.check('pre-checkout accepts the exact payment', public.payment_precheck((select (r->>'order_id')::uuid from ord), 120, 'XTR', 111000111) is null);
+select pg_temp.check('pre-checkout refuses a wrong amount', public.payment_precheck((select (r->>'order_id')::uuid from ord), 1, 'XTR', 111000111) = 'amount mismatch');
+select pg_temp.check('pre-checkout refuses another Telegram account', public.payment_precheck((select (r->>'order_id')::uuid from ord), 120, 'XTR', 999) = 'wrong account');
+select pg_temp.check('4 payment confirmed → coins credited', (public.payment_complete((select (r->>'order_id')::uuid from ord), 'charge-AAA-1', 'prov-1', 120, 111000111, '{}') ->> 'balance')::bigint = 25000);
+select pg_temp.check('5 same Telegram payment again → no second credit', (public.payment_complete((select (r->>'order_id')::uuid from ord), 'charge-AAA-1', 'prov-1', 120, 111000111, '{}') ->> 'duplicate')::boolean);
+select pg_temp.check('5b another charge for a paid order → no second credit', (public.payment_complete((select (r->>'order_id')::uuid from ord), 'charge-AAA-2', 'prov-2', 120, 111000111, '{}') ->> 'duplicate')::boolean);
+select pg_temp.check('balance credited exactly once', (select balance = 25000 from public.user_wallets where user_id = 'eeeeeeee-0000-4000-8000-000000000001'));
+select pg_temp.check('ledger row for the top-up', (select count(*) = 1 and sum(amount) = 25000 from public.wallet_transactions where user_id = 'eeeeeeee-0000-4000-8000-000000000001' and kind = 'topup'));
+select pg_temp.check('order marked paid with the Telegram charge id', (select status = 'paid' and telegram_payment_charge_id = 'charge-AAA-1' from public.payment_orders where id = (select (r->>'order_id')::uuid from ord)));
+select pg_temp.check('paid order cannot pass pre-checkout again', public.payment_precheck((select (r->>'order_id')::uuid from ord), 120, 'XTR', 111000111) = 'order is paid');
+reset role;
+
+set role authenticated;
+set request.jwt.claim.sub = 'eeeeeeee-0000-4000-8000-000000000001';
+select pg_temp.check('wallet_me shows the balance', (public.wallet_me() ->> 'balance')::bigint = 25000);
+select pg_temp.check('top-up notification', (select count(*) = 1 from public.notifications_mine() where kind = 'wallet.topup'));
+-- 6-8 shop
+select pg_temp.check('6 buy Gold Classic (12 000)', (public.shop_buy('gold-classic', 'key-buy-0001') ->> 'balance')::bigint = 13000);
+select pg_temp.check('same request again is not charged twice', (public.shop_buy('gold-classic', 'key-buy-0001') ->> 'duplicate')::boolean and (public.wallet_me() ->> 'balance')::bigint = 13000);
+do $$ begin
+  perform public.shop_buy('gold-classic', 'key-buy-0002');
+  perform pg_temp.check('cannot buy an owned item again', false);
+exception when others then perform pg_temp.check('cannot buy an owned item again', sqlerrm like '%already owned%', sqlerrm); end $$;
+select pg_temp.check('7 inventory has the item', (select count(*) = 1 from public.user_inventory where user_id = auth.uid() and item_slug = 'gold-classic'));
+select pg_temp.check('catalog shows owned', (select (x ->> 'owned')::boolean from json_array_elements(public.shop_catalog() -> 'items') x where x ->> 'slug' = 'gold-classic'));
+select pg_temp.check('8 equip owned skin', (public.equip_item('piece', 'gold-classic') ->> 'ok')::boolean);
+select pg_temp.check('8b equipped choice saved on the profile (all devices)', (select equipped_piece = 'gold-classic' from public.profiles where id = auth.uid()));
+do $$ begin
+  perform public.equip_item('piece', 'shadow-king');
+  perform pg_temp.check('cannot equip a skin you do not own', false);
+exception when others then perform pg_temp.check('cannot equip a skin you do not own', sqlerrm like '%not owned%', sqlerrm); end $$;
+do $$ begin
+  perform public.equip_item('board', 'gold-classic');
+  perform pg_temp.check('cannot equip into the wrong slot', false);
+exception when others then perform pg_temp.check('cannot equip into the wrong slot', sqlerrm like '%not found%', sqlerrm); end $$;
+select pg_temp.check('free default board can be equipped', (public.equip_item('board', 'classic-blue') ->> 'ok')::boolean);
+select pg_temp.check('equipped look is public (cosmetics_of)', (public.cosmetics_of(auth.uid()) -> 'piece' ->> 'slug') = 'gold-classic');
+do $$ begin
+  perform public.shop_buy('emperor', 'key-buy-0003');
+  perform pg_temp.check('not enough coins for a mythic item', false);
+exception when others then perform pg_temp.check('not enough coins for a mythic item', sqlerrm like '%insufficient%', sqlerrm); end $$;
+select pg_temp.check('ledger is complete (top-up − purchase = balance)', (select sum(amount) = 13000 from public.wallet_transactions where user_id = auth.uid()));
+select pg_temp.check('report can be filed', (public.report_create('bug', 'Doska sekin yuklanadi') ->> 'id') is not null);
+reset role;
+
+-- 16-17 admin roles, permissions and audit log
+set role authenticated;
+set request.jwt.claim.sub = 'eeeeeeee-0000-4000-8000-000000000002';
+select pg_temp.check('Telegram id 7550418397 is super admin', (public.admin_me() ->> 'role') = 'super_admin');
+select pg_temp.check('panel opening is audited', (select count(*) = 1 from public.admin_audit(50, 0, 'panel.open')));
+select pg_temp.check('dashboard works for admins', (public.admin_dashboard() ->> 'users_total')::int >= 4);
+select pg_temp.check('admin user search', (select count(*) = 1 from public.admin_users('buyer_one')));
+do $$ begin
+  perform public.admin_wallet_adjust('eeeeeeee-0000-4000-8000-000000000001', 500, '', 'adm-key-0001');
+  perform pg_temp.check('balance change needs a reason', false);
+exception when others then perform pg_temp.check('balance change needs a reason', sqlerrm like '%reason%', sqlerrm); end $$;
+select pg_temp.check('admin credit with reason', (public.admin_wallet_adjust('eeeeeeee-0000-4000-8000-000000000001', 500, 'Turnir mukofoti', 'adm-key-0001') ->> 'balance')::bigint = 13500);
+select pg_temp.check('admin credit is idempotent', (public.admin_wallet_adjust('eeeeeeee-0000-4000-8000-000000000001', 500, 'Turnir mukofoti', 'adm-key-0001') ->> 'balance')::bigint = 13500);
+do $$ begin
+  perform public.admin_wallet_adjust('eeeeeeee-0000-4000-8000-000000000001', -999999, 'xato', 'adm-key-0002');
+  perform pg_temp.check('debit can not make a balance negative', false);
+exception when others then perform pg_temp.check('debit can not make a balance negative', sqlerrm like '%insufficient%', sqlerrm); end $$;
+select pg_temp.check('17 balance change is in the audit log with reason', (select count(*) = 1 from public.admin_audit(50, 0, 'wallet.adjust') where reason = 'Turnir mukofoti'));
+select pg_temp.check('super admin grants moderator', (public.admin_role_set('eeeeeeee-0000-4000-8000-000000000003', 'moderator', 'Yangi moderator') ->> 'ok')::boolean);
+select pg_temp.check('admin shop edit (price + discount)', (public.admin_shop_save(
+  (select to_jsonb(i) || '{"discount_percent": 50}'::jsonb from public.shop_items i where slug = 'titanium'), 'Aksiya') ->> 'ok')::boolean);
+select pg_temp.check('discount shows in the shop', (select (x ->> 'final_price')::int = 7000 from json_array_elements(public.shop_catalog() -> 'items') x where x ->> 'slug' = 'titanium'));
+select pg_temp.check('admin can retire an item', (public.admin_shop_save((select to_jsonb(i) || '{"retired": true}'::jsonb from public.shop_items i where slug = 'chrome'), 'Sotuvdan olindi') ->> 'ok')::boolean);
+select pg_temp.check('admin package price change', (public.admin_package_save('{"id":"coins_5k","coins":5000,"stars":30,"sort":1,"active":true}', 'Narx yangilandi') ->> 'ok')::boolean);
+select pg_temp.check('new package price applies', (select stars = 30 from public.coin_packages where id = 'coins_5k'));
+reset role;
+set role authenticated;
+set request.jwt.claim.sub = 'eeeeeeee-0000-4000-8000-000000000001';
+do $$ begin
+  perform public.shop_buy('chrome', 'key-buy-0009');
+  perform pg_temp.check('retired item is not sold', false);
+exception when others then perform pg_temp.check('retired item is not sold', sqlerrm like '%not for sale%', sqlerrm); end $$;
+select pg_temp.check('discounted price is charged', (public.shop_buy('titanium', 'key-buy-0010') ->> 'price')::int = 7000);
+reset role;
+
+set role authenticated;
+set request.jwt.claim.sub = 'eeeeeeee-0000-4000-8000-000000000003';
+select pg_temp.check('moderator role active', (public.admin_me() ->> 'role') = 'moderator');
+do $$ begin
+  perform public.admin_wallet_adjust('eeeeeeee-0000-4000-8000-000000000003', 100000, 'o''zimga', 'mod-key-0001');
+  perform pg_temp.check('moderator can NOT change balances', false);
+exception when others then perform pg_temp.check('moderator can NOT change balances', sqlerrm like '%forbidden%', sqlerrm); end $$;
+do $$ begin
+  perform public.admin_role_set('eeeeeeee-0000-4000-8000-000000000003', 'admin', 'o''zimni ko''taraman');
+  perform pg_temp.check('moderator can NOT raise own role', false);
+exception when others then perform pg_temp.check('moderator can NOT raise own role', sqlerrm like '%forbidden%', sqlerrm); end $$;
+do $$ begin
+  perform public.admin_ban('eeeeeeee-0000-4000-8000-000000000002', now() + interval '1 day', 'urinish');
+  perform pg_temp.check('nobody can restrict the super admin', false);
+exception when others then perform pg_temp.check('nobody can restrict the super admin', sqlerrm like '%forbidden%', sqlerrm); end $$;
+select pg_temp.check('moderator restricts a player', (public.admin_ban('eeeeeeee-0000-4000-8000-000000000004', now() + interval '1 day', 'Haqorat') ->> 'ok')::boolean);
+reset role;
+do $$ begin
+  set local role authenticated;
+  insert into public.admin_roles (user_id, role) values ('eeeeeeee-0000-4000-8000-000000000004', 'admin');
+  perform pg_temp.check('admin_roles not writable by clients', false);
+exception when others then perform pg_temp.check('admin_roles not writable by clients', true, sqlerrm); end $$;
+-- restricted player can not play, queue, join the tournament or buy
+set role authenticated;
+set request.jwt.claim.sub = 'eeeeeeee-0000-4000-8000-000000000004';
+do $$ begin
+  perform public.quick_match(180);
+  perform pg_temp.check('restricted player can NOT queue', false);
+exception when others then perform pg_temp.check('restricted player can NOT queue', sqlerrm like '%restricted%', sqlerrm); end $$;
+do $$ begin
+  perform public.start_bot_match('easy');
+  perform pg_temp.check('restricted player can NOT start a bot game', false);
+exception when others then perform pg_temp.check('restricted player can NOT start a bot game', sqlerrm like '%restricted%', sqlerrm); end $$;
+do $$ begin
+  perform public.weekly_join();
+  perform pg_temp.check('restricted player can NOT join the tournament', false);
+exception when others then perform pg_temp.check('restricted player can NOT join the tournament', sqlerrm like '%restricted%', sqlerrm); end $$;
+reset role;
+set role authenticated;
+set request.jwt.claim.sub = 'eeeeeeee-0000-4000-8000-000000000002';
+select pg_temp.check('unban restores access', (public.admin_unban('eeeeeeee-0000-4000-8000-000000000004', 'Muddatidan oldin') ->> 'ok')::boolean);
+select pg_temp.check('super admin removes the moderator role', (public.admin_role_set('eeeeeeee-0000-4000-8000-000000000003', null, 'Lavozimdan olindi') ->> 'ok')::boolean);
+select pg_temp.check('audit log lists every action', (select count(*) >= 8 from public.admin_audit(100, 0, null)));
+select pg_temp.check('reports visible to admins', (select count(*) >= 1 from public.admin_reports(null, 10, 0)));
+select pg_temp.check('weekly prizes editable', (public.admin_weekly_prizes_save('[{"place":2,"title_uz":"100 Telegram Stars","title_en":"100 Telegram Stars","icon":"⭐"}]', 'Sovrin oshirildi') ->> 'ok')::boolean
+  and (select json_array_length(public.weekly_overview() -> 'prizes') = 5));
+select pg_temp.check('confirm last week''s winners', (public.admin_weekly_confirm('dddddddd-0000-4000-8000-000000000001', 'Natijalar tekshirildi') ->> 'ok')::boolean);
+select pg_temp.check('winners marked confirmed', (select count(*) = 3 from public.weekly_entries where tournament_id = 'dddddddd-0000-4000-8000-000000000001' and prize_status = 'confirmed'));
+select pg_temp.check('mark a prize delivered', (public.admin_weekly_delivered('dddddddd-0000-4000-8000-000000000001', 'cccccccc-0000-4000-8000-000000000008', 'Premium yuborildi') ->> 'ok')::boolean);
+reset role;
+set role authenticated;
+set request.jwt.claim.sub = 'eeeeeeee-0000-4000-8000-000000000003';
+do $$ begin
+  perform public.admin_dashboard();
+  perform pg_temp.check('removed staff loses access', false);
+exception when others then perform pg_temp.check('removed staff loses access', sqlerrm like '%forbidden%', sqlerrm); end $$;
+reset role;
+
+-- refunds: coins are taken back first; refused if already spent; reverted if Telegram refuses
+set role service_role;
+create temp table ord2 as select public.payment_create('eeeeeeee-0000-4000-8000-000000000001', 'coins_5k') as r;
+grant all on ord2 to public;
+select public.payment_complete((select (r->>'order_id')::uuid from ord2), 'charge-BBB-1', 'prov-b', 30, 111000111, '{}');
+select pg_temp.check('refund takes the coins back', (public.payment_refund_begin((select (r->>'order_id')::uuid from ord2), 'eeeeeeee-0000-4000-8000-000000000002', 'Foydalanuvchi so''rovi') ->> 'charge_id') = 'charge-BBB-1');
+select pg_temp.check('order marked refunded, coins debited', (select status = 'refunded' from public.payment_orders where id = (select (r->>'order_id')::uuid from ord2))
+  and (select balance from public.user_wallets where user_id = 'eeeeeeee-0000-4000-8000-000000000001') = 6500);
+select public.payment_refund_revert((select (r->>'order_id')::uuid from ord2), 'eeeeeeee-0000-4000-8000-000000000002', 'telegram error');
+select pg_temp.check('failed Telegram refund gives the coins back', (select status = 'paid' from public.payment_orders where id = (select (r->>'order_id')::uuid from ord2))
+  and (select balance from public.user_wallets where user_id = 'eeeeeeee-0000-4000-8000-000000000001') = 11500);
+do $$ begin
+  perform public.payment_refund_begin((select (r->>'order_id')::uuid from ord), 'eeeeeeee-0000-4000-8000-000000000003', 'urinish');
+  perform pg_temp.check('refund needs an admin with permission', false);
+exception when others then perform pg_temp.check('refund needs an admin with permission', sqlerrm like '%forbidden%', sqlerrm); end $$;
+do $$ begin
+  perform public.payment_refund_begin((select (r->>'order_id')::uuid from ord), 'eeeeeeee-0000-4000-8000-000000000002', 'urinish');
+  perform pg_temp.check('refund refused when the coins are already spent', false);
+exception when others then perform pg_temp.check('refund refused when the coins are already spent', sqlerrm like '%insufficient%', sqlerrm); end $$;
+select pg_temp.check('wallet never negative, ledger consistent', (select bool_and(w.balance = coalesce((select sum(amount) from public.wallet_transactions t where t.user_id = w.user_id), 0)) from public.user_wallets w));
+reset role;
+
+-- ---------- Live spectating, chats, draw, rematch, blocking (0013) ----------
+insert into auth.users (id, email, raw_user_meta_data) values
+  ('99999999-0000-4000-8000-000000000001', 'g1@x.io', '{"username":"live_white"}'),
+  ('99999999-0000-4000-8000-000000000002', 'g2@x.io', '{"username":"live_black"}'),
+  ('99999999-0000-4000-8000-000000000003', 'g3@x.io', '{"username":"watcher"}'),
+  ('99999999-0000-4000-8000-000000000004', 'g4@x.io', '{"username":"shy_player"}');
+update public.profiles set hide_games = true where id = '99999999-0000-4000-8000-000000000004';
+-- a public 3-minute game (via a challenge)
+set role authenticated;
+set request.jwt.claim.sub = '99999999-0000-4000-8000-000000000001';
+create temp table lch as select public.send_challenge('99999999-0000-4000-8000-000000000002') as r;
+grant all on lch to public;
+reset role;
+update public.profiles set last_seen = now() where id in ('99999999-0000-4000-8000-000000000001','99999999-0000-4000-8000-000000000002','99999999-0000-4000-8000-000000000004');
+set role authenticated;
+set request.jwt.claim.sub = '99999999-0000-4000-8000-000000000002';
+create temp table lgm as select (public.respond_challenge((select (r->>'challenge_id')::uuid from lch), true) ->> 'match_id')::uuid as id;
+grant all on lgm to public;
+reset role;
+select pg_temp.check('challenge game is public', (select is_public from public.matches where id = (select id from lgm)));
+set role service_role;
+insert into public.match_moves (match_id, ply, from_sq, path) values ((select id from lgm), 0, 42, '{35}');
+update public.matches set move_count = 1 where id = (select id from lgm);
+reset role;
+-- a private game: shy_player hides their games
+set role authenticated;
+set request.jwt.claim.sub = '99999999-0000-4000-8000-000000000004';
+create temp table pch as select public.send_challenge('99999999-0000-4000-8000-000000000003') as r;
+grant all on pch to public;
+reset role;
+update public.profiles set last_seen = now() where id = '99999999-0000-4000-8000-000000000003';
+set role authenticated;
+set request.jwt.claim.sub = '99999999-0000-4000-8000-000000000003';
+create temp table pgm as select (public.respond_challenge((select (r->>'challenge_id')::uuid from pch), true) ->> 'match_id')::uuid as id;
+grant all on pgm to public;
+select pg_temp.check('13 game of a player who hides games is private', (select not is_public from public.matches where id = (select id from pgm)));
+select pg_temp.check('… but the players themselves still see it', (select count(*) = 1 from public.matches where id = (select id from pgm)));
+reset role;
+reset request.jwt.claim.sub;
+set role anon;
+select pg_temp.check('12 live list shows the public game with its moves', (select count(*) = 1 from json_array_elements(public.live_list(50, 0)) x where (x->>'id')::uuid = (select id from lgm) and json_array_length(x->'moves') = 1));
+select pg_temp.check('13 private game is NOT in the live list', (select count(*) = 0 from json_array_elements(public.live_list(50, 0)) x where (x->>'id')::uuid = (select id from pgm)));
+select pg_temp.check('anon can read a public game + moves', (select count(*) = 1 from public.matches where id = (select id from lgm)) and (select count(*) = 1 from public.match_moves where match_id = (select id from lgm)));
+select pg_temp.check('13 outsiders can NOT read a private game', (select count(*) = 0 from public.matches where id = (select id from pgm)));
+reset role;
+set role authenticated;
+set request.jwt.claim.sub = '99999999-0000-4000-8000-000000000001';
+select pg_temp.check('13 outsider (signed in) can NOT read a private game', (select count(*) = 0 from public.matches where id = (select id from pgm)));
+do $$ begin
+  perform public.live_ping((select id from pgm));
+  perform pg_temp.check('cannot watch a private game', false);
+exception when others then perform pg_temp.check('cannot watch a private game', true, sqlerrm); end $$;
+select pg_temp.check('a player is not counted as a viewer', (public.live_ping((select id from lgm)) ->> 'viewers')::int = 0);
+reset role;
+set role authenticated;
+set request.jwt.claim.sub = '99999999-0000-4000-8000-000000000003';
+select pg_temp.check('a spectator is counted', (public.live_ping((select id from lgm)) ->> 'viewers')::int = 1);
+select pg_temp.check('live stats count games and viewers', (select (r->>'games')::int >= 1 and (r->>'viewers')::int >= 1 from (select public.live_stats() as r) x));
+-- 14 spectator chat
+select pg_temp.check('14 spectator writes in the live chat', (public.live_chat_send((select id from lgm), 'text', 'Zo''r yurish!') ->> 'ok')::boolean);
+do $$ begin
+  perform public.live_chat_send((select id from lgm), 'text', 'yana');
+  perform pg_temp.check('live chat rate limit', false);
+exception when others then perform pg_temp.check('live chat rate limit', sqlerrm like '%slow down%', sqlerrm); end $$;
+do $$ begin
+  perform public.live_chat_send((select id from lgm), 'emoji', '💩');
+  perform pg_temp.check('only the allowed emoji reactions', false);
+exception when others then perform pg_temp.check('only the allowed emoji reactions', sqlerrm like '%bad emoji%', sqlerrm); end $$;
+do $$ begin
+  perform public.live_chat_send((select id from lgm), 'text', repeat('x', 201));
+  perform pg_temp.check('message length limit', false);
+exception when others then perform pg_temp.check('message length limit', true, sqlerrm); end $$;
+reset role;
+set role anon;
+select pg_temp.check('everyone can read the live chat', (select count(*) = 1 from public.live_chat_recent((select id from lgm), 50)));
+reset role;
+set role authenticated;
+set request.jwt.claim.sub = '99999999-0000-4000-8000-000000000001';
+select pg_temp.check('players can NOT read the live chat during their game', (select count(*) = 0 from public.live_chat_recent((select id from lgm), 50)));
+do $$ begin
+  perform public.live_chat_send((select id from lgm), 'text', 'menga yordam bering');
+  perform pg_temp.check('players can NOT write in the live chat during their game', false);
+exception when others then perform pg_temp.check('players can NOT write in the live chat during their game', true, sqlerrm); end $$;
+-- 15 players' match chat
+select pg_temp.check('15 player writes in the match chat', (public.match_chat_send((select id from lgm), 'text', 'Omad!') ->> 'ok')::boolean);
+reset role;
+set role authenticated;
+set request.jwt.claim.sub = '99999999-0000-4000-8000-000000000002';
+select pg_temp.check('opponent reads it', (select count(*) = 1 from public.match_chat_messages where match_id = (select id from lgm)));
+select pg_temp.check('emoji reaction', (public.match_chat_send((select id from lgm), 'emoji', '🔥') ->> 'ok')::boolean);
+reset role;
+set role authenticated;
+set request.jwt.claim.sub = '99999999-0000-4000-8000-000000000003';
+select pg_temp.check('spectators can NOT read the players'' chat', (select count(*) = 0 from public.match_chat_messages where match_id = (select id from lgm)));
+do $$ begin
+  perform public.match_chat_send((select id from lgm), 'text', 'salom');
+  perform pg_temp.check('spectators can NOT write in the players'' chat', false);
+exception when others then perform pg_temp.check('spectators can NOT write in the players'' chat', sqlerrm like '%not found%', sqlerrm); end $$;
+reset role;
+-- moderation
+set role authenticated;
+set request.jwt.claim.sub = 'eeeeeeee-0000-4000-8000-000000000002';
+select pg_temp.check('moderator hides a chat message', (public.admin_chat_hide((select max(id) from public.live_chat_messages), 'Spam') ->> 'ok')::boolean);
+select pg_temp.check('admin mutes a player', (public.admin_mute('99999999-0000-4000-8000-000000000003', now() + interval '1 hour', 'Spam') ->> 'ok')::boolean);
+reset role;
+set role anon;
+select pg_temp.check('hidden message disappears', (select count(*) = 0 from public.live_chat_recent((select id from lgm), 50)));
+reset role;
+set role authenticated;
+set request.jwt.claim.sub = '99999999-0000-4000-8000-000000000003';
+select pg_sleep(2.1);
+do $$ begin
+  perform public.live_chat_send((select id from lgm), 'text', 'yana spam');
+  perform pg_temp.check('muted player can NOT chat', false);
+exception when others then perform pg_temp.check('muted player can NOT chat', sqlerrm like '%muted%', sqlerrm); end $$;
+reset role;
+-- draw offer
+set role authenticated;
+set request.jwt.claim.sub = '99999999-0000-4000-8000-000000000001';
+create temp table dr0 as select rating, rated_games from public.profiles where id = '99999999-0000-4000-8000-000000000001';
+grant all on dr0 to public;
+select pg_temp.check('draw offered', (public.match_offer_draw((select id from lgm)) ->> 'ok')::boolean);
+do $$ begin
+  perform public.match_respond_draw((select id from lgm), true);
+  perform pg_temp.check('cannot accept your own draw offer', false);
+exception when others then perform pg_temp.check('cannot accept your own draw offer', sqlerrm like '%no open offer%', sqlerrm); end $$;
+reset role;
+set role authenticated;
+set request.jwt.claim.sub = '99999999-0000-4000-8000-000000000002';
+select pg_temp.check('opponent accepts the draw', (public.match_respond_draw((select id from lgm), true) ->> 'accepted')::boolean);
+reset role;
+select pg_temp.check('game finished as a draw by agreement, rated once (0 points)', (select status = 'finished' and result = 'draw' and result_reason = 'agreement' and rating_applied and white_delta = 0 from public.matches where id = (select id from lgm))
+  and (select rated_games = (select rated_games from dr0) + 1 and rating = (select rating from dr0) from public.profiles where id = '99999999-0000-4000-8000-000000000001'));
+-- rematch
+set role authenticated;
+set request.jwt.claim.sub = '99999999-0000-4000-8000-000000000002';
+select pg_temp.check('rematch offered', (public.match_offer_rematch((select id from lgm)) ->> 'ok')::boolean);
+reset role;
+set role authenticated;
+set request.jwt.claim.sub = '99999999-0000-4000-8000-000000000001';
+create temp table rem as select (public.match_respond_rematch((select id from lgm), true) ->> 'match_id')::uuid as id;
+grant all on rem to public;
+select pg_temp.check('rematch: new game with swapped colours and the same clock', (select n.white_id = o.black_id and n.black_id = o.white_id and n.time_control = 180 and n.status = 'active'
+  from public.matches n, public.matches o where n.id = (select id from rem) and o.id = (select id from lgm)));
+do $$ begin
+  perform public.match_respond_rematch((select id from lgm), true);
+  perform pg_temp.check('rematch can not be accepted twice', false);
+exception when others then perform pg_temp.check('rematch can not be accepted twice', sqlerrm like '%no open offer%', sqlerrm); end $$;
+select pg_temp.check('archive lists my finished games', (select count(*) >= 1 from json_array_elements(public.my_games(null, 20)) x where (x->>'id')::uuid = (select id from lgm)));
+-- blocking
+select pg_temp.check('block a player', (public.block_user('99999999-0000-4000-8000-000000000002', true) ->> 'ok')::boolean);
+select pg_temp.check('blocked list', (select count(*) = 1 from public.blocked_users()));
+reset role;
+set role authenticated;
+set request.jwt.claim.sub = '99999999-0000-4000-8000-000000000002';
+select pg_sleep(1.1);
+select public.match_chat_send((select id from rem), 'text', 'salom');
+do $$ begin
+  perform public.send_challenge('99999999-0000-4000-8000-000000000001');
+  perform pg_temp.check('blocked player can NOT challenge you', false);
+exception when others then perform pg_temp.check('blocked player can NOT challenge you', sqlerrm like '%unavailable%' or sqlerrm like '%offline%', sqlerrm); end $$;
+reset role;
+set role authenticated;
+set request.jwt.claim.sub = '99999999-0000-4000-8000-000000000001';
+select pg_temp.check('blocked player''s messages are hidden from me', (select count(*) = 0 from public.match_chat_messages where match_id = (select id from rem)));
+select pg_temp.check('unblock', (public.block_user('99999999-0000-4000-8000-000000000002', false) ->> 'ok')::boolean);
+select pg_temp.check('… block list is empty', (select count(*) = 0 from public.blocked_users()));
+select pg_temp.check('after unblock the messages are visible again', (select count(*) = 1 from public.match_chat_messages where match_id = (select id from rem)));
+select pg_temp.check('a player can hide a running game', (public.match_set_visibility((select id from rem), false) ->> 'ok')::boolean);
+reset role;
+set role anon;
+select pg_temp.check('… then it is gone from the live list', (select count(*) = 0 from json_array_elements(public.live_list(50, 0)) x where (x->>'id')::uuid = (select id from rem)));
+reset role;
+
 -- service_role (Edge Functions) must be able to read/write game tables (regression test for the 404 bug)
 set role service_role;
 select pg_temp.check('service_role can read matches', (select count(*) from public.matches) > 0);

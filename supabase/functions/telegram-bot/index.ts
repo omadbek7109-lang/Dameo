@@ -2,8 +2,12 @@
 //  - POST from Telegram (webhook): answers /start (and /play, /help) with a welcome text + "open the game" button.
 //  - GET ?setup=1: registers this function as the bot's webhook (with a secret header), sets the menu button
 //    and the command list. Safe to call repeatedly; it only points the bot at this same function.
+//  - Telegram Stars payments: answers pre_checkout_query (SQL payment_precheck decides) and, on successful_payment,
+//    credits the DAMEO Coins exactly once (SQL payment_complete, unique Telegram charge id) and thanks the player.
 // Deploy with verify_jwt = false (Telegram does not send a Supabase JWT); requests are authenticated
 // with Telegram's X-Telegram-Bot-Api-Secret-Token header instead.
+import { createClient } from 'jsr:@supabase/supabase-js@2';
+
 const WEBAPP_URL = Deno.env.get('DAMEO_WEBAPP_URL') ?? 'https://omadbek7109-lang.github.io/Dameo/';
 
 const enc = new TextEncoder();
@@ -60,7 +64,7 @@ Deno.serve(async (req) => {
     const results = {
       bot: me?.result?.username,
       previous_webhook: current || null,
-      webhook: await tg(token, 'setWebhook', { url: self, secret_token: secret, allowed_updates: ['message'], drop_pending_updates: false }),
+      webhook: await tg(token, 'setWebhook', { url: self, secret_token: secret, allowed_updates: ['message', 'pre_checkout_query'], drop_pending_updates: false }),
       menu: await tg(token, 'setChatMenuButton', { menu_button: { type: 'web_app', text: "O'ynash", web_app: { url: WEBAPP_URL } } }),
       commands: await tg(token, 'setMyCommands', { commands: [{ command: 'start', description: "DAMEO — o'yinni ochish" }] }),
       commands_en: await tg(token, 'setMyCommands', { commands: [{ command: 'start', description: 'DAMEO — open the game' }], language_code: 'en' }),
@@ -77,8 +81,54 @@ Deno.serve(async (req) => {
   } catch {
     return new Response('ok');
   }
+  const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+  const db = () => createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, { auth: { persistSession: false } });
+
+  // ---- Stars: Telegram asks whether this payment may go through (must answer within 10 s)
+  const pcq = update?.pre_checkout_query;
+  if (pcq?.id) {
+    let error: string | null = 'Order not found';
+    if (UUID.test(String(pcq.invoice_payload ?? ''))) {
+      const { data, error: e } = await db().rpc('payment_precheck', {
+        p_order: pcq.invoice_payload, p_stars: pcq.total_amount, p_currency: pcq.currency, p_tg: pcq.from?.id,
+      });
+      error = e ? 'Server error, please try again' : (data as string | null);
+    }
+    await tg(token, 'answerPreCheckoutQuery', error ? { pre_checkout_query_id: pcq.id, ok: false, error_message: error } : { pre_checkout_query_id: pcq.id, ok: true });
+    return new Response('ok');
+  }
+
   const msg = update?.message;
   const text: string = msg?.text ?? '';
+
+  // ---- Stars: the payment went through → credit the coins (idempotent on the Telegram charge id)
+  const paid = msg?.successful_payment;
+  if (paid) {
+    const { data, error } = await db().rpc('payment_complete', {
+      p_order: UUID.test(String(paid.invoice_payload ?? '')) ? paid.invoice_payload : '00000000-0000-0000-0000-000000000000',
+      p_charge: paid.telegram_payment_charge_id, p_provider_charge: paid.provider_payment_charge_id ?? null,
+      p_stars: paid.total_amount, p_tg: msg.from?.id, p_raw: paid,
+    });
+    if (error) return new Response('retry', { status: 500 });          // Telegram retries the update later
+    const en = msg.from?.language_code?.startsWith('en');
+    const r = data as { ok: boolean; duplicate?: boolean; coins?: number; balance?: number };
+    if (r?.ok && !r.duplicate) {
+      const n = (x: number) => String(x).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+      await tg(token, 'sendMessage', {
+        chat_id: msg.chat.id,
+        text: en
+          ? `✅ Payment received!\n\n🪙 +${n(r.coins ?? 0)} DAMEO Coins\nBalance: ${n(r.balance ?? 0)} 🪙`
+          : `✅ To'lov qabul qilindi!\n\n🪙 +${n(r.coins ?? 0)} DAMEO Coins\nBalans: ${n(r.balance ?? 0)} 🪙`,
+        reply_markup: { inline_keyboard: [[{ text: en ? '🛍 Open the shop' : "🛍 Do'konni ochish", web_app: { url: `${WEBAPP_URL}#/shop` } }]] },
+      });
+    } else if (r && !r.ok) {
+      await tg(token, 'sendMessage', {
+        chat_id: msg.chat.id,
+        text: en ? '⚠️ We received your payment but need to check it. Support will contact you.' : "⚠️ To'lov qabul qilindi, lekin tekshiruv kerak. Yordam xizmati siz bilan bog'lanadi.",
+      });
+    }
+    return new Response('ok');
+  }
   if (msg?.chat?.type === 'private' && /^\/(start|play|help)\b/.test(text)) {
     const from = msg.from ?? {};
     const name = escapeHtml(from.first_name || from.username || "o'yinchi");
