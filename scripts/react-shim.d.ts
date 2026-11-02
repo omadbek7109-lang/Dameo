@@ -29,4 +29,5 @@ declare module 'react' {
   export const StrictMode: any;
 }
 declare module 'react-dom/client' { export function createRoot(e: any): { render(n: any): void }; }
+declare module 'react-dom' { export function createPortal(children: any, container: Element): any; }
 declare namespace React { type RefObject<T> = { current: T }; type ReactNode = any }

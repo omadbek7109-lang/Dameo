@@ -375,6 +375,127 @@ create temp table bm8 as select public.start_bot_match('easy') as r;
 select pg_temp.check('bot games have no clock', (select time_control is null from public.matches where id = (select (r ->> 'match_id')::uuid from bm8)));
 reset role;
 
+-- ---------- DAMEO Weekly Tournament (0010) ----------
+insert into auth.users (id, email, raw_user_meta_data) values
+  ('cccccccc-0000-4000-8000-000000000004', 'w4@x.io', '{"username":"wk_four"}'),
+  ('cccccccc-0000-4000-8000-000000000005', 'w5@x.io', '{"username":"wk_five"}'),
+  ('cccccccc-0000-4000-8000-000000000006', 'w6@x.io', '{"username":"wk_six"}'),
+  ('cccccccc-0000-4000-8000-000000000008', 'w8@x.io', '{"username":"wk_eight"}'),
+  ('cccccccc-0000-4000-8000-000000000009', 'w9@x.io', '{"username":"wk_nine"}'),
+  ('cccccccc-0000-4000-8000-000000000010', 'w10@x.io', '{"username":"wk_ten"}');
+-- a finished PvP game: (white, black, result, ended_at) → applied once by the server
+create function pg_temp.pvp(w uuid, b uuid, res text, at timestamptz) returns uuid language plpgsql as $$
+declare mid uuid;
+begin
+  insert into public.matches (white_id, black_id, status, rated, started_at) values (w, b, 'active', true, at) returning matches.id into mid;
+  update public.matches set status = 'finished', result = res, result_reason = 'no-moves', ended_at = at where matches.id = mid;
+  perform public.apply_match_result(mid);
+  return mid;
+end $$;
+
+set role anon;
+select pg_temp.check('anyone can read the weekly overview', (public.weekly_overview() -> 'current' ->> 'id') is not null);
+reset role;
+select pg_temp.check('one tournament per week (no duplicates)', (select count(*) from public.weekly_tournaments) = 1);
+select pg_temp.check('week = Monday 00:00 → next Monday 00:00 Tashkent',
+  (select extract(isodow from starts_at at time zone 'Asia/Tashkent') = 1 and (starts_at at time zone 'Asia/Tashkent')::time = '00:00'
+          and ends_at - starts_at = interval '7 days' and now() >= starts_at and now() < ends_at from public.weekly_tournaments));
+do $$ begin
+  set local role anon;
+  perform public.weekly_join();
+  perform pg_temp.check('anon can NOT join', false);
+exception when others then perform pg_temp.check('anon can NOT join', true, sqlerrm); end $$;
+
+set role authenticated;
+set request.jwt.claim.sub = 'cccccccc-0000-4000-8000-000000000004';
+select pg_temp.check('join records the current rating as start', (public.weekly_join() ->> 'start_rating')::int = 1200);
+select public.weekly_join();
+select pg_temp.check('joining twice does not duplicate', (select count(*) from public.weekly_entries where user_id = auth.uid()) = 1);
+do $$ begin
+  insert into public.weekly_entries (tournament_id, user_id, start_rating) select id, '33333333-3333-3333-3333-333333333333', 9999 from public.weekly_tournaments;
+  perform pg_temp.check('client can NOT write entries directly', false);
+exception when others then perform pg_temp.check('client can NOT write entries directly', true, sqlerrm); end $$;
+do $$ begin
+  update public.weekly_entries set start_rating = 100 where user_id = auth.uid();
+  perform pg_temp.check('client can NOT change own start rating', (select start_rating from public.weekly_entries where user_id = auth.uid()) = 1200);
+exception when others then perform pg_temp.check('client can NOT change own start rating', sqlstate = '42501', sqlerrm); end $$;
+do $$ begin
+  perform public.weekly_tick();
+  perform pg_temp.check('client can NOT run the scheduler', false);
+exception when others then perform pg_temp.check('client can NOT run the scheduler', sqlstate = '42501', sqlerrm); end $$;
+reset role;
+set role authenticated;
+set request.jwt.claim.sub = 'cccccccc-0000-4000-8000-000000000005';
+select public.weekly_join();
+reset role;
+set role authenticated;
+set request.jwt.claim.sub = 'cccccccc-0000-4000-8000-000000000006';
+select public.weekly_join();
+reset role;
+
+-- a game that ended BEFORE joining does not count; one after joining does
+select pg_temp.pvp('cccccccc-0000-4000-8000-000000000005', 'cccccccc-0000-4000-8000-000000000004', 'white', now() - interval '1 hour');
+update public.weekly_entries set start_rating = (select rating from public.profiles where id = user_id) where user_id in ('cccccccc-0000-4000-8000-000000000004', 'cccccccc-0000-4000-8000-000000000005');  -- as if they joined after that game
+create temp table g1 as select pg_temp.pvp('cccccccc-0000-4000-8000-000000000004', 'cccccccc-0000-4000-8000-000000000005', 'white', clock_timestamp()) as id;
+grant all on g1 to public;
+select public.apply_match_result((select id from g1));    -- a second call must not count it again
+create temp table st1 as select * from public.weekly_standings();
+grant all on st1 to public;
+select pg_temp.check('winner +5, 1 win, rank 1', (select delta = 5 and wins = 1 and games = 1 and rank = 1 from st1 where username = 'wk_four'), (select string_agg(username || ':' || delta || '/' || games, ' ') from st1));
+select pg_temp.check('loser −5, 1 loss, rank 2', (select delta = -5 and losses = 1 and rank = 2 from st1 where username = 'wk_five'));
+select pg_temp.check('game before joining is not counted', (select games = 1 from st1 where username = 'wk_five'));
+select pg_temp.check('player without games is listed but unranked', (select rank is null and games = 0 from st1 where username = 'wk_six'));
+select pg_temp.check('tournament rating = global rating (in sync)',
+  (select bool_and(st1.rating = p.rating) from st1 join public.profiles p on p.id = st1.user_id));
+-- bot games never count, even a (legacy) rated one; unrated PvP games neither
+insert into public.matches (white_id, status, rated, vs_bot, bot_level, started_at, ended_at, result, result_reason)
+  values ('cccccccc-0000-4000-8000-000000000004', 'finished', true, true, 'easy', now(), clock_timestamp(), 'white', 'no-moves');
+select public.apply_match_result(id) from public.matches where vs_bot and white_id = 'cccccccc-0000-4000-8000-000000000004';
+insert into public.matches (white_id, black_id, status, rated, started_at, ended_at, result, result_reason)
+  values ('cccccccc-0000-4000-8000-000000000004', 'cccccccc-0000-4000-8000-000000000006', 'finished', false, now(), clock_timestamp(), 'white', 'no-moves');
+select pg_temp.check('bot and unrated games are not counted', (select delta = 5 and games = 1 from public.weekly_standings() where username = 'wk_four'));
+set role authenticated;
+set request.jwt.claim.sub = 'cccccccc-0000-4000-8000-000000000004';
+select pg_temp.check('overview shows my live score', (select (r -> 'me' ->> 'delta')::int = 5 and (r -> 'me' ->> 'rank')::int = 1 from (select public.weekly_overview() as r) x));
+reset role;
+
+-- ---- an ended week: tie-break, freeze, idempotence ----
+insert into public.weekly_tournaments (id, week_start, name, starts_at, ends_at)
+  values ('dddddddd-0000-4000-8000-000000000001', (public._weekly_bounds(now())).week_start - 7, 'past week',
+          now() - interval '7 days', now() - interval '1 minute');
+insert into public.weekly_entries (tournament_id, user_id, joined_at, start_rating)
+  select 'dddddddd-0000-4000-8000-000000000001', id, now() - interval '7 days', rating from public.profiles
+   where id in ('cccccccc-0000-4000-8000-000000000008', 'cccccccc-0000-4000-8000-000000000009', 'cccccccc-0000-4000-8000-000000000010');
+select pg_temp.pvp('cccccccc-0000-4000-8000-000000000008', 'cccccccc-0000-4000-8000-000000000009', 'white', now() - interval '3 days');  -- 8 reaches +5 first
+select pg_temp.pvp('cccccccc-0000-4000-8000-000000000010', 'cccccccc-0000-4000-8000-000000000009', 'white', now() - interval '2 days');  -- 10 reaches +5 later
+select pg_temp.pvp('cccccccc-0000-4000-8000-000000000009', 'cccccccc-0000-4000-8000-000000000008', 'white', now() - interval '30 seconds'); -- after the end
+set role service_role;
+select pg_temp.check('scheduler freezes the ended week', (public.weekly_tick() ->> 'finalized')::int = 1);
+reset role;
+create temp table fin as select * from public.weekly_entries where tournament_id = 'dddddddd-0000-4000-8000-000000000001';
+grant all on fin to public;
+select pg_temp.check('tie on points → earlier achiever ranks higher', (select final_rank = 1 from fin where user_id = 'cccccccc-0000-4000-8000-000000000008')
+  and (select final_rank = 2 from fin where user_id = 'cccccccc-0000-4000-8000-000000000010'));
+select pg_temp.check('game after the end is not counted', (select final_delta = -10 and final_games = 2 and final_rank = 3 from fin where user_id = 'cccccccc-0000-4000-8000-000000000009'));
+select pg_temp.check('final rating = start + points', (select bool_and(final_rating = start_rating + final_delta) from fin));
+select pg_temp.check('week marked finished', (select status = 'finished' and finalized_at is not null from public.weekly_tournaments where id = 'dddddddd-0000-4000-8000-000000000001'));
+create temp table fz as select finalized_at from public.weekly_tournaments where id = 'dddddddd-0000-4000-8000-000000000001';
+grant all on fz to public;
+-- even a game written later with an in-window time cannot change frozen results
+select pg_temp.pvp('cccccccc-0000-4000-8000-000000000009', 'cccccccc-0000-4000-8000-000000000010', 'white', now() - interval '1 day');
+set role service_role;
+select public.weekly_tick();
+reset role;
+select pg_temp.check('frozen results never change', (select bool_and(f.final_delta = e.final_delta and f.final_rank is not distinct from e.final_rank)
+  from fin f join public.weekly_entries e using (tournament_id, user_id)));
+select pg_temp.check('finalize runs only once', (select finalized_at from public.weekly_tournaments where id = 'dddddddd-0000-4000-8000-000000000001') = (select finalized_at from fz));
+set role anon;
+select pg_temp.check('frozen standings are public', (select count(*) = 3 and bool_and(frozen) from public.weekly_standings('dddddddd-0000-4000-8000-000000000001')));
+select pg_temp.check('overview shows last week''s winners', (select json_array_length(public.weekly_overview() -> 'previous' -> 'winners') = 3));
+select pg_temp.check('next tournament starts when this one ends', (select (r ->> 'next_starts_at') = (r -> 'current' ->> 'ends_at') from (select public.weekly_overview() as r) x));
+reset role;
+select pg_temp.check('still one tournament for the current week', (select count(*) from public.weekly_tournaments where week_start = (public._weekly_bounds(now())).week_start) = 1);
+
 -- service_role (Edge Functions) must be able to read/write game tables (regression test for the 404 bug)
 set role service_role;
 select pg_temp.check('service_role can read matches', (select count(*) from public.matches) > 0);
@@ -388,7 +509,7 @@ reset role;
 set role anon;
 reset request.jwt.claim.sub;
 set request.jwt.claim.role = 'anon';
-select pg_temp.check('anon can read the leaderboard', (select count(*) from public.leaderboard) = 3);
+select pg_temp.check('anon can read the leaderboard', (select count(*) from public.leaderboard) = (select count(*) from public.profiles));
 do $$ begin
   perform public.create_room();
   perform pg_temp.check('anon can NOT create rooms', false);

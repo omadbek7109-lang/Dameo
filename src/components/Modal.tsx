@@ -1,4 +1,5 @@
 import { useEffect, useRef, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { LuX } from 'react-icons/lu';
 import { useT } from '../i18n/index.tsx';
 
@@ -49,7 +50,9 @@ export function Modal({ open, onClose, title, children, locked, wide }: Props) {
   }, [open, locked, onClose]);
 
   if (!open) return null;
-  return (
+  // Rendered into <body>: inside a page it would share main's stacking context (z-index 1) and sit under the
+  // phone tab bar, which then covered the dialog's bottom buttons.
+  return createPortal(
     <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && !locked && onClose()}>
       <div className={`modal ${wide ? 'modal-wide' : ''}`} role="dialog" aria-modal="true" aria-label={title} ref={ref} tabIndex={-1}>
         <div className="modal-head">
@@ -62,6 +65,7 @@ export function Modal({ open, onClose, title, children, locked, wide }: Props) {
         </div>
         <div className="modal-body">{children}</div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

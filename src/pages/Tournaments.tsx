@@ -5,6 +5,7 @@ import { useAuthDialog } from '../components/AuthDialog.tsx';
 import { EmptyState, ErrorState, Spinner } from '../components/States.tsx';
 import { useToast } from '../components/Toast.tsx';
 import { DemoNotice } from '../components/ui.tsx';
+import { WeeklyTournament } from '../components/WeeklyTournament.tsx';
 import { useAsync } from '../hooks/useAsync.ts';
 import { useI18n, type TKey } from '../i18n/index.tsx';
 import { registerLive, listTournaments, unregisterLive } from '../services/tournaments.ts';
@@ -60,6 +61,11 @@ export function Tournaments() {
       </div>
       <DemoNotice text={t('demo.tourNotice')} />
 
+      {mode === 'live' && <WeeklyTournament />}
+
+      {/* other (bracket) tournaments: only shown when there are any, or in demo mode */}
+      {(mode !== 'live' || (list.data ?? []).length > 0) && (
+      <>
       <div className="tabs" role="tablist">
         {TABS.map((x) => (
           <button key={x.id} role="tab" aria-selected={tab === x.id} className={`tab ${tab === x.id ? 'tab-active' : ''}`} onClick={() => setTab(x.id)}>
@@ -80,6 +86,8 @@ export function Tournaments() {
             <TournamentCard key={x.id} x={x} busy={busy === x.id} onToggle={() => toggle(x)} />
           ))}
         </div>
+      )}
+      </>
       )}
     </div>
   );
