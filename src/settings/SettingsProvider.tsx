@@ -1,13 +1,19 @@
-import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { readJSON, writeJSON } from '../services/localStore.ts';
+import { configureSound, installAudioUnlock } from '../services/sound.ts';
 
 export interface Settings {
   /** highlight selectable pieces and legal destination squares */
   showLegal: boolean;
   /** ask before restart / resign */
   confirmActions: boolean;
+  /** sound effects on/off and volume 0–1 */
+  sound: boolean;
+  volume: number;
+  /** hide the in-game chat */
+  chatHidden: boolean;
 }
-const DEFAULTS: Settings = { showLegal: true, confirmActions: true };
+const DEFAULTS: Settings = { showLegal: true, confirmActions: true, sound: true, volume: 0.7, chatHidden: false };
 const KEY = 'dameo.settings';
 
 interface Ctx {
@@ -25,6 +31,10 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       return next;
     });
   }, []);
+  useEffect(() => {
+    installAudioUnlock();
+    configureSound({ enabled: settings.sound, volume: settings.volume });
+  }, [settings.sound, settings.volume]);
   const value = useMemo(() => ({ settings, update }), [settings, update]);
   return <C.Provider value={value}>{children}</C.Provider>;
 }

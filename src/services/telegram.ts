@@ -24,6 +24,7 @@ interface TgWebApp {
   onEvent(e: string, cb: () => void): void;
   offEvent?: (e: string, cb: () => void) => void;
   openTelegramLink?: (url: string) => void;
+  openInvoice?: (url: string, cb?: (status: 'paid' | 'cancelled' | 'failed' | 'pending') => void) => void;
   HapticFeedback?: { impactOccurred(s: 'light' | 'medium' | 'heavy'): void; notificationOccurred(t: 'error' | 'success' | 'warning'): void };
   BackButton?: { show(): void; hide(): void; onClick(cb: () => void): void; offClick(cb: () => void): void };
 }

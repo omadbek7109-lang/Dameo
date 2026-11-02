@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { App } from './App.tsx';
 import { initTelegram, startJoinCode } from './services/telegram.ts';
 import { AuthProvider } from './auth/AuthProvider.tsx';
+import { CosmeticsProvider } from './cosmetics/CosmeticsProvider.tsx';
 import { AuthDialogProvider } from './components/AuthDialog.tsx';
 import { ToastProvider } from './components/Toast.tsx';
 import { I18nProvider } from './i18n/index.tsx';
@@ -39,9 +40,11 @@ createRoot(document.getElementById('root')!).render(
         <SettingsProvider>
           <ToastProvider>
             <AuthProvider>
-              <AuthDialogProvider>
-                <App />
-              </AuthDialogProvider>
+              <CosmeticsProvider>
+                <AuthDialogProvider>
+                  <App />
+                </AuthDialogProvider>
+              </CosmeticsProvider>
             </AuthProvider>
           </ToastProvider>
         </SettingsProvider>

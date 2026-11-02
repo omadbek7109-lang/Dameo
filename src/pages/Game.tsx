@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { LuArrowLeft, LuBookOpen, LuCrown, LuFlag, LuHandshake, LuLightbulb, LuLoader, LuRotateCcw, LuSwords, LuTimer, LuUndo2, LuWifiOff } from 'react-icons/lu';
+import { LuArrowLeft, LuBookOpen, LuCrown, LuEye, LuEyeOff, LuFlag, LuHandshake, LuLightbulb, LuLoader, LuRotateCcw, LuSwords, LuTimer, LuUndo2, LuWifiOff } from 'react-icons/lu';
 import { useAuth } from '../auth/AuthProvider.tsx';
 import type { Difficulty } from '../bot/ai.ts';
 import { Avatar } from '../components/Avatar.tsx';
@@ -18,6 +18,9 @@ import { DEMO_PLAYERS } from '../services/demoData.ts';
 import { clockView, formatClock, GRACE_MS } from '../services/clock.ts';
 import { claimTimeout, getMatch, getMoves, resignOnline, startBotMatch, submitMove, toLocalMs, watchMatch, type OnlineMatch } from '../services/online.ts';
 import { haptic, tg } from '../services/telegram.ts';
+import { offerDraw, offerRematch, setMatchVisibility, chatErrorKey } from '../services/live.ts';
+import { moveSound, playSound } from '../services/sound.ts';
+import { MatchChat } from '../components/MatchChat.tsx';
 import { SbError } from '../services/supabase.ts';
 import type { ConnectionState } from '../services/supabase.ts';
 import { useSettings } from '../settings/SettingsProvider.tsx';
@@ -103,6 +106,14 @@ function LocalGame() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [g.game.result]);
 
+  // sounds for local games (no server to wait for)
+  const heard = useRef(0);
+  useEffect(() => {
+    const h = g.game.history;
+    if (h.length > heard.current) playSound(moveSound(h[h.length - 1], kind === 'local' || h[h.length - 1].color === humanColor));
+    heard.current = h.length;
+  }, [g.game.history.length]);
+
   const restart = useCallback(() => {
     recorded.current = false;
     setResult(null);
@@ -162,6 +173,9 @@ function OnlineGame({ matchId }: { matchId: string }) {
       try {
         const r = await submitMove(matchId, mv.from, mv.path);
         if (!r.ok) throw new Error(r.error);
+        // sound only once the server has accepted the move
+        const mineRec = gRef.current.game.history.find((h, i) => i >= 0 && h.from === mv.from && h.path.join() === mv.path.join());
+        playSound(moveSound(mineRec, true));
         // my clock stops and the opponent's starts right away (the realtime row update confirms it)
         const c = r.clock;
         if (c?.turn_started_at && c.white_ms != null && c.black_ms != null) {
@@ -173,7 +187,10 @@ function OnlineGame({ matchId }: { matchId: string }) {
           );
         }
         // Server bot reply comes back in the same response (realtime delivers it too; the ply check de-duplicates).
-        if (r.bot && gRef.current.game.history.length === r.bot.ply) gRef.current.applyRemote(r.bot.from, r.bot.path);
+        if (r.bot && gRef.current.game.history.length === r.bot.ply) {
+          gRef.current.applyRemote(r.bot.from, r.bot.path);
+          setTimeout(() => playSound(moveSound(gRef.current.game.history[r.bot!.ply], false)), 250);
+        }
       } catch (e) {
         // Say exactly why the server refused the move, then re-sync the board from the server's copy.
         const code = e instanceof SbError ? e.message : e instanceof TypeError ? 'network' : 'server';
@@ -265,7 +282,10 @@ function OnlineGame({ matchId }: { matchId: string }) {
     return watchMatch(matchId, {
       onMove: (mv) => {
         const have = gRef.current.game.history.length;
-        if (mv.ply === have) gRef.current.applyRemote(mv.from, mv.path);
+        if (mv.ply === have) {
+          gRef.current.applyRemote(mv.from, mv.path);
+          setTimeout(() => playSound(moveSound(gRef.current.game.history[mv.ply], false)), 30);
+        }
         else if (mv.ply > have) void resync(gRef.current.loadMoves).catch(() => {}); // missed a move while offline
       },
       onMatch: (m) => setMatch(m),
@@ -312,6 +332,7 @@ function OnlineGame({ matchId }: { matchId: string }) {
     );
   }
   const iAmWhite = humanColor === 'w';
+  const pvp = !match.vsBot && !!match.blackId;
   const opp = match.vsBot
     ? { name: `${t('game.botName')} · ${t(`bot.${match.botLevel ?? 'medium'}` as 'bot.easy')}`, rating: undefined, tag: t('game.botTag') }
     : { name: (iAmWhite ? match.blackName : match.whiteName) ?? t('quick.opponent'), rating: (iAmWhite ? match.blackRating : match.whiteRating) ?? undefined };
@@ -355,6 +376,42 @@ function OnlineGame({ matchId }: { matchId: string }) {
       }
       onExit={() => navigate('/play')}
       serverThinking={waitingServer && match.vsBot}
+      extraControls={
+        pvp ? (
+          <>
+            <button
+              className="btn btn-secondary"
+              disabled={match.status !== 'active'}
+              onClick={() =>
+                offerDraw(matchId)
+                  .then(() => toast('success', t('chat.drawSent')))
+                  .catch((e) => toast('error', t(chatErrorKey(e instanceof SbError ? e.message : ''))))
+              }
+            >
+              <LuHandshake /> {t('chat.offerDraw')}
+            </button>
+            <button
+              className="btn btn-ghost"
+              onClick={() =>
+                setMatchVisibility(matchId, !match.isPublic)
+                  .then(() => load())
+                  .catch(() => toast('error', t('chat.cannotPublic')))
+              }
+            >
+              {match.isPublic ? <LuEyeOff /> : <LuEye />} {t(match.isPublic ? 'game.hideGame' : 'game.showGame')}
+            </button>
+          </>
+        ) : undefined
+      }
+      aside={pvp && me ? <MatchChat matchId={matchId} myId={me.id} opponentId={(iAmWhite ? match.blackId : match.whiteId) ?? ''} names={{ [match.whiteId]: match.whiteName, ...(match.blackId ? { [match.blackId]: match.blackName ?? '' } : {}) }} active={match.status === 'active'} /> : undefined}
+      onRematch={
+        pvp && match.status === 'finished'
+          ? () =>
+              offerRematch(matchId)
+                .then(() => toast('success', t('chat.rematchSent')))
+                .catch((e) => toast('error', t(chatErrorKey(e instanceof SbError ? e.message : ''))))
+          : undefined
+      }
       banner={
         conn !== 'open' ? (
           <div className="notice notice-warn" role="status">
@@ -387,9 +444,14 @@ interface ScreenProps {
   onExit: () => void;
   banner?: ReactNode;
   serverThinking?: boolean;
+  /** extra buttons in the controls card (online: draw offer, hide game) */
+  extraControls?: ReactNode;
+  /** chat / offers (online PvP) */
+  aside?: ReactNode;
+  onRematch?: () => void;
 }
 
-function GameScreen({ g, kind, humanColor, top, bottom, canRestart, canUndo, canHint, canDraw, onResign, onRestart, result, onPlayAgain, onExit, banner, serverThinking }: ScreenProps) {
+function GameScreen({ g, kind, humanColor, top, bottom, canRestart, canUndo, canHint, canDraw, onResign, onRestart, result, onPlayAgain, onExit, banner, serverThinking, extraControls, aside, onRematch }: ScreenProps) {
   const { t } = useI18n();
   const { settings } = useSettings();
   const [confirm, setConfirm] = useState<null | 'resign' | 'restart' | 'draw'>(null);
@@ -524,6 +586,7 @@ function GameScreen({ g, kind, humanColor, top, bottom, canRestart, canUndo, can
                 <LuRotateCcw /> {t('game.restart')}
               </button>
             )}
+            {extraControls}
             <button className="btn btn-danger" onClick={ask('resign', onResign)} disabled={over}>
               <LuFlag /> {t('game.resign')}
             </button>
@@ -556,10 +619,16 @@ function GameScreen({ g, kind, humanColor, top, bottom, canRestart, canUndo, can
       </Modal>
 
       <RulesDialog open={rules} onClose={() => setRules(false)} />
-      {result && <ResultDialog open={resultOpen} onClose={() => setResultOpen(false)} result={result} onPlayAgain={onPlayAgain} onExit={onExit} kind={kind} />}
+      {aside}
+      {result && <ResultDialog open={resultOpen} onClose={() => setResultOpen(false)} result={result} onPlayAgain={onPlayAgain} onExit={onExit} kind={kind} onRematch={onRematch} />}
       {over && !result && kind === 'online' && <div className="notice"><LuLoader className="spin" /> {t('online.finalizing')}</div>}
       {over && result && !resultOpen && (
         <div className="row-actions center">
+          {onRematch && (
+            <button className="btn btn-secondary" onClick={onRematch}>
+              <LuRotateCcw /> {t('chat.rematch')}
+            </button>
+          )}
           <button className="btn btn-primary" onClick={onPlayAgain}>
             <LuSwords /> {t('game.playAgain')}
           </button>
@@ -569,11 +638,13 @@ function GameScreen({ g, kind, humanColor, top, bottom, canRestart, canUndo, can
   );
 }
 
-function ResultDialog({ open, onClose, result, onPlayAgain, onExit, kind }: { open: boolean; onClose: () => void; result: ResultInfo; onPlayAgain: () => void; onExit: () => void; kind: GameKind }) {
+function ResultDialog({ open, onClose, result, onPlayAgain, onExit, kind, onRematch }: { open: boolean; onClose: () => void; result: ResultInfo; onPlayAgain: () => void; onExit: () => void; kind: GameKind; onRematch?: () => void }) {
   const { t, num } = useI18n();
   const win = result.outcome === 'win';
   useEffect(() => {
-    if (open) haptic(win ? 'win' : 'error');
+    if (!open) return;
+    haptic(win ? 'win' : 'error');
+    playSound(result.outcome === 'win' ? 'win' : result.outcome === 'loss' ? 'loss' : 'draw');
   }, [open, win]);
   const title = result.outcome === 'win' ? t('result.victory') : result.outcome === 'loss' ? t('result.defeat') : result.outcome === 'draw' ? t('result.drawn') : t(result.winnerColor === 'w' ? 'result.whiteWins' : 'result.blackWins');
   const hasRating = result.rated && result.before !== undefined && result.after !== undefined;
@@ -597,6 +668,11 @@ function ResultDialog({ open, onClose, result, onPlayAgain, onExit, kind }: { op
           <p className="muted small">{kind === 'online' && result.rated ? t('result.updating') : t('result.unrated')}</p>
         )}
         <div className="row-actions center">
+          {onRematch && (
+            <button className="btn btn-secondary" onClick={onRematch}>
+              <LuRotateCcw /> {t('chat.rematch')}
+            </button>
+          )}
           <button className="btn btn-primary" onClick={onPlayAgain}>
             <LuSwords /> {t('game.playAgain')}
           </button>

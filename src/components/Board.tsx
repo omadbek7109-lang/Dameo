@@ -2,6 +2,7 @@ import { memo, useMemo } from 'react';
 import { LuCrown } from 'react-icons/lu';
 import { isDark, rc, squareName, type Cell } from '../engine/index.ts';
 import { useT } from '../i18n/index.tsx';
+import { useCosmetics } from '../cosmetics/CosmeticsProvider.tsx';
 
 interface Props {
   board: Cell[];
@@ -17,12 +18,17 @@ interface Props {
   disabled: boolean;
   shake: number;
   onSquare: (i: number) => void;
+  /** skin classes override (shop previews); default = the player's equipped cosmetics */
+  skin?: string;
 }
 
 const FILES = 'abcdefgh';
 
-function BoardImpl({ board, ids, flipped, selected, targets, pathMarks, mustMove, hint, lastMove, showLegal, disabled, shake, onSquare }: Props) {
+function BoardImpl({ board, ids, flipped, selected, targets, pathMarks, mustMove, hint, lastMove, showLegal, disabled, shake, onSquare, skin }: Props) {
   const t = useT();
+  const cosmetics = useCosmetics();
+  const skinClass = skin ?? cosmetics?.boardClass ?? '';
+  const hasFx = /(^| )fx-/.test(skinClass);
   const pos = (i: number) => {
     const [r, c] = rc(i);
     return { x: flipped ? 7 - c : c, y: flipped ? 7 - r : r };
@@ -50,7 +56,7 @@ function BoardImpl({ board, ids, flipped, selected, targets, pathMarks, mustMove
   };
 
   return (
-    <div className={`board-wrap`}>
+    <div className={`board-wrap ${skinClass}`}>
       <div key={shake} className={`board ${shake > 0 ? 'board-shake' : ''} ${disabled ? 'board-disabled' : ''}`} role="grid" aria-label={t('board.label')}>
         {squares.map((i) => {
           const [r, c] = rc(i);
@@ -74,6 +80,7 @@ function BoardImpl({ board, ids, flipped, selected, targets, pathMarks, mustMove
             <button key={i} className={cls} style={style} onClick={() => onSquare(i)} aria-label={label(i)} role="gridcell" aria-selected={selected === i}>
               {isTarget && <span className="mark" />}
               {isPath && <span className="mark mark-path" />}
+              {hasFx && lastMove && lastMove.to === i && <span className="fx-burst" key={`${lastMove.from}-${lastMove.to}`} aria-hidden="true" />}
             </button>
           );
         })}
@@ -84,7 +91,10 @@ function BoardImpl({ board, ids, flipped, selected, targets, pathMarks, mustMove
             const king = cell === 2 || cell === -2;
             return (
               <div key={id} className={`piece ${white ? 'piece-w' : 'piece-b'} ${king ? 'piece-king' : ''} ${selected === i ? 'piece-selected' : ''}`} style={{ ['--x' as string]: p.x, ['--y' as string]: p.y }}>
-                <span className="piece-disc">{king && <LuCrown className="piece-crown" />}</span>
+                <span className="piece-disc">
+                  <i className="pfx" />
+                  {king && <LuCrown className="piece-crown" />}
+                </span>
               </div>
             );
           })}

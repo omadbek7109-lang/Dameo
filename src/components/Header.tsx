@@ -1,4 +1,4 @@
-import { LuBell, LuCheck, LuGlobe, LuLogOut, LuMoon, LuSettings, LuSun, LuTrophy, LuUser, LuUsers, LuHouse, LuSwords, LuMedal } from 'react-icons/lu';
+import { LuBell, LuCheck, LuGlobe, LuMenu, LuMoon, LuSun, LuTrophy, LuUser, LuUsers, LuHouse, LuSwords, LuMedal } from 'react-icons/lu';
 import type { IconType } from 'react-icons';
 import { useAuth } from '../auth/AuthProvider.tsx';
 import { LANGS, useI18n, type TKey } from '../i18n/index.tsx';
@@ -10,6 +10,10 @@ import { Avatar } from './Avatar.tsx';
 import { useAuthDialog } from './AuthDialog.tsx';
 import { Logo } from './Logo.tsx';
 import { Popover } from './Popover.tsx';
+import { MenuSheet } from './MenuSheet.tsx';
+import { useCallback, useState } from 'react';
+import { CoinBadge } from './ShopParts.tsx';
+import { useCosmetics } from '../cosmetics/CosmeticsProvider.tsx';
 
 export const NAV: Array<{ to: string; key: TKey; short?: TKey; icon: IconType; match: (p: string) => boolean }> = [
   { to: '/', key: 'nav.home', icon: LuHouse, match: (p) => p === '/' },
@@ -27,6 +31,9 @@ export function Header() {
   const { openAuth } = useAuthDialog();
   const { path } = useRoute();
   const unread = notifications.filter((n) => !n.read).length;
+  const cos = useCosmetics();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const closeMenu = useCallback(() => setMenuOpen(false), []);
 
   return (
     <header className="header">
@@ -42,6 +49,7 @@ export function Header() {
           ))}
         </nav>
         <div className="header-tools">
+          {mode === 'live' && signedIn && <CoinBadge value={cos?.balance ?? null} to="/wallet" className="coin-badge-header" />}
           {mode === 'demo' && (
             <span className="badge badge-demo hide-sm" title={t('demo.modeHint')}>
               {t('demo.mode')}
@@ -50,6 +58,7 @@ export function Header() {
 
           <Popover
             id="lang-menu"
+            className="hide-sm"
             button={({ open, toggle: tg, ref, id }) => (
               <button ref={ref} className="icon-btn icon-btn-text" onClick={tg} aria-haspopup="menu" aria-expanded={open} aria-controls={id} aria-label={t('a11y.language')}>
                 <LuGlobe />
@@ -79,7 +88,7 @@ export function Header() {
             )}
           </Popover>
 
-          <button className="icon-btn theme-toggle" onClick={toggle} aria-label={theme === 'dark' ? t('theme.toLight') : t('theme.toDark')} title={theme === 'dark' ? t('theme.toLight') : t('theme.toDark')}>
+          <button className="icon-btn theme-toggle hide-sm" onClick={toggle} aria-label={theme === 'dark' ? t('theme.toLight') : t('theme.toDark')} title={theme === 'dark' ? t('theme.toLight') : t('theme.toDark')}>
             <span className={`theme-icon ${theme === 'dark' ? 'is-on' : ''}`}>
               <LuMoon />
             </span>
@@ -131,48 +140,20 @@ export function Header() {
           </Popover>
 
           {signedIn && me ? (
-            <Popover
-              id="user-menu"
-              button={({ open, toggle: tg, ref, id }) => (
-                <button ref={ref} className="user-btn" onClick={tg} aria-haspopup="menu" aria-expanded={open} aria-controls={id} aria-label={t('a11y.userMenu')}>
-                  <Avatar name={me.username} seed={me.avatar} size={34} />
-                </button>
-              )}
-            >
-              {(close) => (
-                <div className="menu menu-user" role="menu">
-                  <div className="menu-head">
-                    <strong>{me.username}</strong>
-                    <span className="muted small">
-                      {t('common.rating')}: {me.rating} <LevelBadge rating={me.rating} label={(n) => t('level.short', { n })} />
-                    </span>
-                  </div>
-                  <Link to="/profile" className="menu-item" role="menuitem" onClick={close}>
-                    <LuUser /> {t('nav.profile')}
-                  </Link>
-                  <Link to="/settings" className="menu-item" role="menuitem" onClick={close}>
-                    <LuSettings /> {t('nav.settings')}
-                  </Link>
-                  {mode === 'live' && !inTelegram && (
-                    <button
-                      className="menu-item"
-                      role="menuitem"
-                      onClick={() => {
-                        close();
-                        void signOut();
-                      }}
-                    >
-                      <LuLogOut /> {t('auth.signOut')}
-                    </button>
-                  )}
-                </div>
-              )}
-            </Popover>
-          ) : (
-            <button className="btn btn-primary btn-sm" onClick={openAuth}>
-              {t('auth.signIn')}
+            <button className="user-btn" onClick={() => setMenuOpen(true)} aria-haspopup="dialog" aria-expanded={menuOpen} aria-controls="main-menu" aria-label={t('menu.title')}>
+              <Avatar name={me.username} seed={me.avatar} size={34} />
             </button>
+          ) : (
+            <>
+              <button className="btn btn-primary btn-sm" onClick={openAuth}>
+                {t('auth.signIn')}
+              </button>
+              <button className="icon-btn" onClick={() => setMenuOpen(true)} aria-label={t('menu.title')} aria-controls="main-menu">
+                <LuMenu />
+              </button>
+            </>
           )}
+          <MenuSheet open={menuOpen} onClose={closeMenu} />
         </div>
       </div>
     </header>

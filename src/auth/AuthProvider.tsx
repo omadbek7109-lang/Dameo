@@ -159,7 +159,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const markAllRead = useCallback(() => {
     if (mode === 'demo') mutateLocal((p) => ({ ...p, notifications: p.notifications.map((n) => ({ ...n, read: true })) }));
-    else setLiveNotes((l) => l.map((n) => ({ ...n, read: true })));
+    else {
+      setLiveNotes((l) => l.map((n) => ({ ...n, read: true })));
+      void db.rpc('notifications_mark_read').catch(() => {});
+    }
   }, [mode, mutateLocal]);
 
   const recordDemoResult = useCallback(

@@ -12,6 +12,14 @@ import { Play } from './pages/Play.tsx';
 import { Profile } from './pages/Profile.tsx';
 import { Settings } from './pages/Settings.tsx';
 import { Tournaments } from './pages/Tournaments.tsx';
+import { Shop } from './pages/Shop.tsx';
+import { Inventory } from './pages/Inventory.tsx';
+import { Wallet } from './pages/Wallet.tsx';
+import { Admin } from './pages/Admin.tsx';
+import { Live } from './pages/Live.tsx';
+import { Watch } from './pages/Watch.tsx';
+import { Archive } from './pages/Archive.tsx';
+import { About, Blocked, Feedback, Help } from './pages/Info.tsx';
 import { Link, useRoute } from './router.tsx';
 
 function NotFound() {
@@ -65,6 +73,39 @@ export function App() {
       break;
     case 'settings':
       page = <Settings />;
+      break;
+    case 'shop':
+      page = <Shop />;
+      break;
+    case 'inventory':
+      page = <Inventory />;
+      break;
+    case 'wallet':
+      page = <Wallet />;
+      break;
+    case 'admin':
+      page = <Admin />;
+      break;
+    case 'live':
+      page = <Live />;
+      break;
+    case 'watch':
+      page = <Watch />;
+      break;
+    case 'archive':
+      page = <Archive />;
+      break;
+    case 'help':
+      page = <Help />;
+      break;
+    case 'about':
+      page = <About />;
+      break;
+    case 'feedback':
+      page = <Feedback />;
+      break;
+    case 'blocked':
+      page = <Blocked />;
       break;
     default:
       page = <NotFound />;

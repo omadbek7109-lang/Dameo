@@ -33,6 +33,8 @@ export interface OnlineMatch {
   timeoutKind: 'move' | 'clock' | null;
   /** server clock − local clock (ms), measured when this row was fetched */
   skewMs: number;
+  /** visible to spectators */
+  isPublic: boolean;
 }
 export interface OnlineMove {
   ply: number;
@@ -62,6 +64,7 @@ interface MatchRow {
   turn_started_at?: string | null;
   timeout_kind?: 'move' | 'clock' | null;
   server_now?: string | null;
+  is_public?: boolean;
 }
 
 /** server time → local time, given skew = server − local */
@@ -92,6 +95,7 @@ const mapMatch = (r: MatchRow, receivedAt = Date.now()): OnlineMatch => {
   clock,
   timeoutKind: r.timeout_kind ?? null,
   skewMs,
+  isPublic: r.is_public ?? true,
   };
 };
 
