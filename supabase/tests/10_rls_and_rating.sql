@@ -889,6 +889,47 @@ do $$ begin
 exception when others then perform pg_temp.check('anon can NOT create rooms', true, sqlerrm); end $$;
 reset role;
 
+-- avatar frames: 'dameo' for everyone, 'champion' only for the current #1; players cannot write the column directly
+create temp table fr as
+  select (select id from public.profiles order by rating desc, wins desc, created_at asc limit 1) as leader,
+         (select id from public.profiles order by rating asc, wins asc, created_at desc limit 1) as other;
+grant select on fr to authenticated, anon;
+set role authenticated;
+select set_config('request.jwt.claim.sub', (select other::text from fr), false);
+select pg_temp.check('anyone can wear the DAMEO frame', (public.frame_equip('dameo') ->> 'ok')::boolean);
+do $$ begin
+  perform public.frame_equip('champion');
+  perform pg_temp.check('a non-#1 player can NOT wear the champion frame', false);
+exception when others then perform pg_temp.check('a non-#1 player can NOT wear the champion frame', sqlerrm like 'only the #1%', sqlerrm); end $$;
+do $$ begin
+  perform public.frame_equip('gold<script>');
+  perform pg_temp.check('unknown frames are refused', false);
+exception when others then perform pg_temp.check('unknown frames are refused', true, sqlerrm); end $$;
+do $$ begin
+  update public.profiles set equipped_frame = 'champion' where id = auth.uid();
+  perform pg_temp.check('the frame column can NOT be written directly', false);
+exception when others then perform pg_temp.check('the frame column can NOT be written directly', true, sqlerrm); end $$;
+select pg_temp.check('frames_mine: not #1', (public.frames_mine() ->> 'champion_ok')::boolean = false and public.frames_mine() ->> 'equipped' = 'dameo');
+select pg_temp.check('a frame can be taken off', (public.frame_equip(null) ->> 'equipped') is null);
+select set_config('request.jwt.claim.sub', (select leader::text from fr), false);
+select pg_temp.check('the #1 can wear the champion frame', (public.frame_equip('champion') ->> 'equipped') = 'champion');
+reset role;
+set role anon;
+select pg_temp.check('everyone sees the #1''s champion frame', exists (select 1 from public.frames_active() f, fr where f.user_id = fr.leader and f.frame = 'champion'));
+reset role;
+update public.profiles set rating = rating + 1000 where id = (select other from fr);
+set role anon;
+select pg_temp.check('… and it disappears when they lose #1', not exists (select 1 from public.frames_active() f, fr where f.user_id = fr.leader));
+reset role;
+update public.profiles set rating = rating - 1000 where id = (select other from fr);
+set role anon;
+select pg_temp.check('… and comes back when they win #1 back', exists (select 1 from public.frames_active() f, fr where f.user_id = fr.leader and f.frame = 'champion'));
+do $$ begin
+  perform public.frame_equip('dameo');
+  perform pg_temp.check('anon can NOT equip frames', false);
+exception when others then perform pg_temp.check('anon can NOT equip frames', true, sqlerrm); end $$;
+reset role;
+
 \set QUIET off
 select case when ok then 'PASS' else 'FAIL' end as status, name, left(detail, 70) as detail from results order by 1 desc, 2;
 select count(*) filter (where not ok) as failures, count(*) as total from results;

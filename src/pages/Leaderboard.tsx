@@ -117,7 +117,7 @@ export function Leaderboard({ initialTab }: { initialTab?: View } = {}) {
           {order.map((p) => (
             <Link key={p.id} to={`/profile/${p.id}`} className={`podium-card podium-${p.rank}`}>
               <span className="podium-crown">{p.rank === 1 && <LuCrown />}</span>
-              <Avatar name={p.username} seed={p.avatar} size={p.rank === 1 ? 76 : 60} ring={p.rank === 1 ? 'gold' : p.rank === 2 ? 'silver' : 'bronze'} />
+              <Avatar userId={p.id} name={p.username} seed={p.avatar} size={p.rank === 1 ? 76 : 60} ring={p.rank === 1 ? 'gold' : p.rank === 2 ? 'silver' : 'bronze'} />
               <span className="podium-name">{p.username}</span>
               <LevelBadge rating={p.rating} label={(n) => t('level.short', { n })} />
               <span className="podium-rating">{num(p.rating)}</span>
@@ -204,7 +204,7 @@ function LbRow({ p, meId }: { p: RankedPlayer; meId?: string }) {
     <Link to={`/profile/${p.id}`} className={`lb-row ${p.id === meId ? 'lb-me' : ''}`}>
       <span className={`rank-chip ${p.rank <= 3 ? `rank-${p.rank}` : ''}`}>{p.rank}</span>
       <span className="lb-player">
-        <Avatar name={p.username} seed={p.avatar} size={36} online={isOnline(p)} />
+        <Avatar name={p.username} seed={p.avatar} size={36} online={isOnline(p)} userId={p.id} />
         <span className="lb-name">
           <span className="row-title">
             {p.username}

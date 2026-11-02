@@ -383,7 +383,7 @@ export function LiveQuickPanel({ autoStart = 0 }: { autoStart?: number }) {
           <ul className="rows">
             {players.map((p) => (
               <li key={p.id} className="row row-static">
-                <Avatar name={p.username} seed={p.avatar} size={38} online />
+                <Avatar name={p.username} seed={p.avatar} size={38} online userId={p.id} />
                 <span className="row-main">
                   <span className="row-title">
                     {p.username}

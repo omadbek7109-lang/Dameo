@@ -33,6 +33,8 @@ interface PlayerInfo {
   name: string;
   rating?: number;
   seed?: string;
+  /** player id (avatar frame) */
+  id?: string | null;
   color: Color;
   tag?: string;
   /** game clock (timed online games) */
@@ -128,7 +130,7 @@ function LocalGame() {
     kind === 'local' ? t('game.player2') : kind === 'demo-rated' ? (demoOpp?.username ?? t('quick.opponent')) : `${t('game.computer')} · ${t(`bot.${level}` as 'bot.easy')}`;
   const oppColor: Color = humanColor === 'w' ? 'b' : 'w';
   const top: PlayerInfo = { name: opponentName, rating: demoOpp && kind === 'demo-rated' ? demoOpp.rating : undefined, seed: demoOpp?.avatar, color: oppColor, tag: kind === 'demo-rated' ? t('demo.badge') : undefined };
-  const bottom: PlayerInfo = { name: kind === 'local' ? t('game.player1') : (me?.username ?? t('common.you')), rating: kind === 'local' ? undefined : me?.rating, seed: me?.avatar, color: humanColor };
+  const bottom: PlayerInfo = { name: kind === 'local' ? t('game.player1') : (me?.username ?? t('common.you')), rating: kind === 'local' ? undefined : me?.rating, seed: me?.avatar, id: kind === 'local' ? null : me?.id, color: humanColor };
 
   return (
     <GameScreen
@@ -342,7 +344,7 @@ function OnlineGame({ matchId }: { matchId: string }) {
   const pvp = !match.vsBot && !!match.blackId;
   const opp = match.vsBot
     ? { name: `${t('game.botName')} · ${t(`bot.${match.botLevel ?? 'medium'}` as 'bot.easy')}`, rating: undefined, tag: t('game.botTag') }
-    : { name: (iAmWhite ? match.blackName : match.whiteName) ?? t('quick.opponent'), rating: (iAmWhite ? match.blackRating : match.whiteRating) ?? undefined };
+    : { name: (iAmWhite ? match.blackName : match.whiteName) ?? t('quick.opponent'), rating: (iAmWhite ? match.blackRating : match.whiteRating) ?? undefined, id: iAmWhite ? match.blackId : match.whiteId };
   const clockFor = (c: Color): PlayerInfo['clock'] => {
     if (!view) return undefined;
     const active = match.status === 'active' && view.side === c;
@@ -351,7 +353,7 @@ function OnlineGame({ matchId }: { matchId: string }) {
   };
   const topColor: Color = iAmWhite ? 'b' : 'w';
   const top: PlayerInfo = { ...opp, color: topColor, clock: clockFor(topColor) };
-  const bottom: PlayerInfo = { name: me.username, rating: me.rating, seed: me.avatar, color: humanColor, clock: clockFor(humanColor) };
+  const bottom: PlayerInfo = { name: me.username, rating: me.rating, seed: me.avatar, id: me.id, color: humanColor, clock: clockFor(humanColor) };
   const clockNote =
     match.clock && match.status === 'active' && match.clock.moveCount === 0 ? (
       <div className="notice" role="status">
@@ -499,7 +501,7 @@ function GameScreen({ g, kind, humanColor, top, bottom, canRestart, canUndo, can
 
   const bar = (p: PlayerInfo, active: boolean, remaining: number) => (
     <div className={`player-bar ${active && !over ? 'player-active' : ''}`}>
-      <Avatar name={p.name} seed={p.seed} size={40} />
+      <Avatar name={p.name} seed={p.seed} size={40} userId={p.id} />
       <div className="player-info">
         <span className="player-name">
           {p.name} {p.tag && <span className="badge badge-demo">{p.tag}</span>}

@@ -4,6 +4,7 @@ import type { IconType } from 'react-icons';
 import { useAuth } from '../auth/AuthProvider.tsx';
 import { Avatar, LevelBadge, isPhoto } from '../components/Avatar.tsx';
 import { Modal } from '../components/Modal.tsx';
+import { FramePicker } from '../components/FramePicker.tsx';
 import { RatingChart } from '../components/RatingChart.tsx';
 import { EmptyState, ErrorState, Spinner } from '../components/States.tsx';
 import { useToast } from '../components/Toast.tsx';
@@ -87,7 +88,7 @@ function ProfileView({ view }: { view: View }) {
       <DemoNotice text={own ? t('demo.profileNotice') : t('demo.otherProfileNotice')} />
       <section className="card profile-head">
         <div className="profile-avatar">
-          <Avatar name={p.username} seed={p.avatar} size={96} online={online} ring={rank === 1 ? 'gold' : undefined} />
+          <Avatar name={p.username} seed={p.avatar} size={96} online={online} ring={rank === 1 ? 'gold' : undefined} userId={p.id} />
         </div>
         <div className="profile-id">
           <h1 className="h1">
@@ -120,6 +121,8 @@ function ProfileView({ view }: { view: View }) {
           </div>
         </div>
       </section>
+
+      {own && <FramePicker />}
 
       <section className="card level-card" aria-label={t('level.title')}>
         <div>

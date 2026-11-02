@@ -158,7 +158,7 @@ export function Friends() {
   const PlayerLine = ({ p, children }: { p: Player; children?: React.ReactNode }) => (
     <li className="row row-static">
       <Link to={`/profile/${p.id}`} className="row-link">
-        <Avatar name={p.username} seed={p.avatar} size={40} online={isOnline(p)} />
+        <Avatar name={p.username} seed={p.avatar} size={40} online={isOnline(p)} userId={p.id} />
         <span className="row-main">
           <span className="row-title">
             {p.username} {p.demo && <span className="badge badge-demo">{t('demo.badge')}</span>}

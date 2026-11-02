@@ -20,6 +20,7 @@ declare module 'react' {
   export function useContext<T>(c: Context<T>): T;
   export function useState<S>(i: S | (() => S)): [S, (v: S | ((p: S) => S)) => void];
   export function useEffect(f: () => void | (() => void), d?: unknown[]): void;
+  export function useSyncExternalStore<T>(subscribe: (onChange: () => void) => () => void, get: () => T, getServer?: () => T): T;
   export function useRef<T>(i: T): { current: T };
   export function useRef<T>(i: T | null): { current: T | null };
   export function useMemo<T>(f: () => T, d: unknown[]): T;

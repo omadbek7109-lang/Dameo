@@ -11,17 +11,18 @@ import { useAuthDialog } from './AuthDialog.tsx';
 import { Logo } from './Logo.tsx';
 import { Popover } from './Popover.tsx';
 import { MenuSheet } from './MenuSheet.tsx';
-import { useCallback, useState } from 'react';
+import { openMainMenu, useMainMenuOpen } from './menuStore.ts';
 import { CoinBadge } from './ShopParts.tsx';
 import { useCosmetics } from '../cosmetics/CosmeticsProvider.tsx';
 
-export const NAV: Array<{ to: string; key: TKey; short?: TKey; icon: IconType; match: (p: string) => boolean }> = [
+export const NAV: Array<{ to: string; key: TKey; short?: TKey; icon: IconType; match: (p: string) => boolean; menu?: boolean }> = [
   { to: '/', key: 'nav.home', icon: LuHouse, match: (p) => p === '/' },
   { to: '/play', key: 'nav.play', icon: LuSwords, match: (p) => p.startsWith('/play') || p.startsWith('/game') },
   // tournaments live inside the rating page (its third tab)
   { to: '/leaderboard', key: 'nav.leaderboard', short: 'nav.leaderboard.short', icon: LuTrophy, match: (p) => p.startsWith('/leaderboard') || p.startsWith('/tournaments') },
   { to: '/friends', key: 'nav.friends', icon: LuUsers, match: (p) => p.startsWith('/friends') },
-  { to: '/profile', key: 'nav.profile', icon: LuUser, match: (p) => p.startsWith('/profile') },
+  // on phones the Profil tab opens the main menu (which links to the profile page)
+  { to: '/profile', key: 'nav.profile', icon: LuUser, match: (p) => p.startsWith('/profile'), menu: true },
 ];
 
 export function Header() {
@@ -32,8 +33,7 @@ export function Header() {
   const { path } = useRoute();
   const unread = notifications.filter((n) => !n.read).length;
   const cos = useCosmetics();
-  const [menuOpen, setMenuOpen] = useState(false);
-  const closeMenu = useCallback(() => setMenuOpen(false), []);
+  const menuOpen = useMainMenuOpen();
 
   return (
     <header className="header">
@@ -140,20 +140,20 @@ export function Header() {
           </Popover>
 
           {signedIn && me ? (
-            <button className="user-btn" onClick={() => setMenuOpen(true)} aria-haspopup="dialog" aria-expanded={menuOpen} aria-controls="main-menu" aria-label={t('menu.title')}>
-              <Avatar name={me.username} seed={me.avatar} size={34} />
+            <button className="user-btn" onClick={openMainMenu} aria-haspopup="dialog" aria-expanded={menuOpen} aria-controls="main-menu" aria-label={t('menu.title')}>
+              <Avatar name={me.username} seed={me.avatar} size={34} userId={me.id} />
             </button>
           ) : (
             <>
               <button className="btn btn-primary btn-sm" onClick={openAuth}>
                 {t('auth.signIn')}
               </button>
-              <button className="icon-btn" onClick={() => setMenuOpen(true)} aria-label={t('menu.title')} aria-controls="main-menu">
+              <button className="icon-btn" onClick={openMainMenu} aria-label={t('menu.title')} aria-controls="main-menu">
                 <LuMenu />
               </button>
             </>
           )}
-          <MenuSheet open={menuOpen} onClose={closeMenu} />
+          <MenuSheet />
         </div>
       </div>
     </header>
@@ -163,11 +163,21 @@ export function Header() {
 export function BottomNav() {
   const t = useI18n().t;
   const { path } = useRoute();
+  const menuOpen = useMainMenuOpen();
   return (
     <nav className="bottom-nav" aria-label={t('a11y.mainNav')}>
       {NAV.map((n) => {
         const Icon = n.icon;
-        const active = n.match(path);
+        if (n.menu) {
+          const active = menuOpen || n.match(path);
+          return (
+            <button key={n.to} type="button" className={`bn-item ${active ? 'bn-active' : ''}`} onClick={openMainMenu} aria-haspopup="dialog" aria-expanded={menuOpen} aria-controls="main-menu">
+              <Icon />
+              <span>{t(n.short ?? n.key)}</span>
+            </button>
+          );
+        }
+        const active = n.match(path) && !menuOpen;
         return (
           <Link key={n.to} to={n.to} className={`bn-item ${active ? 'bn-active' : ''}`} aria-current={active ? 'page' : undefined}>
             <Icon />

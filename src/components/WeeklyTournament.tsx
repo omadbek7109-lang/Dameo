@@ -287,7 +287,7 @@ export function WeeklyTournament() {
                     <td className="wk-rank">{r.rank ? <span className={`wk-rank-badge ${r.rank <= 3 ? `wk-rank-${r.rank}` : ''}`}>{r.rank}</span> : <span className="muted">—</span>}</td>
                     <td>
                       <Link to={`/profile/${r.user_id}`} className="wk-player">
-                        <Avatar name={r.username} seed={r.avatar} size={32} />
+                        <Avatar name={r.username} seed={r.avatar} size={32} userId={r.user_id} />
                         <span className="wk-player-name">
                           <span>
                             {r.username} {mine && <span className="badge">{t('common.you')}</span>}
@@ -342,7 +342,7 @@ function WinnersList({ winners }: { winners: WeeklyWinner[] }) {
         return (
           <li key={w.user_id} className={`wk-winner wk-winner-${w.rank}`}>
             <span className={`wk-rank-badge ${w.rank <= 3 ? `wk-rank-${w.rank}` : ''}`}>{w.rank}</span>
-            <Avatar name={w.username} seed={w.avatar} size={30} />
+            <Avatar name={w.username} seed={w.avatar} size={30} userId={w.user_id} />
             <span className="wk-winner-name">{w.username}</span>
             <span className="wk-points delta-up">{signed(w.delta)}</span>
             {prize && (
@@ -377,7 +377,7 @@ function ResultsModal({ open, onClose, name, range, winners, myId }: { open: boo
           {top3.map((w) => (
             <div key={w.user_id} className={`wk-pod wk-pod-${w.rank}`} style={{ animationDelay: `${w.rank === 1 ? 0.5 : w.rank === 2 ? 0.25 : 0}s` }}>
               {w.rank === 1 && <LuCrown className="wk-pod-crown" />}
-              <Avatar name={w.username} seed={w.avatar} size={w.rank === 1 ? 64 : 52} />
+              <Avatar name={w.username} seed={w.avatar} size={w.rank === 1 ? 64 : 52} userId={w.user_id} />
               <span className="wk-pod-name">{w.username}</span>
               <span className="wk-points delta-up">{signed(w.delta)}</span>
               <div className="wk-pod-step">

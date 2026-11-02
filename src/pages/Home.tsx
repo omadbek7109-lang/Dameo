@@ -110,7 +110,7 @@ export function Home() {
                 <li key={p.id}>
                   <Link to={`/profile/${p.id}`} className="row">
                     <span className={`rank-chip ${p.rank <= 3 ? `rank-${p.rank}` : ''}`}>{p.rank}</span>
-                    <Avatar name={p.username} seed={p.avatar} size={34} online={isOnline(p)} />
+                    <Avatar name={p.username} seed={p.avatar} size={34} online={isOnline(p)} userId={p.id} />
                     <span className="row-main">
                       <span className="row-title">
                         {p.username}
@@ -226,7 +226,7 @@ export function Home() {
               {active.data!.map((p) => (
                 <li key={p.id}>
                   <Link to={`/profile/${p.id}`} className="row">
-                    <Avatar name={p.username} seed={p.avatar} size={34} online={isOnline(p)} />
+                    <Avatar name={p.username} seed={p.avatar} size={34} online={isOnline(p)} userId={p.id} />
                     <span className="row-main">
                       <span className="row-title">{p.username}</span>
                       <span className="row-sub">{isOnline(p) ? t('common.online') : relative(p.lastSeen)}</span>

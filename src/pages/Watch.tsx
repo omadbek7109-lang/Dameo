@@ -119,12 +119,13 @@ export function Watch() {
   const bar = (color: Color) => {
     const white = color === 'w';
     const name = (white ? match.whiteName : match.blackName) ?? '—';
+    const uid = white ? match.whiteId : match.vsBot ? null : match.blackId;
     const rating = white ? match.whiteRating : match.blackRating;
     const ms = view ? (white ? view.whiteMs : view.blackMs) : null;
     const on = active && st.turn === color;
     return (
       <div className={`player-bar ${on ? 'player-active' : ''}`}>
-        <Avatar name={name} size={36} />
+        <Avatar name={name} size={36} userId={uid} />
         <div className="player-info">
           <span className="player-name">{name}</span>
           <span className="muted small">

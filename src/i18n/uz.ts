@@ -696,6 +696,23 @@ export const uz = {
   'blocked.sub': "Bu o'yinchilarning xabarlarini ko'rmaysiz va ular sizga taklif yubora olmaydi.",
   'blocked.empty': "Bloklangan o'yinchi yo'q.",
   'blocked.unblock': "Blokdan chiqarish",
+  'frame.title': "Avatar ramkasi",
+  'frame.notSold': "Ramkalar sotilmaydi",
+  'frame.none': "Ramkasiz",
+  'frame.noneSub': "Oddiy avatar",
+  'frame.dameo': "DAMEO",
+  'frame.dameoSub': "Hamma uchun bepul",
+  'frame.champion': "Chempion",
+  'frame.championSub': "Siz reytingda 1-o'rindasiz!",
+  'frame.championLocked': "Faqat reytingdagi 1-o'rin uchun",
+  'frame.on': "Ramka qo'yildi",
+  'frame.off': "Ramka olib tashlandi",
+  'frame.notFirst': "Bu ramka faqat reytingdagi 1-o'rin uchun",
+  'frame.failed': "Ramkani o'zgartirib bo'lmadi",
+  'menu.myProfile': "Profilimni ko'rish",
+  'menu.frames': "Ramkalar",
+  'menu.topUp': "To'ldirish",
+  'menu.groupHelp': "Yordam va ma'lumot",
 } as const;
 
 export type TKey = keyof typeof uz;

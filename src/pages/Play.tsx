@@ -181,14 +181,14 @@ function QuickPanel({ autoStart = 0 }: { autoStart?: number }) {
             <div className="vs">
               {me && (
                 <div className="vs-side">
-                  <Avatar name={me.username} seed={me.avatar} size={64} />
+                  <Avatar name={me.username} seed={me.avatar} size={64} userId={me.id} />
                   <strong>{me.username}</strong>
                   <span className="muted small">{num(me.rating)}</span>
                 </div>
               )}
               <span className="vs-badge">VS</span>
               <div className="vs-side">
-                {opp ? <Avatar name={opp.username} seed={opp.avatar} size={64} /> : <Avatar name="?" size={64} />}
+                {opp ? <Avatar name={opp.username} seed={opp.avatar} size={64} userId={(opp as { id?: string }).id} /> : <Avatar name="?" size={64} />}
                 <strong>{opp?.username ?? (botFallback ? t('game.botName') : t('quick.opponent'))}</strong>
                 {opp && <span className="muted small">{num(opp.rating)}</span>}
               </div>

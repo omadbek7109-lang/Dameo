@@ -2,8 +2,8 @@ import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { IconType } from 'react-icons';
 import {
-  LuArchive, LuBackpack, LuBan, LuBookOpen, LuChevronRight, LuCircleHelp, LuGlobe, LuInfo, LuLayoutGrid, LuLogOut, LuMessageSquareWarning,
-  LuMoon, LuPlus, LuRadio, LuSettings, LuShieldCheck, LuSparkles, LuSun, LuWallet, LuX,
+  LuArchive, LuBackpack, LuBan, LuChevronRight, LuCircleHelp, LuCircleUser, LuFrame, LuGraduationCap, LuInfo, LuLayoutGrid, LuLogIn, LuLogOut,
+  LuMessageSquareWarning, LuMoon, LuPlus, LuRadio, LuSettings, LuShieldCheck, LuSparkles, LuStar, LuSun, LuX,
 } from 'react-icons/lu';
 import { useAuth } from '../auth/AuthProvider.tsx';
 import { useCosmetics } from '../cosmetics/CosmeticsProvider.tsx';
@@ -13,28 +13,34 @@ import { adminMe } from '../services/admin.ts';
 import { coins } from '../services/shop.ts';
 import { inTelegram } from '../services/telegram.ts';
 import { useTheme } from '../theme/ThemeProvider.tsx';
+import { useAuthDialog } from './AuthDialog.tsx';
 import { Avatar, LevelBadge } from './Avatar.tsx';
+import { closeMainMenu, useMainMenuOpen } from './menuStore.ts';
 
 interface Item {
   to: string;
   key: TKey;
   icon: IconType;
-  extra?: string;
 }
 
-/** Main menu (opened from the avatar): rarely used places grouped by topic, plus language / theme. */
-export function MenuSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
+/**
+ * Main menu (header avatar or the "Profil" tab): who I am + my coins on top, the game places as a tile grid,
+ * then account and help lists, language / theme at the bottom. Full-width on phones, a side panel on desktop.
+ */
+export function MenuSheet() {
+  const open = useMainMenuOpen();
   const { t, lang, setLang } = useI18n();
   const { theme, toggle } = useTheme();
   const { me, mode, signedIn, signOut } = useAuth();
+  const { openAuth } = useAuthDialog();
   const cos = useCosmetics();
   const { path, query } = useRoute();
   const [isAdmin, setIsAdmin] = useState(false);
+  const onClose = closeMainMenu;
 
-  // closes on navigation and on Escape
+  // closes on navigation and on Escape; the page underneath does not scroll
   useEffect(() => {
-    if (open) onClose();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    closeMainMenu();
   }, [path, query.toString()]);
   useEffect(() => {
     if (!open) return;
@@ -50,30 +56,36 @@ export function MenuSheet({ open, onClose }: { open: boolean; onClose: () => voi
   if (!open) return null;
 
   const live = mode === 'live';
-  const game: Item[] = [
+  const account = live && signedIn;
+  const tiles: Item[] = [
     { to: '/shop?cat=pieces', key: 'menu.pieceShop', icon: LuSparkles },
     { to: '/shop?cat=boards', key: 'menu.boardShop', icon: LuLayoutGrid },
     { to: '/live', key: 'menu.live', icon: LuRadio },
-    { to: '/live?tab=featured', key: 'menu.featured', icon: LuSparkles },
-    { to: '/play?mode=practice', key: 'menu.training', icon: LuBookOpen },
+    { to: '/live?tab=featured', key: 'menu.featured', icon: LuStar },
+    { to: '/play?mode=practice', key: 'menu.training', icon: LuGraduationCap },
     { to: '/archive', key: 'menu.archive', icon: LuArchive },
   ];
-  const account: Item[] = [
-    { to: '/wallet', key: 'menu.balance', icon: LuWallet, extra: cos?.balance !== null && cos?.balance !== undefined ? `🪙 ${coins(cos.balance)}` : undefined },
-    { to: '/wallet', key: 'wallet.topUp', icon: LuPlus },
-    { to: '/inventory', key: 'inv.title', icon: LuBackpack },
-    { to: '/blocked', key: 'menu.blocked', icon: LuBan },
-    { to: '/settings', key: 'nav.settings', icon: LuSettings },
+  const mine: Item[] = account
+    ? [
+        { to: '/profile?section=frames', key: 'menu.frames', icon: LuFrame },
+        { to: '/inventory', key: 'inv.title', icon: LuBackpack },
+        { to: '/settings', key: 'nav.settings', icon: LuSettings },
+        { to: '/blocked', key: 'menu.blocked', icon: LuBan },
+        ...(isAdmin ? [{ to: '/admin', key: 'menu.admin' as TKey, icon: LuShieldCheck }] : []),
+      ]
+    : [{ to: '/settings', key: 'nav.settings', icon: LuSettings }];
+  const help: Item[] = [
     { to: '/help', key: 'menu.help', icon: LuCircleHelp },
-    { to: '/feedback', key: 'menu.feedback', icon: LuMessageSquareWarning },
+    ...(account ? [{ to: '/feedback', key: 'menu.feedback' as TKey, icon: LuMessageSquareWarning }] : []),
     { to: '/about', key: 'menu.about', icon: LuInfo },
   ];
   const row = (i: Item) => (
     <li key={i.key + i.to}>
       <Link to={i.to} className="menu-row" onClick={onClose}>
-        <i.icon className="menu-row-ico" />
-        <span>{t(i.key)}</span>
-        {i.extra && <span className="menu-row-extra">{i.extra}</span>}
+        <span className="menu-row-ico">
+          <i.icon />
+        </span>
+        <span className="menu-row-label">{t(i.key)}</span>
         <LuChevronRight className="menu-row-go" />
       </Link>
     </li>
@@ -83,62 +95,104 @@ export function MenuSheet({ open, onClose }: { open: boolean; onClose: () => voi
     <div className="sheet-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <nav className="sheet" aria-label={t('menu.title')} id="main-menu">
         <header className="sheet-head">
-          {me ? (
-            <Link to="/profile" className="sheet-me" onClick={onClose}>
-              <Avatar name={me.username} seed={me.avatar} size={44} />
-              <span>
+          {me && (live ? signedIn : true) ? (
+            <div className="sheet-me">
+              <Avatar name={me.username} seed={me.avatar} size={52} userId={me.id} />
+              <span className="sheet-me-text">
                 <strong>{me.username}</strong>
-                <span className="muted small">
+                <span className="sheet-me-sub">
                   {me.rating} <LevelBadge rating={me.rating} label={(n) => t('level.short', { n })} />
                 </span>
               </span>
-            </Link>
+            </div>
           ) : (
-            <strong>DAMEO</strong>
+            <div className="sheet-me">
+              <strong className="sheet-brand">DAMEO</strong>
+            </div>
           )}
-          <button className="icon-btn" onClick={onClose} aria-label={t('common.close')}>
+          <button className="icon-btn sheet-close" onClick={onClose} aria-label={t('common.close')}>
             <LuX />
           </button>
         </header>
-        <div className="sheet-quick">
-          <div className="seg" role="radiogroup" aria-label={t('settings.language')}>
-            <LuGlobe className="sheet-quick-ico" />
-            {LANGS.map((l) => (
-              <button key={l.code} role="radio" aria-checked={lang === l.code} className={`seg-btn ${lang === l.code ? 'seg-on' : ''}`} onClick={() => setLang(l.code)}>
-                {l.code.toUpperCase()}
-              </button>
-            ))}
-          </div>
-          <button className="btn btn-secondary btn-sm" onClick={toggle} aria-label={t('settings.theme')}>
-            {theme === 'dark' ? <LuSun /> : <LuMoon />} {t(theme === 'dark' ? 'settings.light' : 'settings.dark')}
-          </button>
-        </div>
+
         <div className="sheet-body">
+          {me && (live ? signedIn : true) ? (
+            <Link to="/profile" className="btn btn-secondary btn-block sheet-profile" onClick={onClose}>
+              <LuCircleUser /> {t('menu.myProfile')}
+            </Link>
+          ) : (
+            <button
+              className="btn btn-primary btn-block sheet-profile"
+              onClick={() => {
+                onClose();
+                openAuth();
+              }}
+            >
+              <LuLogIn /> {t('auth.signIn')}
+            </button>
+          )}
+
+          {account && (
+            <Link to="/wallet" className="sheet-coins" onClick={onClose}>
+              <span className="sheet-coins-main">
+                <span className="sheet-coins-label">DAMEO Coins</span>
+                <span className="sheet-coins-value">🪙 {cos?.balance !== null && cos?.balance !== undefined ? coins(cos.balance) : '—'}</span>
+              </span>
+              <span className="btn btn-primary btn-sm sheet-coins-add">
+                <LuPlus /> {t('menu.topUp')}
+              </span>
+            </Link>
+          )}
+
           {live && (
             <>
               <h3 className="sheet-group">{t('menu.groupGame')}</h3>
-              <ul className="menu-rows">{game.map(row)}</ul>
+              <ul className="menu-tiles">
+                {tiles.map((i) => (
+                  <li key={i.to}>
+                    <Link to={i.to} className="menu-tile" onClick={onClose}>
+                      <i.icon />
+                      <span>{t(i.key)}</span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
             </>
           )}
+
           <h3 className="sheet-group">{t('menu.groupAccount')}</h3>
-          <ul className="menu-rows">
-            {(live && signedIn ? account : account.filter((i) => ['/settings', '/help', '/about'].includes(i.to))).map(row)}
-            {isAdmin && row({ to: '/admin', key: 'menu.admin', icon: LuShieldCheck })}
-            {live && signedIn && !inTelegram && (
-              <li>
-                <button
-                  className="menu-row"
-                  onClick={() => {
-                    onClose();
-                    void signOut();
-                  }}
-                >
-                  <LuLogOut className="menu-row-ico" />
-                  <span>{t('auth.signOut')}</span>
+          <ul className="menu-rows">{mine.map(row)}</ul>
+
+          <h3 className="sheet-group">{t('menu.groupHelp')}</h3>
+          <ul className="menu-rows">{help.map(row)}</ul>
+
+          <div className="sheet-prefs">
+            <div className="seg" role="radiogroup" aria-label={t('settings.language')}>
+              {LANGS.map((l) => (
+                <button key={l.code} role="radio" aria-checked={lang === l.code} className={`seg-btn ${lang === l.code ? 'seg-on' : ''}`} onClick={() => setLang(l.code)}>
+                  {l.code.toUpperCase()}
                 </button>
-              </li>
-            )}
-          </ul>
+              ))}
+            </div>
+            <button className="btn btn-ghost btn-sm" onClick={toggle} aria-label={t('settings.theme')}>
+              {theme === 'dark' ? <LuSun /> : <LuMoon />} {t(theme === 'dark' ? 'settings.light' : 'settings.dark')}
+            </button>
+          </div>
+
+          {account && !inTelegram && (
+            <button
+              className="menu-row menu-row-danger"
+              onClick={() => {
+                onClose();
+                void signOut();
+              }}
+            >
+              <span className="menu-row-ico">
+                <LuLogOut />
+              </span>
+              <span className="menu-row-label">{t('auth.signOut')}</span>
+            </button>
+          )}
         </div>
       </nav>
     </div>,
