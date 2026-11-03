@@ -1,3 +1,4 @@
+import { AiBadge } from '../components/AiBadge.tsx';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { LuArchive, LuClock, LuEye, LuRadio, LuSparkles, LuSwords } from 'react-icons/lu';
 import { Avatar } from '../components/Avatar.tsx';
@@ -26,8 +27,8 @@ export function PositionBoard({ moves }: { moves: Array<[number, number[]]> | Ar
   );
 }
 
-export const modeLabel = (t: (k: TKey, p?: Record<string, string | number>) => string, g: { vs_bot?: boolean; bot_level?: string | null; time_control: number | null }) =>
-  g.vs_bot ? `${t('game.botName')} · ${t(`bot.${g.bot_level ?? 'medium'}` as TKey)}` : g.time_control ? t('tc.minutes', { n: g.time_control / 60 }) : t('live.untimed');
+export const modeLabel = (t: (k: TKey, p?: Record<string, string | number>) => string, g: { vs_bot?: boolean; bot_level?: string | null; time_control: number | null; black_virtual?: boolean }) =>
+  g.vs_bot && !g.black_virtual ? `${t('game.botName')} · ${t(`bot.${g.bot_level ?? 'medium'}` as TKey)}` : g.time_control ? t('tc.minutes', { n: g.time_control / 60 }) : t('live.untimed');
 
 const dur = (ms: number) => {
   const s = Math.max(0, Math.floor(ms / 1000));
@@ -123,7 +124,7 @@ export function Live() {
                     <Avatar name={g.white_name} seed={g.white_avatar} size={22} /> <strong>{g.white_name}</strong> <span className="muted">{g.white_rating}</span>
                   </span>
                   <span className="live-p">
-                    <Avatar name={g.black_name ?? '?'} seed={g.black_avatar ?? undefined} size={22} /> <strong>{g.black_name}</strong> <span className="muted">{g.black_rating}</span>
+                    <Avatar name={g.black_name ?? '?'} seed={g.black_avatar ?? undefined} size={22} /> <strong>{g.black_name}</strong> {g.black_virtual && <AiBadge />} <span className="muted">{g.black_rating}</span>
                   </span>
                 </div>
                 <div className="live-meta muted small">

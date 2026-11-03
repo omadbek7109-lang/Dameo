@@ -137,3 +137,31 @@ export async function uploadShopImage(slug: string, file: Blob): Promise<string>
   await storageUpload('shop', path, file);
   return `${SUPABASE_URL}/storage/v1/object/public/shop/${path}`;
 }
+
+/* ---------------------------------------------------------------- virtual opponents */
+export interface VirtualAdminPlayer {
+  id: string;
+  nickname: string;
+  avatar: string;
+  style: string;
+  level: 'beginner' | 'normal' | 'pro';
+  rating: number;
+  wins: number;
+  losses: number;
+  draws: number;
+  enabled: boolean;
+  games_today: number;
+  playing: number;
+}
+export interface VirtualOverview {
+  settings: { enabled: boolean; auto_off: boolean; auto_off_threshold: number; updated_at: string };
+  active_now: boolean;
+  online_real: number;
+  live_games: number;
+  players: VirtualAdminPlayer[];
+}
+export const adminVirtual = () => db.rpc<VirtualOverview>('admin_virtual_overview');
+export const adminVirtualSave = (id: string, enabled: boolean | null, level: string | null, reason: string) =>
+  db.rpc('admin_virtual_save', { p_id: id, p_enabled: enabled, p_level: level, p_reason: reason });
+export const adminVirtualSettings = (enabled: boolean | null, autoOff: boolean | null, threshold: number | null, reason: string) =>
+  db.rpc('admin_virtual_settings_save', { p_enabled: enabled, p_auto_off: autoOff, p_threshold: threshold, p_reason: reason });

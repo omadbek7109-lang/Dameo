@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
   LuBan, LuCheck, LuChevronRight, LuCoins, LuGauge, LuHistory, LuImage, LuLoader, LuPackage, LuPlus, LuRefreshCw, LuSearch,
-  LuShieldCheck, LuShoppingBag, LuTrophy, LuTriangleAlert, LuUndo2, LuUserCog, LuUsers, LuVolumeX,
+  LuBot, LuShieldCheck, LuShoppingBag, LuTrophy, LuTriangleAlert, LuUndo2, LuUserCog, LuUsers, LuVolumeX,
 } from 'react-icons/lu';
 import { useAuth } from '../auth/AuthProvider.tsx';
 import { Avatar } from '../components/Avatar.tsx';
@@ -23,7 +23,7 @@ function useL() {
 }
 const errText = (e: unknown) => (e instanceof SbError ? e.message : e instanceof Error ? e.message : 'error');
 
-type Tab = 'dash' | 'users' | 'payments' | 'shop' | 'packages' | 'reports' | 'weekly' | 'roles' | 'audit';
+type Tab = 'dash' | 'users' | 'payments' | 'shop' | 'packages' | 'reports' | 'weekly' | 'virtual' | 'roles' | 'audit';
 const TABS: Array<{ id: Tab; perm: string; icon: typeof LuGauge; uz: string; en: string }> = [
   { id: 'dash', perm: 'dashboard', icon: LuGauge, uz: 'Dashboard', en: 'Dashboard' },
   { id: 'users', perm: 'users.view', icon: LuUsers, uz: 'Foydalanuvchilar', en: 'Users' },
@@ -32,6 +32,7 @@ const TABS: Array<{ id: Tab; perm: string; icon: typeof LuGauge; uz: string; en:
   { id: 'packages', perm: 'shop.manage', icon: LuPackage, uz: 'Paketlar', en: 'Packages' },
   { id: 'reports', perm: 'reports.view', icon: LuTriangleAlert, uz: 'Shikoyatlar', en: 'Reports' },
   { id: 'weekly', perm: 'tournaments.manage', icon: LuTrophy, uz: 'Turnirlar', en: 'Tournaments' },
+  { id: 'virtual', perm: 'virtual.manage', icon: LuBot, uz: 'Virtual raqiblar', en: 'Virtual opponents' },
   { id: 'roles', perm: 'roles.manage', icon: LuUserCog, uz: 'Rollar', en: 'Roles' },
   { id: 'audit', perm: 'audit.view', icon: LuHistory, uz: 'Audit log', en: 'Audit log' },
 ];
@@ -90,6 +91,7 @@ export function Admin() {
       {current === 'packages' && <PackagesTab />}
       {current === 'reports' && <ReportsTab canManage={can('reports.manage')} />}
       {current === 'weekly' && <WeeklyTab />}
+      {current === 'virtual' && <VirtualTab />}
       {current === 'roles' && <RolesTab />}
       {current === 'audit' && <AuditTab />}
     </div>
@@ -1139,6 +1141,103 @@ function AuditTab() {
         <button className="btn btn-ghost btn-block" onClick={() => load(rows.length)}>
           {L("Ko'proq", 'More')}
         </button>
+      )}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ virtual opponents */
+const VLEVELS: Array<['beginner' | 'normal' | 'pro', string, string]> = [
+  ['beginner', "Boshlang'ich", 'Beginner'],
+  ['normal', "O'rta", 'Normal'],
+  ['pro', 'Pro', 'Pro'],
+];
+function VirtualTab() {
+  const L = useL();
+  const [data, setData] = useState<A.VirtualOverview | null>(null);
+  const [err, setErr] = useState(false);
+  const [dlg, setDlg] = useState<null | { title: string; run: (reason: string) => Promise<unknown>; body?: ReactNode; danger?: boolean }>(null);
+  const [threshold, setThreshold] = useState('');
+  const load = useCallback(() => A.adminVirtual().then((d) => { setData(d); setThreshold(String(d.settings.auto_off_threshold)); }, () => setErr(true)), []);
+  useEffect(() => void load(), [load]);
+  if (err) return <ErrorState onRetry={() => { setErr(false); void load(); }} />;
+  if (!data) return <Spinner />;
+  const st = data.settings;
+  const total = data.players.reduce((a, p) => ({ w: a.w + p.wins, l: a.l + p.losses, d: a.d + p.draws }), { w: 0, l: 0, d: 0 });
+  const ask = (title: string, run: (reason: string) => Promise<unknown>, danger = false, body?: ReactNode) => setDlg({ title, run: async (r) => { await run(r); await load(); }, danger, body });
+  return (
+    <div className="admin-stack">
+      <section className="card admin-form">
+        <div className="vadm-head">
+          <div>
+            <strong>{L('Virtual raqiblar', 'Virtual opponents')}</strong>
+            <p className="muted small">
+              {data.active_now ? L('Hozir faol: raqib topilmasa 20–35 soniyada virtual raqib chiqadi.', 'Active now: when nobody is found, a virtual opponent appears after 20–35 s.') : L("Hozir o'chiq: o'yinchilar faqat haqiqiy raqib kutadi.", 'Off right now: players only wait for real opponents.')}
+            </p>
+          </div>
+          <span className={`pay-status ${data.active_now ? 'pay-paid' : ''}`}>{data.active_now ? L('Faol', 'On') : L("O'chiq", 'Off')}</span>
+        </div>
+        <div className="admin-kpis">
+          <span><strong>{data.online_real}</strong> {L('haqiqiy onlayn (5 daq)', 'real players online (5 min)')}</span>
+          <span><strong>{data.live_games}</strong> {L("hozir o'ynalayotgan", 'games now')}</span>
+          <span><strong>{total.w}</strong> {L("botlar yutgan", 'bot wins')} · <strong>{total.l}</strong> {L("yutqazgan", 'losses')} · <strong>{total.d}</strong> {L('durang', 'draws')}</span>
+        </div>
+        <div className="row-actions">
+          <button className={`btn ${st.enabled ? 'btn-danger' : 'btn-primary'}`} onClick={() => ask(st.enabled ? L("Barcha virtual raqiblarni o'chirish", 'Switch all virtual opponents off') : L('Virtual raqiblarni yoqish', 'Switch virtual opponents on'), (r) => A.adminVirtualSettings(!st.enabled, null, null, r), st.enabled)}>
+            <LuBot /> {st.enabled ? L("Hammasini o'chirish", 'Switch all off') : L('Yoqish', 'Switch on')}
+          </button>
+        </div>
+        <label className="vadm-auto">
+          <input type="checkbox" checked={st.auto_off} onChange={() => ask(st.auto_off ? L("Avto-o'chirishni bekor qilish", 'Disable auto-off') : L("Avto-o'chirishni yoqish", 'Enable auto-off'), (r) => A.adminVirtualSettings(null, !st.auto_off, Number(threshold) || st.auto_off_threshold, r))} />{' '}
+          <span>{L("Haqiqiy o'yinchilar ko'p bo'lsa avtomatik o'chsin", 'Switch off automatically when enough real players are online')}</span>
+        </label>
+        <div className="vadm-threshold">
+          <label className="field">
+            <span>{L('Chegara (onlayn haqiqiy o\'yinchilar soni)', 'Threshold (real players online)')}</span>
+            <input type="number" min={1} max={100000} value={threshold} onChange={(e: any) => setThreshold(e.target.value)} />
+          </label>
+          <button className="btn btn-secondary btn-sm" disabled={!Number(threshold) || Number(threshold) === st.auto_off_threshold} onClick={() => ask(L('Chegarani saqlash', 'Save threshold'), (r) => A.adminVirtualSettings(null, null, Number(threshold), r))}>
+            <LuCheck /> {L('Saqlash', 'Save')}
+          </button>
+        </div>
+      </section>
+      <ul className="admin-list">
+        {data.players.map((p) => (
+          <li key={p.id} className="admin-row admin-row-static vadm-row">
+            <Avatar name={p.nickname} seed={p.avatar} size={40} />
+            <span className="admin-row-main">
+              <strong>
+                {p.nickname} <span className="ai-badge">AI</span> {!p.enabled && <span className="pay-status">{L("o'chiq", 'off')}</span>}
+              </strong>
+              <span className="muted small">
+                {p.rating} · {p.wins}{L('G', 'W')} {p.losses}{L('M', 'L')} {p.draws}{L('D', 'D')} · {L('bugun', 'today')} {p.games_today} · {p.style}
+                {p.playing > 0 ? ` · ${L("o'ynayapti", 'playing')}` : ''}
+              </span>
+            </span>
+            <span className="vadm-actions">
+              <select
+                value={p.level}
+                aria-label={L('Kuch darajasi', 'Strength')}
+                onChange={(e: any) => {
+                  const lvl = e.target.value;
+                  ask(`${p.nickname}: ${L('kuch darajasi', 'strength')} → ${L(...(VLEVELS.find((x) => x[0] === lvl)!.slice(1) as [string, string]))}`, (r) => A.adminVirtualSave(p.id, null, lvl, r));
+                }}
+              >
+                {VLEVELS.map(([v, uz, en]) => (
+                  <option key={v} value={v}>{L(uz, en)}</option>
+                ))}
+              </select>
+              <button className={`btn btn-sm ${p.enabled ? 'btn-ghost' : 'btn-primary'}`} onClick={() => ask(`${p.nickname}: ${p.enabled ? L("o'chirish", 'switch off') : L('yoqish', 'switch on')}`, (r) => A.adminVirtualSave(p.id, !p.enabled, null, r), p.enabled)}>
+                {p.enabled ? L("O'chirish", 'Off') : L('Yoqish', 'On')}
+              </button>
+            </span>
+          </li>
+        ))}
+      </ul>
+      {dlg && (
+        <ReasonDialog title={dlg.title} onSubmit={dlg.run} onClose={() => setDlg(null)} danger={dlg.danger}>
+          {dlg.body}
+        </ReasonDialog>
       )}
     </div>
   );

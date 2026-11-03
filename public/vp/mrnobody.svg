@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+<defs>
+<radialGradient id="bg" cx="50%" cy="35%" r="75%"><stop offset="0" stop-color="#7d8597"/><stop offset="1" stop-color="#1b1f2a"/></radialGradient>
+<radialGradient id="gl" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#cfd5df" stop-opacity=".55"/><stop offset="1" stop-color="#cfd5df" stop-opacity="0"/></radialGradient>
+
+</defs>
+<rect width="256" height="256" fill="url(#bg)"/>
+<circle cx="128" cy="120" r="110" fill="url(#gl)"/>
+<path d="M40 256 C44 206 84 186 128 186 C172 186 212 206 216 256 Z" fill="#2b2f3a"/>
+<path d="M112 186 l16 30 l16 -30 z" fill="#f2f2f2"/><path d="M124 196 l4 40 l4 -40 z" fill="#c0392b"/>
+<rect x="112" y="150" width="32" height="42" rx="14" fill="#cfd5df"/>
+<ellipse cx="128" cy="114" rx="46" ry="52" fill="#e9edf3"/>
+<path d="M76 84 h104 l-10 -30 q-42 -14 -84 0 z" fill="#1c1f27"/><rect x="62" y="80" width="132" height="12" rx="6" fill="#1c1f27"/>
+<text x="128" y="146" text-anchor="middle" font-family="Georgia, serif" font-size="58" font-weight="700" fill="#8a93a6">?</text>
+</svg>

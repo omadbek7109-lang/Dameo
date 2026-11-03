@@ -35,6 +35,24 @@ export interface OnlineMatch {
   skewMs: number;
   /** visible to spectators */
   isPublic: boolean;
+  /** virtual opponent (AI player with its own profile) — always shown with an "AI" badge */
+  virtual: { id: string; avatar: string | null; level: VirtualLevel | null; style: string | null } | null;
+  /** when the virtual opponent's planned move is due (local clock ms), null when none is pending */
+  botDueAt: number | null;
+  /** the virtual opponent's answer to a rematch offer ('declined' or the new match id) */
+  virtualRematch: string | null;
+}
+export type VirtualLevel = 'beginner' | 'normal' | 'pro';
+export interface VirtualPlayer {
+  id: string;
+  nickname: string;
+  avatar: string;
+  rating: number;
+  level: VirtualLevel;
+  style: string;
+  wins: number;
+  losses: number;
+  draws: number;
 }
 export interface OnlineMove {
   ply: number;
@@ -65,6 +83,12 @@ interface MatchRow {
   timeout_kind?: 'move' | 'clock' | null;
   server_now?: string | null;
   is_public?: boolean;
+  virtual_id?: string | null;
+  virtual_avatar?: string | null;
+  virtual_level?: VirtualLevel | null;
+  virtual_style?: string | null;
+  bot_due_at?: string | null;
+  virtual_rematch?: string | null;
 }
 
 /** server time → local time, given skew = server − local */
@@ -96,6 +120,9 @@ const mapMatch = (r: MatchRow, receivedAt = Date.now()): OnlineMatch => {
   timeoutKind: r.timeout_kind ?? null,
   skewMs,
   isPublic: r.is_public ?? true,
+  virtual: r.virtual_id ? { id: r.virtual_id, avatar: r.virtual_avatar ?? null, level: r.virtual_level ?? null, style: r.virtual_style ?? null } : null,
+  botDueAt: r.bot_due_at ? toLocalMs(r.bot_due_at, skewMs) : null,
+  virtualRematch: r.virtual_rematch ?? null,
   };
 };
 
@@ -124,13 +151,23 @@ export async function getMoves(id: string): Promise<OnlineMove[]> {
   return rows.map((r) => ({ ply: r.ply, from: r.from_sq, path: r.path }));
 }
 
+type ClockReply = { white_ms?: number; black_ms?: number; turn_started_at?: string } | null;
 export const submitMove = (matchId: string, from: number, path: number[]) =>
-  db.invokeFunction<{ ok: boolean; error?: string; bot?: OnlineMove | null; clock?: { white_ms?: number; black_ms?: number; turn_started_at?: string } | null }>('match-action', {
+  db.invokeFunction<{ ok: boolean; error?: string; bot?: OnlineMove | null; pending?: { due_at: string } | null; clock?: ClockReply }>('match-action', {
     action: 'move',
     match_id: matchId,
     from,
     path,
   });
+/** Virtual opponent: commit its planned move (the server refuses before it is due and charges its clock itself). */
+export const commitBotMove = (matchId: string) =>
+  db.invokeFunction<{ ok: boolean; error?: string; due_at?: string; bot?: OnlineMove; clock?: ClockReply }>('match-action', { action: 'bot', match_id: matchId });
+/** Asked ~20–35 s into a search with nobody found: a virtual opponent (null when they are switched off). */
+export const virtualMatch = (timeControl: TimeControl) =>
+  db.rpc<{ match_id: string | null; virtual?: VirtualPlayer | null; reason?: string }>('virtual_match', { p_time: timeControl });
+export const virtualRematch = (matchId: string) => db.rpc<{ accepted: boolean; match_id?: string | null }>('virtual_rematch', { p_match: matchId });
+export const virtualProfile = (id: string) =>
+  db.rpc<(VirtualPlayer & { enabled: boolean; recent: Array<{ id: string; ended_at: string; result: 'white' | 'black' | 'draw'; time_control: number | null; opponent: string }> }) | null>('virtual_profile', { p_id: id });
 export const resignOnline = (matchId: string) => db.invokeFunction<{ ok: boolean }>('match-action', { action: 'resign', match_id: matchId });
 
 export function watchMatch(
@@ -165,7 +202,8 @@ export function watchPairing(userId: string, onPaired: (matchId: string) => void
       { table: 'matches', event: 'UPDATE', filter: `black_id=eq.${userId}` },
     ],
     (e) => {
-      if (e.record?.status === 'active') onPaired(e.record.id);
+      // real pairings only (a virtual / bot game is started by this client itself and handled there)
+      if (e.record?.status === 'active' && !e.record?.vs_bot) onPaired(e.record.id);
     },
   );
   return () => sub.close();

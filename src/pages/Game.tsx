@@ -16,7 +16,9 @@ import { useI18n, type TKey } from '../i18n/index.tsx';
 import { navigate, useRoute } from '../router.tsx';
 import { DEMO_PLAYERS } from '../services/demoData.ts';
 import { clockView, formatClock, GRACE_MS } from '../services/clock.ts';
-import { claimTimeout, getMatch, getMoves, resignOnline, startBotMatch, submitMove, toLocalMs, watchMatch, type OnlineMatch } from '../services/online.ts';
+import { claimTimeout, commitBotMove, getMatch, getMoves, resignOnline, startBotMatch, submitMove, toLocalMs, virtualRematch, watchMatch, type OnlineMatch } from '../services/online.ts';
+import { AiBadge } from '../components/AiBadge.tsx';
+import { Link } from '../router.tsx';
 import { haptic, tg } from '../services/telegram.ts';
 import { offerDraw, offerRematch, setMatchVisibility, chatErrorKey } from '../services/live.ts';
 import { moveSound, playSound } from '../services/sound.ts';
@@ -35,6 +37,9 @@ interface PlayerInfo {
   seed?: string;
   /** player id (avatar frame) */
   id?: string | null;
+  /** a virtual (AI) opponent: shown with the AI badge, the name opens its profile */
+  ai?: boolean;
+  link?: string;
   color: Color;
   tag?: string;
   /** game clock (timed online games) */
@@ -195,6 +200,8 @@ function OnlineGame({ matchId }: { matchId: string }) {
               : m,
           );
         }
+        // virtual opponent: the server planned its reply — show "thinking" until it is due
+        if (r.pending?.due_at) setMatch((m) => (m ? { ...m, botDueAt: toLocalMs(r.pending!.due_at, m.skewMs) } : m));
         // Server bot reply comes back in the same response (realtime delivers it too; the ply check de-duplicates).
         if (r.bot && gRef.current.game.history.length === r.bot.ply) {
           gRef.current.applyRemote(r.bot.from, r.bot.path);
@@ -276,6 +283,45 @@ function OnlineGame({ matchId }: { matchId: string }) {
       .catch(() => setTimeout(() => (claimed.current = -1), 2000));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [now]);
+  // virtual opponent: commit its planned move when it is due (the server checks the time and charges its clock;
+  // if this app is closed, the server's sweep commits it instead)
+  const committing = useRef<number | null>(null);
+  useEffect(() => {
+    if (!match?.virtual || match.status !== 'active' || !match.botDueAt) return;
+    const due = match.botDueAt;
+    let retry: ReturnType<typeof setTimeout> | null = null;
+    const commit = async (tries: number) => {
+      if (committing.current === due) return;
+      committing.current = due;
+      try {
+        const r = await commitBotMove(matchId);
+        const b = r.bot;
+        if (b && gRef.current.game.history.length === b.ply) {
+          gRef.current.applyRemote(b.from, b.path);
+          setTimeout(() => playSound(moveSound(gRef.current.game.history[b.ply], false)), 30);
+        }
+        const c = r.clock;
+        setMatch((m) =>
+          m && m.clock && c?.turn_started_at && c.white_ms != null && c.black_ms != null
+            ? { ...m, botDueAt: null, clock: { ...m.clock, whiteMs: c.white_ms, blackMs: c.black_ms, turnStartedAt: toLocalMs(c.turn_started_at, m.skewMs), moveCount: (b?.ply ?? m.clock.moveCount) + 1 } }
+            : m ? { ...m, botDueAt: null } : m,
+        );
+        if (!b) void load(); // e.g. the bot ran out of time
+      } catch (e) {
+        committing.current = null;
+        const code = e instanceof SbError ? e.message : '';
+        // a little early by the server's clock → ask again shortly; anything else: re-read (the server sweep moves it anyway)
+        if (code === 'too-early' && tries < 4) retry = setTimeout(() => void commit(tries + 1), 450);
+        else void load();
+      }
+    };
+    const id = setTimeout(() => void commit(0), Math.max(0, due - Date.now()) + 60);
+    return () => {
+      clearTimeout(id);
+      if (retry) clearTimeout(retry);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [match?.botDueAt, match?.status, matchId]);
   const lowWarned = useRef(-1);
   useEffect(() => {
     if (!view || !match?.clock || match.status !== 'active' || view.side !== humanColor) return;
@@ -308,7 +354,7 @@ function OnlineGame({ matchId }: { matchId: string }) {
   // finalised on the server → show the result using the server's verdict
   const shown = useRef(false);
   useEffect(() => {
-    if (!match || match.status !== 'finished' || shown.current || !match.blackId) return;
+    if (!match || match.status !== 'finished' || shown.current || (!match.blackId && !match.vsBot)) return;
     shown.current = true;
     const winnerColor: Color | null = match.result === 'white' ? 'w' : match.result === 'black' ? 'b' : null;
     if (g.game.result.status === 'playing') g.finishExternal(winnerColor, match.reason === 'resign' ? 'resign' : 'no-moves');
@@ -326,6 +372,23 @@ function OnlineGame({ matchId }: { matchId: string }) {
   const mine = matches.find((m) => m.id === matchId);
   const finalResult: ResultInfo | null = result && mine && me ? { ...result, before: me.rating - mine.delta, after: me.rating } : result;
 
+  // rematch with a virtual opponent: it answers after a natural pause (the server decides once per game)
+  const [vr, setVr] = useState<null | 'asking' | 'declined'>(null);
+  const askVirtualRematch = async () => {
+    setVr('asking');
+    try {
+      const [r] = await Promise.all([virtualRematch(matchId), new Promise((res) => setTimeout(res, 1400 + Math.random() * 2200))]);
+      if (r.accepted && r.match_id) {
+        toast('success', t('virtual.rematchAccepted', { name: match?.blackName ?? '' }));
+        navigate(`/game?online=${r.match_id}`);
+        setVr(null);
+      } else setVr('declined');
+    } catch {
+      setVr(null);
+      toast('error', t('chat.err.generic'));
+    }
+  };
+
   if (error) return <div className="page"><ErrorState onRetry={load} /></div>;
   if (!match || !me) return <div className="page"><Spinner /></div>;
   if (match.status === 'waiting') {
@@ -342,7 +405,10 @@ function OnlineGame({ matchId }: { matchId: string }) {
   }
   const iAmWhite = humanColor === 'w';
   const pvp = !match.vsBot && !!match.blackId;
-  const opp = match.vsBot
+  const virtualOpp = match.virtual;
+  const opp = virtualOpp
+    ? { name: match.blackName ?? 'AI', rating: match.blackRating ?? undefined, seed: virtualOpp.avatar ?? undefined, tag: 'AI', ai: true, link: `/vp/${virtualOpp.id}` }
+    : match.vsBot
     ? { name: `${t('game.botName')} · ${t(`bot.${match.botLevel ?? 'medium'}` as 'bot.easy')}`, rating: undefined, tag: t('game.botTag') }
     : { name: (iAmWhite ? match.blackName : match.whiteName) ?? t('quick.opponent'), rating: (iAmWhite ? match.blackRating : match.whiteRating) ?? undefined, id: iAmWhite ? match.blackId : match.whiteId };
   const clockFor = (c: Color): PlayerInfo['clock'] => {
@@ -372,11 +438,17 @@ function OnlineGame({ matchId }: { matchId: string }) {
       canUndo={false}
       canHint={false}
       canDraw={false}
-      onResign={() => resignOnline(matchId).catch(() => toast('error', t('online.resignFailed')))}
+      onResign={() =>
+        resignOnline(matchId)
+          .then(() => load()) // don't depend on the realtime update alone
+          .catch(() => toast('error', t('online.resignFailed')))
+      }
       onRestart={() => {}}
       result={finalResult}
       onPlayAgain={
-        match.vsBot
+        virtualOpp
+          ? () => navigate('/play?mode=quick')
+          : match.vsBot
           ? () =>
               startBotMatch(match.botLevel ?? 'random')
                 .then((r) => navigate(`/game?online=${r.match_id}`))
@@ -384,7 +456,7 @@ function OnlineGame({ matchId }: { matchId: string }) {
           : () => navigate('/play?mode=quick')
       }
       onExit={() => navigate('/play')}
-      serverThinking={waitingServer && match.vsBot}
+      serverThinking={(waitingServer && match.vsBot && !virtualOpp) || (!!virtualOpp && match.status === 'active' && match.botDueAt !== null)}
       skin={skin}
       extraControls={
         pvp ? (
@@ -415,7 +487,9 @@ function OnlineGame({ matchId }: { matchId: string }) {
       }
       aside={pvp && me ? <MatchChat matchId={matchId} myId={me.id} opponentId={(iAmWhite ? match.blackId : match.whiteId) ?? ''} names={{ [match.whiteId]: match.whiteName, ...(match.blackId ? { [match.blackId]: match.blackName ?? '' } : {}) }} active={match.status === 'active'} /> : undefined}
       onRematch={
-        pvp && match.status === 'finished'
+        virtualOpp && match.status === 'finished'
+          ? () => void askVirtualRematch()
+          : pvp && match.status === 'finished'
           ? () =>
               offerRematch(matchId)
                 .then(() => toast('success', t('chat.rematchSent')))
@@ -430,6 +504,29 @@ function OnlineGame({ matchId }: { matchId: string }) {
         ) : (
           clockNote
         )
+      }
+      overlay={
+        vr ? (
+          <Modal open onClose={() => vr !== 'asking' && setVr(null)} title={t('chat.rematch')}>
+            {vr === 'asking' ? (
+              <p className="muted vr-asking">
+                <LuLoader className="spin" /> {t('virtual.rematchAsking', { name: match.blackName ?? '' })}
+              </p>
+            ) : (
+              <>
+                <p className="muted">{t('virtual.rematchDeclined', { name: match.blackName ?? '' })}</p>
+                <div className="row-actions">
+                  <button className="btn btn-primary" onClick={() => navigate('/play?mode=quick')}>
+                    <LuSwords /> {t('virtual.otherOpponent')}
+                  </button>
+                  <button className="btn btn-ghost" onClick={() => setVr(null)}>
+                    {t('common.close')}
+                  </button>
+                </div>
+              </>
+            )}
+          </Modal>
+        ) : undefined
       }
     />
   );
@@ -459,11 +556,13 @@ interface ScreenProps {
   /** chat / offers (online PvP) */
   aside?: ReactNode;
   onRematch?: () => void;
+  /** dialogs owned by the caller (virtual rematch answer) */
+  overlay?: ReactNode;
   /** per-player cosmetics of this game (undefined = my own cosmetics on both sides) */
   skin?: { cls: string; fx: { w?: string; b?: string } };
 }
 
-function GameScreen({ g, kind, humanColor, top, bottom, canRestart, canUndo, canHint, canDraw, onResign, onRestart, result, onPlayAgain, onExit, banner, serverThinking, extraControls, aside, onRematch, skin }: ScreenProps) {
+function GameScreen({ g, kind, humanColor, top, bottom, canRestart, canUndo, canHint, canDraw, onResign, onRestart, result, onPlayAgain, onExit, banner, serverThinking, extraControls, aside, onRematch, skin, overlay }: ScreenProps) {
   const { t } = useI18n();
   const { settings } = useSettings();
   const [confirm, setConfirm] = useState<null | 'resign' | 'restart' | 'draw'>(null);
@@ -504,7 +603,8 @@ function GameScreen({ g, kind, humanColor, top, bottom, canRestart, canUndo, can
       <Avatar name={p.name} seed={p.seed} size={40} userId={p.id} />
       <div className="player-info">
         <span className="player-name">
-          {p.name} {p.tag && <span className="badge badge-demo">{p.tag}</span>}
+          {p.link ? <Link to={p.link} className="player-link">{p.name}</Link> : p.name}{' '}
+          {p.ai ? <AiBadge /> : p.tag && <span className="badge badge-demo">{p.tag}</span>}
         </span>
         <span className="muted small">
           <span className={`mini-piece ${p.color === 'w' ? 'mini-w' : 'mini-b'}`} /> {t(p.color === 'w' ? 'side.white' : 'side.black')}
@@ -634,7 +734,8 @@ function GameScreen({ g, kind, humanColor, top, bottom, canRestart, canUndo, can
 
       <RulesDialog open={rules} onClose={() => setRules(false)} />
       {aside}
-      {result && <ResultDialog open={resultOpen} onClose={() => setResultOpen(false)} result={result} onPlayAgain={onPlayAgain} onExit={onExit} kind={kind} onRematch={onRematch} />}
+      {overlay}
+      {result && <ResultDialog open={resultOpen} onClose={() => setResultOpen(false)} result={result} onPlayAgain={onPlayAgain} onExit={onExit} kind={kind} onRematch={onRematch ? () => { setResultOpen(false); onRematch(); } : undefined} />}
       {over && !result && kind === 'online' && <div className="notice"><LuLoader className="spin" /> {t('online.finalizing')}</div>}
       {over && result && !resultOpen && (
         <div className="row-actions center">

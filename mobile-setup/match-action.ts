@@ -384,6 +384,74 @@ function chooseMove(state, level, opts = {}) {
   return best;
 }
 
+// supabase/functions/_shared/bot/virtual.ts
+var LEVELS = ["easy", "medium", "hard"];
+var BASE = { beginner: 0, normal: 1, pro: 2 };
+var SEARCH = { 60: [60, 160, 300], 180: [90, 300, 550], 300: [110, 380, 750] };
+var THINK = { 60: [700, 2300], 180: [1100, 3600], 300: [1500, 5200] };
+var STYLE_TEMPO = { fast: 0.62, aggressive: 0.88, tricky: 1, solid: 1.12, calm: 1.32 };
+function material(state) {
+  let s = 0;
+  for (const c of state.board) {
+    if (c === 0)
+      continue;
+    const v = c === 2 || c === -2 ? 3 : 1;
+    s += c > 0 === (state.turn === "w") ? v : -v;
+  }
+  return s;
+}
+function effectiveLevel(level, style, mat, humanRating, rnd) {
+  let i = BASE[level];
+  if (mat >= 2 && rnd() < (style === "aggressive" ? 0.3 : 0.5))
+    i--;
+  if (mat <= -2 && rnd() < 0.5)
+    i++;
+  if (humanRating < 1100 && rnd() < 0.4)
+    i--;
+  if (humanRating > 1450 && rnd() < 0.4)
+    i++;
+  return Math.max(0, Math.min(2, i));
+}
+function thinkTime(opts, rnd) {
+  const tc = THINK[opts.timeControl] ? opts.timeControl : 180;
+  const [lo, hi] = THINK[tc];
+  let t;
+  if (opts.legal <= 1)
+    t = 350 + rnd() * 850;
+  else {
+    t = lo + rnd() * (hi - lo);
+    if (opts.captures && opts.legal > 1)
+      t *= 1.15 + rnd() * 0.35;
+    if (opts.legal >= 9 && tc >= 180)
+      t *= 1.15 + rnd() * 0.6;
+    if (opts.moveNo < 4)
+      t *= 0.55 + rnd() * 0.3;
+    if (opts.style === "tricky")
+      t *= 0.6 + rnd() * 0.9;
+  }
+  t *= STYLE_TEMPO[opts.style];
+  t += rnd() * 240 - 120;
+  const overthink = tc === 60 && opts.botMs < 20000 && opts.legal > 1 && rnd() < 0.06;
+  if (overthink)
+    t = Math.max(t, opts.botMs * (0.75 + rnd() * 0.5));
+  const cap = overthink ? Math.min(28000, opts.botMs + 2000) : Math.max(300, Math.min(26000, opts.botMs * (tc === 60 ? 0.12 : 0.1)));
+  return Math.round(Math.max(300, Math.min(t, cap)));
+}
+function planVirtualMove(inp) {
+  const rnd = inp.random ?? Math.random;
+  const moves = legalMovesFor(inp.state.board, inp.state.turn);
+  if (moves.length === 0)
+    return null;
+  const lvlIdx = effectiveLevel(inp.level, inp.style, material(inp.state), inp.humanRating, rnd);
+  const engineLevel = LEVELS[lvlIdx];
+  const budget = (SEARCH[inp.timeControl] ?? SEARCH[180])[lvlIdx];
+  const move = chooseMove(inp.state, engineLevel, { timeMs: budget, random: rnd });
+  if (!move)
+    return null;
+  const thinkMs = thinkTime({ timeControl: inp.timeControl, style: inp.style, legal: moves.length, captures: moves.some((m) => m.captures.length > 0), botMs: inp.botMs, moveNo: inp.state.history.length }, rnd);
+  return { move, thinkMs, engineLevel };
+}
+
 // supabase/functions/match-action/index.ts
 var cors = {
   "Access-Control-Allow-Origin": "*",
@@ -410,7 +478,7 @@ Deno.serve(async (req) => {
     return json({ ok: false, error: "bad-json" }, 400);
   }
   const { action, match_id } = body ?? {};
-  if (typeof match_id !== "string" || !["move", "resign"].includes(action))
+  if (typeof match_id !== "string" || !["move", "resign", "bot"].includes(action))
     return json({ ok: false, error: "bad-request" }, 400);
   const { data: match } = await admin.from("matches").select("*").eq("id", match_id).maybeSingle();
   if (!match)
@@ -431,6 +499,34 @@ Deno.serve(async (req) => {
     else if (r.status === "draw")
       await finish("draw", r.reason, plies);
   };
+  if (action === "bot") {
+    const pending = match.bot_pending;
+    if (!match.virtual_id || !pending)
+      return json({ ok: false, error: "conflict" }, 409);
+    const due = Date.parse(match.bot_due_at ?? "");
+    if (Number.isFinite(due) && Date.now() < due - 400)
+      return json({ ok: false, error: "too-early", due_at: match.bot_due_at }, 425);
+    const { data: rows } = await admin.from("match_moves").select("ply, from_sq, path").eq("match_id", match_id).order("ply", { ascending: true });
+    const stored = (rows ?? []).map((r) => ({ from: r.from_sq, path: r.path }));
+    const replayed = replay(stored);
+    if (!replayed.ok || replayed.state.turn !== "b" || stored.length !== pending.ply)
+      return json({ ok: false, error: "conflict" }, 409);
+    const applied = playMove(replayed.state, pending.from, pending.path);
+    if (!applied.ok)
+      return json({ ok: false, error: "corrupt-plan" }, 500);
+    const { data: vc, error: vcErr } = await admin.rpc("virtual_commit", { p_match: match_id, p_ply: pending.ply });
+    if (vcErr || !vc)
+      return json({ ok: false, error: "server" }, 500);
+    if (!vc.ok)
+      return json({ ok: vc.error === "timeout", error: vc.error, result: vc.error === "timeout" ? { status: "won", winner: "w", reason: "timeout" } : undefined }, vc.error === "timeout" ? 200 : 409);
+    await finishIfOver(applied.state.result, pending.ply + 1);
+    return json({
+      ok: true,
+      bot: { ply: pending.ply, from: pending.from, path: pending.path },
+      result: applied.state.result,
+      clock: { white_ms: vc.white_ms, black_ms: vc.black_ms, turn_started_at: vc.turn_started_at }
+    });
+  }
   if (action === "resign") {
     const { count } = await admin.from("match_moves").select("*", { count: "exact", head: true }).eq("match_id", match_id);
     await finish(myColor === "w" ? "black" : "white", "resign", count ?? 0);
@@ -453,7 +549,7 @@ Deno.serve(async (req) => {
     return json({ ok: false, error: out.error ?? "illegal" }, 422);
   let ply = stored.length;
   let clock = null;
-  if (!match.vs_bot) {
+  if (!match.vs_bot || match.virtual_id) {
     const { data: ct, error: ctErr } = await admin.rpc("clock_take_turn", { p_match: match_id, p_ply: ply });
     if (ctErr || !ct)
       return json({ ok: false, error: "server" }, 500);
@@ -470,7 +566,28 @@ Deno.serve(async (req) => {
   ply++;
   let state = out.state;
   let bot = null;
-  if (match.vs_bot && state.result.status === "playing") {
+  let pending = null;
+  if (match.virtual_id && state.result.status === "playing") {
+    const [{ data: vp }, { data: human }] = await Promise.all([
+      admin.from("virtual_players").select("level, style").eq("id", match.virtual_id).maybeSingle(),
+      admin.from("profiles").select("rating").eq("id", match.white_id).maybeSingle()
+    ]);
+    const plan = planVirtualMove({
+      state,
+      level: vp?.level ?? "normal",
+      style: vp?.style ?? "solid",
+      timeControl: match.time_control ?? 180,
+      botMs: clock?.black_ms ?? match.black_ms ?? 180000,
+      humanRating: human?.rating ?? 1200
+    });
+    if (plan) {
+      const start = clock?.turn_started_at ? Date.parse(clock.turn_started_at) : Date.now();
+      const dueAt = new Date(start + plan.thinkMs).toISOString();
+      const { data: upd } = await admin.from("matches").update({ bot_pending: { ply, from: plan.move.from, path: plan.move.path, think: plan.thinkMs }, bot_due_at: dueAt }).eq("id", match_id).eq("status", "active").eq("move_count", ply).select("id");
+      if (upd && upd.length > 0)
+        pending = { due_at: dueAt };
+    }
+  } else if (match.vs_bot && state.result.status === "playing") {
     const m = chooseMove(state, match.bot_level, { timeMs: BOT_TIME[match.bot_level] ?? 400 });
     if (m) {
       const applied = playMove(state, m.from, m.path);
@@ -486,5 +603,5 @@ Deno.serve(async (req) => {
   }
   await admin.from("matches").update({ move_count: ply }).eq("id", match_id).lt("move_count", ply);
   await finishIfOver(state.result, ply);
-  return json({ ok: true, bot, result: state.result, clock });
+  return json({ ok: true, bot, pending, result: state.result, clock });
 });

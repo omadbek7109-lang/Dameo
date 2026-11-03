@@ -1,3 +1,4 @@
+import { AiBadge } from '../components/AiBadge.tsx';
 import { useEffect, useState } from 'react';
 import { LuArchive, LuEyeOff, LuPlay } from 'react-icons/lu';
 import { useAuth } from '../auth/AuthProvider.tsx';
@@ -53,7 +54,7 @@ export function Archive() {
                   <span className={`res-dot ${g.result === 'draw' ? 'res-draw' : won ? 'res-win' : 'res-loss'}`} aria-hidden="true" />
                   <span className="admin-row-main">
                     <strong>
-                      {white ? g.black_name : g.white_name} {!g.is_public && <LuEyeOff aria-label={t('archive.private')} />}
+                      {white ? g.black_name : g.white_name} {white && g.black_virtual && <AiBadge />} {!g.is_public && <LuEyeOff aria-label={t('archive.private')} />}
                     </strong>
                     <span className="muted small">
                       {t(g.result === 'draw' ? 'result.drawn' : won ? 'result.victory' : 'result.defeat')} · {modeLabel(t, g)} · {g.move_count} {t('live.moves')} · {dateTime(Date.parse(g.ended_at))}

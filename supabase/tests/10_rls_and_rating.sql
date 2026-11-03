@@ -930,6 +930,107 @@ do $$ begin
 exception when others then perform pg_temp.check('anon can NOT equip frames', true, sqlerrm); end $$;
 reset role;
 
+-- ===================== virtual opponents (0017)
+reset role;
+insert into auth.users (id, email, raw_user_meta_data) values ('99999999-0000-4000-8000-000000000017', 'v@x.io', '{"username":"virtualtester"}');
+update public.virtual_settings set enabled = true, auto_off = false where id;
+create temp table vt (k text primary key, v text);
+grant all on vt to authenticated, anon, service_role;
+set role authenticated;
+select set_config('request.jwt.claim.sub', '99999999-0000-4000-8000-000000000017', false);
+select pg_temp.check('virtual: refused when the player is not searching', public.virtual_match(180) ->> 'reason' = 'not-searching');
+select public.quick_match(180);
+select pg_temp.check('virtual: refused right after the search started (< 18 s)', public.virtual_match(180) ->> 'reason' = 'too-early');
+reset role;
+update public.matchmaking_queue set created_at = now() - interval '25 seconds' where user_id = '99999999-0000-4000-8000-000000000017';
+update public.virtual_settings set enabled = false where id;
+set role authenticated;
+select pg_temp.check('virtual: admin switch off → no virtual opponent', public.virtual_match(180) ->> 'reason' = 'disabled');
+reset role;
+update public.virtual_settings set enabled = true where id;
+set role authenticated;
+insert into vt select 'm1', public.virtual_match(180) ->> 'match_id';
+reset role;
+select pg_temp.check('virtual: match created against a virtual player, unrated, with clocks',
+  (select m.virtual_id is not null and m.vs_bot and not m.rated and m.time_control = 180 and m.white_ms = 180000 and m.black_id is null
+     from public.matches m where m.id = (select v::uuid from vt where k = 'm1')));
+select pg_temp.check('virtual: the player left the queue', (select last_seen = '-infinity' from public.matchmaking_queue where user_id = '99999999-0000-4000-8000-000000000017'));
+select pg_temp.check('virtual: not in profiles / leaderboard', not exists (select 1 from public.leaderboard l join public.virtual_players v on v.nickname = l.username));
+-- the player makes the first move, the server plans the bot's answer
+insert into public.match_moves (match_id, ply, from_sq, path) values ((select v::uuid from vt where k = 'm1'), 0, 42, '{35}');
+update public.matches set move_count = 1, turn_started_at = now(), bot_pending = '{"ply":1,"from":21,"path":[28],"think":1200}', bot_due_at = now()
+ where id = (select v::uuid from vt where k = 'm1');
+set role authenticated;
+do $$ begin
+  perform public.virtual_commit((select v::uuid from vt where k = 'm1'));
+  perform pg_temp.check('virtual: players can NOT commit bot moves', false);
+exception when others then perform pg_temp.check('virtual: players can NOT commit bot moves', true, sqlerrm); end $$;
+reset role;
+set role service_role;
+select pg_temp.check('virtual: due bot move committed, bot clock charged exactly the planned time',
+  (public.virtual_commit((select v::uuid from vt where k = 'm1')) ->> 'black_ms')::int = 178800);
+reset role;
+select pg_temp.check('virtual: move stored once, pending cleared',
+  (select count(*) = 2 from public.match_moves where match_id = (select v::uuid from vt where k = 'm1'))
+  and (select bot_pending is null and move_count = 2 from public.matches where id = (select v::uuid from vt where k = 'm1')));
+set role service_role;
+select pg_temp.check('virtual: committing twice is refused', public.virtual_commit((select v::uuid from vt where k = 'm1')) ->> 'error' = 'conflict');
+reset role;
+select pg_temp.check('virtual: shown in the live list', exists (select 1 from json_array_elements(public.live_list(50, 0)) x where x->>'id' = (select v from vt where k = 'm1') and (x->>'black_virtual')::boolean));
+-- the sweep commits an overdue planned move when the player's app is away
+insert into public.match_moves (match_id, ply, from_sq, path) values ((select v::uuid from vt where k = 'm1'), 2, 35, '{26}');
+update public.matches set move_count = 3, turn_started_at = now() - interval '6 seconds', bot_pending = '{"ply":3,"from":22,"path":[31],"think":4000}', bot_due_at = now() - interval '3 seconds'
+ where id = (select v::uuid from vt where k = 'm1');
+select public.finish_expired_games();
+select pg_temp.check('virtual: sweep commits an overdue bot move (not a timeout)',
+  (select status = 'active' and move_count = 4 and bot_pending is null from public.matches where id = (select v::uuid from vt where k = 'm1')));
+-- the bot can lose on time
+update public.matches set black_ms = 500, bot_pending = '{"ply":4,"from":23,"path":[30],"think":900}', bot_due_at = now() where id = (select v::uuid from vt where k = 'm1');
+insert into vt select 'rating_before', rating::text from public.virtual_players where id = (select virtual_id from public.matches where id = (select v::uuid from vt where k = 'm1'));
+set role service_role;
+select pg_temp.check('virtual: bot without enough clock loses on time', public.virtual_commit((select v::uuid from vt where k = 'm1')) ->> 'error' = 'timeout');
+reset role;
+select pg_temp.check('… game finished, the player won on the clock',
+  (select status = 'finished' and result = 'white' and timeout_kind = 'clock' from public.matches where id = (select v::uuid from vt where k = 'm1')));
+select pg_temp.check('… the virtual player''s own stats/rating updated (loss, −5)',
+  (select v.losses >= 1 and v.rating = (select v2::int from (select v as v2 from vt where k = 'rating_before') z) - 5
+     from public.virtual_players v where v.id = (select virtual_id from public.matches where id = (select v::uuid from vt where k = 'm1'))));
+select pg_temp.check('… real player''s rating untouched (unrated)', (select white_delta is null from public.matches where id = (select v::uuid from vt where k = 'm1')));
+select pg_temp.check('… gone from the live list', not exists (select 1 from json_array_elements(public.live_list(50, 0)) x where x->>'id' = (select v from vt where k = 'm1')));
+-- rematch: one answer per game, only for the player of that game
+set role authenticated;
+select set_config('request.jwt.claim.sub', '11111111-1111-1111-1111-111111111111', false);
+do $$ begin
+  perform public.virtual_rematch((select v::uuid from vt where k = 'm1'));
+  perform pg_temp.check('virtual: someone else can NOT ask for the rematch', false);
+exception when others then perform pg_temp.check('virtual: someone else can NOT ask for the rematch', true, sqlerrm); end $$;
+select set_config('request.jwt.claim.sub', '99999999-0000-4000-8000-000000000017', false);
+insert into vt select 'r1', public.virtual_rematch((select v::uuid from vt where k = 'm1'))::text;
+select pg_temp.check('virtual: asking again gives the same answer', public.virtual_rematch((select v::uuid from vt where k = 'm1'))::text = (select v from vt where k = 'r1'));
+select pg_temp.check('virtual: admin functions refused for players', not public.admin_has_perm(auth.uid(), 'virtual.manage'));
+do $$ begin
+  perform public.admin_virtual_settings_save(false, null, null, 'test');
+  perform pg_temp.check('virtual: a player can NOT switch virtual opponents off', false);
+exception when others then perform pg_temp.check('virtual: a player can NOT switch virtual opponents off', true, sqlerrm); end $$;
+reset role;
+set role anon;
+do $$ begin
+  perform public.virtual_match(180);
+  perform pg_temp.check('virtual: anon can NOT start virtual games', false);
+exception when others then perform pg_temp.check('virtual: anon can NOT start virtual games', true, sqlerrm); end $$;
+select pg_temp.check('virtual: profiles readable by everyone', (select count(*) = 10 from public.virtual_players));
+reset role;
+-- old bot game / untimed games left behind → closed; and never shown live
+insert into public.matches (id, white_id, status, rated, vs_bot, bot_level, started_at, created_at, move_count)
+values ('aaaaaaaa-1111-4000-8000-000000000001', '11111111-1111-1111-1111-111111111111', 'active', false, true, 'easy', now() - interval '2 hours', now() - interval '2 hours', 2),
+       ('aaaaaaaa-1111-4000-8000-000000000002', '11111111-1111-1111-1111-111111111111', 'active', false, true, 'easy', now() - interval '2 hours', now() - interval '2 hours', 0),
+       ('aaaaaaaa-1111-4000-8000-000000000003', '22222222-2222-2222-2222-222222222222', 'active', false, true, 'easy', now(), now(), 0);
+select pg_temp.check('old bot games are not live', not exists (select 1 from json_array_elements(public.live_list(50, 0)) x where x->>'id' like 'aaaaaaaa-1111%'));
+select public.finish_expired_games();
+select pg_temp.check('abandoned untimed bot game with moves → finished (bot wins, unrated)', (select status = 'finished' and result = 'black' from public.matches where id = 'aaaaaaaa-1111-4000-8000-000000000001'));
+select pg_temp.check('abandoned untouched game → aborted', (select status = 'aborted' from public.matches where id = 'aaaaaaaa-1111-4000-8000-000000000002'));
+select pg_temp.check('a fresh untimed game is left alone', (select status = 'active' from public.matches where id = 'aaaaaaaa-1111-4000-8000-000000000003'));
+
 \set QUIET off
 select case when ok then 'PASS' else 'FAIL' end as status, name, left(detail, 70) as detail from results order by 1 desc, 2;
 select count(*) filter (where not ok) as failures, count(*) as total from results;

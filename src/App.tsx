@@ -18,6 +18,7 @@ import { Admin } from './pages/Admin.tsx';
 import { Live } from './pages/Live.tsx';
 import { Watch } from './pages/Watch.tsx';
 import { Archive } from './pages/Archive.tsx';
+import { VirtualProfile } from './pages/VirtualProfile.tsx';
 import { About, Blocked, Feedback, Help } from './pages/Info.tsx';
 import { Link, useRoute } from './router.tsx';
 
@@ -69,6 +70,9 @@ export function App() {
       break;
     case 'profile':
       page = <Profile />;
+      break;
+    case 'vp':
+      page = <VirtualProfile />;
       break;
     case 'settings':
       page = <Settings />;

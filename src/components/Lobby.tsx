@@ -14,12 +14,15 @@ import {
   respondChallenge,
   sendChallenge,
   startBotMatch,
+  virtualMatch,
   watchIncomingChallenges,
   watchPairing,
   watchSentChallenges,
   type IncomingChallenge,
   type LobbyPlayer,
+  type VirtualPlayer,
 } from '../services/online.ts';
+import { AiBadge } from './AiBadge.tsx';
 import { DEFAULT_TIME_CONTROL, isTimeControl, TIME_CONTROLS, type TimeControl } from '../services/clock.ts';
 import { SbError } from '../services/supabase.ts';
 import { haptic, tg } from '../services/telegram.ts';
@@ -28,6 +31,9 @@ import { Modal } from './Modal.tsx';
 import { useToast } from './Toast.tsx';
 
 export const SEARCH_WINDOW_S = 60;
+/** a virtual opponent may be found at a random moment in this range (s) — the 60 s search window itself is unchanged */
+export const VIRTUAL_AFTER_S: [number, number] = [20, 35];
+const virtualDelayMs = () => Math.round((VIRTUAL_AFTER_S[0] + Math.random() * (VIRTUAL_AFTER_S[1] - VIRTUAL_AFTER_S[0])) * 1000);
 const POLL_MS = 4000;
 
 type Phase = 'idle' | 'searching' | 'timeout' | 'found';
@@ -73,13 +79,16 @@ export function LiveQuickPanel({ autoStart = 0 }: { autoStart?: number }) {
     if (phase !== 'idle' && window.innerWidth < 1000) stage.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }, [phase]);
   const stopPair = useRef<() => void>(() => {});
+  const [foundOpp, setFoundOpp] = useState<VirtualPlayer | null>(null);
 
-  const go = useCallback((id: string) => {
+  const go = useCallback((id: string, virtual?: VirtualPlayer | null) => {
     run.current++;
     stopPair.current();
+    setFoundOpp(virtual ?? null);
     setPhase('found');
     haptic('win');
-    setTimeout(() => navigate(`/game?online=${id}`), 900);
+    // a virtual opponent's card stays a moment longer so the player sees who it is
+    setTimeout(() => navigate(`/game?online=${id}`), virtual ? 2200 : 900);
   }, []);
 
   /* ---- lobby list + stats (polled; cheap RPCs) ---- */
@@ -161,6 +170,9 @@ export function LiveQuickPanel({ autoStart = 0 }: { autoStart?: number }) {
     const timeControl = tcRef.current;
     const my = ++run.current;
     deadline.current = null;
+    // local moment (20–35 s in) to ask for a virtual opponent if no real player has turned up
+    let virtualAt = Date.now() + virtualDelayMs();
+    let virtualAsked = 0;
     setLeft(SEARCH_WINDOW_S);
     setPhase('searching');
     stopPair.current();
@@ -182,9 +194,17 @@ export function LiveQuickPanel({ autoStart = 0 }: { autoStart?: number }) {
           setLeft(remainingNow());
         }
         if (Date.now() >= deadline.current) break;
+        if (Date.now() >= virtualAt && virtualAsked < 3) {
+          virtualAsked++;
+          const v = await virtualMatch(timeControl).catch(() => null);
+          if (run.current !== my) return;
+          if (v?.match_id) return go(v.match_id, v.virtual ?? null);
+          // switched off → keep searching as before; asked too early (server clock) → try again a little later
+          virtualAt = v?.reason === 'too-early' ? Date.now() + 2500 : Infinity;
+        }
         void refreshLobby();
         await new Promise<void>((res) => {
-          const id = setTimeout(res, Math.max(200, Math.min(POLL_MS, deadline.current! - Date.now())));
+          const id = setTimeout(res, Math.max(200, Math.min(POLL_MS, deadline.current! - Date.now(), virtualAt - Date.now())));
           wake.current = () => {
             clearTimeout(id);
             res();
@@ -347,9 +367,29 @@ export function LiveQuickPanel({ autoStart = 0 }: { autoStart?: number }) {
         )}
         {phase === 'found' && (
           <div className="found">
+            {foundOpp && me && (
+              <div className="vs vs-pop">
+                <div className="vs-side">
+                  <Avatar name={me.username} seed={me.avatar} size={64} userId={me.id} />
+                  <strong>{me.username}</strong>
+                  <span className="muted small">{num(me.rating)}</span>
+                </div>
+                <span className="vs-badge">VS</span>
+                <div className="vs-side">
+                  <Avatar name={foundOpp.nickname} seed={foundOpp.avatar} size={64} />
+                  <strong>
+                    {foundOpp.nickname} <AiBadge />
+                  </strong>
+                  <span className="muted small">
+                    {num(foundOpp.rating)} · {t(`virtual.level.${foundOpp.level}` as 'virtual.level.normal')}
+                  </span>
+                </div>
+              </div>
+            )}
             <p className="search-title">
               <LuCheck /> {t('quick.found')}
             </p>
+            {foundOpp && <p className="muted small">{t('virtual.foundNote')}</p>}
           </div>
         )}
       </div>

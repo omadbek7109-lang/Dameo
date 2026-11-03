@@ -21,6 +21,8 @@ export interface LiveGame {
   black_name: string | null;
   black_avatar: string | null;
   black_rating: number | null;
+  /** the black side is a virtual (AI) opponent */
+  black_virtual?: boolean;
   viewers: number;
   moves: Array<[number, number[]]>;
 }
@@ -53,6 +55,7 @@ export interface ArchiveGame {
   white_delta: number | null;
   black_delta: number | null;
   is_public: boolean;
+  black_virtual?: boolean;
   white_name: string;
   black_name: string;
 }
