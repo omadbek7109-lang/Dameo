@@ -1,5 +1,4 @@
 import { LuBot, LuSwords } from 'react-icons/lu';
-import { AiBadge } from '../components/AiBadge.tsx';
 import { Avatar } from '../components/Avatar.tsx';
 import { EmptyState, ErrorState, Spinner } from '../components/States.tsx';
 import { Stat, winRate } from '../components/ui.tsx';
@@ -27,16 +26,15 @@ export function VirtualProfile() {
         </div>
         <div className="profile-id">
           <h1 className="h1">
-            {v.nickname} <AiBadge />
+            {v.nickname}
           </h1>
           <div className="chips">
-            <span className="chip">
-              <LuBot /> {t('virtual.chip')}
-            </span>
             <span className="chip">{t(`virtual.level.${v.level}` as TKey)}</span>
             <span className="chip">{t(`virtual.style.${v.style}` as TKey)}</span>
           </div>
-          <p className="muted small">{t('virtual.about')}</p>
+          <p className="muted small vp-note">
+            <LuBot /> {t('virtual.about')}
+          </p>
         </div>
         <div className="profile-rating">
           <div className="pr-block">

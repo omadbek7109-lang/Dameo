@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+<defs>
+<radialGradient id="bg" cx="50%" cy="35%" r="75%"><stop offset="0" stop-color="#9575cd"/><stop offset="1" stop-color="#1e0f3d"/></radialGradient>
+<radialGradient id="gl" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#d1c4e9" stop-opacity=".55"/><stop offset="1" stop-color="#d1c4e9" stop-opacity="0"/></radialGradient>
+
+</defs>
+<rect width="256" height="256" fill="url(#bg)"/>
+<circle cx="128" cy="120" r="110" fill="url(#gl)"/>
+
+<path d="M40 256 C44 206 84 186 128 186 C172 186 212 206 216 256 Z" fill="#7c4dff"/>
+<path d="M104 186 C110 204 146 204 152 186" fill="rgba(0,0,0,.12)"/>
+<rect x="112" y="150" width="32" height="42" rx="14" fill="#f0c7a4"/>
+<ellipse cx="128" cy="112" rx="46" ry="52" fill="#f0c7a4"/>
+<ellipse cx="128" cy="160" rx="22" ry="6" fill="rgba(0,0,0,.12)"/>
+<circle cx="92" cy="82" r="16" fill="#3a2416"/><circle cx="110" cy="66" r="18" fill="#3a2416"/><circle cx="130" cy="60" r="19" fill="#3a2416"/><circle cx="150" cy="66" r="18" fill="#3a2416"/><circle cx="166" cy="82" r="16" fill="#3a2416"/><circle cx="100" cy="74" r="14" fill="#3a2416"/><circle cx="158" cy="74" r="14" fill="#3a2416"/><circle cx="84" cy="98" r="11" fill="#3a2416"/><circle cx="172" cy="98" r="11" fill="#3a2416"/>
+<path d="M104 104 q8 -5 16 0" stroke="#3a2418" stroke-width="3.2" fill="none" stroke-linecap="round"/>
+<path d="M136 104 q8 -5 16 0" stroke="#3a2418" stroke-width="3.2" fill="none" stroke-linecap="round"/>
+<ellipse cx="112" cy="118" rx="5" ry="6" fill="#2b1d16"/><ellipse cx="144" cy="118" rx="5" ry="6" fill="#2b1d16"/>
+<circle cx="114" cy="116" r="1.6" fill="#fff"/><circle cx="146" cy="116" r="1.6" fill="#fff"/>
+<path d="M126 124 q2 8 -3 10" stroke="rgba(0,0,0,.18)" stroke-width="2.4" fill="none" stroke-linecap="round"/>
+<path d="M116 142 q12 9 24 0" stroke="#a8584a" stroke-width="3.6" fill="none" stroke-linecap="round"/>
+
+<path d="M72 112 C72 60 184 60 184 112" stroke="#1a1a2e" stroke-width="9" fill="none"/><rect x="60" y="102" width="20" height="32" rx="9" fill="#1a1a2e"/><rect x="176" y="102" width="20" height="32" rx="9" fill="#7c4dff"/>
+</svg>

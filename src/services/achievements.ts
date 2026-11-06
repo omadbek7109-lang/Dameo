@@ -1,3 +1,4 @@
+import { db } from './supabase.ts';
 import type { MatchSummary, Player, RatingPoint } from '../types/models.ts';
 
 export type AchievementId = 'firstWin' | 'tenGames' | 'streak3' | 'rating1400' | 'beatHard' | 'firstDraw' | 'veteran';
@@ -36,3 +37,25 @@ export function computeAchievements(p: Pick<Player, 'wins' | 'losses' | 'draws'>
     { id: 'veteran', unlocked: games >= 50, progress: clamp(games / 50) },
   ];
 }
+
+/* ---------------------------------------------------------------- win-streak achievements (server, with coin rewards) */
+
+export type StreakCode = 'first_win' | 'streak_3' | 'streak_5' | 'streak_10';
+export interface ServerAchievement {
+  code: StreakCode;
+  need: number;
+  reward: number;
+  kind: 'wins' | 'streak';
+  progress: number;
+  unlocked_at: string | null;
+}
+export interface MyAchievements {
+  current_streak: number;
+  best_streak: number;
+  wins: number;
+  items: ServerAchievement[];
+}
+/** unlocked / progress / rewards — rewards are paid by the server, once */
+export const achievementsMine = () => db.rpc<MyAchievements>('achievements_mine');
+/** what a finished game unlocked for me (end-of-game congratulations) */
+export const achievementsForMatch = (matchId: string) => db.rpc<Array<{ code: StreakCode; reward: number }>>('achievements_for_match', { p_match: matchId });

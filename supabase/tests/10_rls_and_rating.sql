@@ -3,6 +3,9 @@
 create temp table results (name text, ok boolean, detail text);
 grant all on results to public;
 create function pg_temp.check(n text, cond boolean, d text default '') returns void language plpgsql as $$ begin insert into results values (n, coalesce(cond, false), d); end $$;
+-- the older tests below expect exact points: use a fixed ±5 instead of 0019's random +15…+30 (restored + tested at the end)
+create or replace function public._rand_delta(p_score numeric, p_me int, p_opp int) returns int
+language sql volatile as $$ select case when p_score = 1 then 5 when p_score = 0 then -5 else 0 end; $$;
 
 -- three users (the signup trigger creates their profiles)
 insert into auth.users (id, email, raw_user_meta_data) values
@@ -60,7 +63,7 @@ reset role;
 set role service_role;
 set request.jwt.claim.role = 'service_role';
 update public.matches set rated = true where id = (select (r ->> 'match_id')::uuid from room);  -- make this room game rated for the test
-update public.matches set status = 'finished', result = 'white', result_reason = 'no-moves', ended_at = now()
+update public.matches set status = 'finished', result = 'white', result_reason = 'no-moves', ended_at = now(), move_count = 24
  where id = (select (r ->> 'match_id')::uuid from room);
 select public.apply_match_result((select (r ->> 'match_id')::uuid from room));
 select pg_temp.check('winner +5', (select rating from public.profiles where id = '11111111-1111-1111-1111-111111111111') = 1205);
@@ -322,7 +325,7 @@ update public.matches set turn_started_at = clock_timestamp() - interval '31.5 s
 select pg_temp.check('move after 30 s (+1 s grace) is refused', (public.clock_take_turn((select id from tmid), 3) ->> 'error') = 'timeout');
 select pg_temp.check('… and Black loses on the move limit',
   (select status = 'finished' and result = 'white' and timeout_kind = 'move' and rating_applied from public.matches where id = (select id from tmid)));
-select pg_temp.check('timeout loss is rated once (±5)', (select white_delta = 5 and black_delta = -5 from public.matches where id = (select id from tmid)));
+select pg_temp.check('timeout after 2 moves: loser −5, winner gains nothing (short game)', (select white_delta = 0 and black_delta = -5 and rating_note = 'short' from public.matches where id = (select id from tmid)));
 reset role;
 
 -- clock (not the 30 s limit) runs out → claim by the opponent
@@ -388,7 +391,7 @@ create function pg_temp.pvp(w uuid, b uuid, res text, at timestamptz) returns uu
 declare mid uuid;
 begin
   insert into public.matches (white_id, black_id, status, rated, started_at) values (w, b, 'active', true, at) returning matches.id into mid;
-  update public.matches set status = 'finished', result = res, result_reason = 'no-moves', ended_at = at where matches.id = mid;
+  update public.matches set status = 'finished', result = res, result_reason = 'no-moves', ended_at = at, move_count = 20 where matches.id = mid;
   perform public.apply_match_result(mid);
   return mid;
 end $$;
@@ -951,8 +954,8 @@ update public.virtual_settings set enabled = true where id;
 set role authenticated;
 insert into vt select 'm1', public.virtual_match(180) ->> 'match_id';
 reset role;
-select pg_temp.check('virtual: match created against a virtual player, unrated, with clocks',
-  (select m.virtual_id is not null and m.vs_bot and not m.rated and m.time_control = 180 and m.white_ms = 180000 and m.black_id is null
+select pg_temp.check('virtual: match created against a virtual player, rated, with clocks',
+  (select m.virtual_id is not null and m.vs_bot and m.rated and m.time_control = 180 and m.white_ms = 180000 and m.black_id is null
      from public.matches m where m.id = (select v::uuid from vt where k = 'm1')));
 select pg_temp.check('virtual: the player left the queue', (select last_seen = '-infinity' from public.matchmaking_queue where user_id = '99999999-0000-4000-8000-000000000017'));
 select pg_temp.check('virtual: not in profiles / leaderboard', not exists (select 1 from public.leaderboard l join public.virtual_players v on v.nickname = l.username));
@@ -995,7 +998,7 @@ select pg_temp.check('… game finished, the player won on the clock',
 select pg_temp.check('… the virtual player''s own stats/rating updated (loss, −5)',
   (select v.losses >= 1 and v.rating = (select v2::int from (select v as v2 from vt where k = 'rating_before') z) - 5
      from public.virtual_players v where v.id = (select virtual_id from public.matches where id = (select v::uuid from vt where k = 'm1'))));
-select pg_temp.check('… real player''s rating untouched (unrated)', (select white_delta is null from public.matches where id = (select v::uuid from vt where k = 'm1')));
+select pg_temp.check('… rated, but after 4 moves the winner gains nothing (short game)', (select white_delta = 0 and rating_applied and rating_note = 'short' from public.matches where id = (select v::uuid from vt where k = 'm1')));
 select pg_temp.check('… gone from the live list', not exists (select 1 from json_array_elements(public.live_list(50, 0)) x where x->>'id' = (select v from vt where k = 'm1')));
 -- rematch: one answer per game, only for the player of that game
 set role authenticated;
@@ -1007,7 +1010,10 @@ exception when others then perform pg_temp.check('virtual: someone else can NOT 
 select set_config('request.jwt.claim.sub', '99999999-0000-4000-8000-000000000017', false);
 insert into vt select 'r1', public.virtual_rematch((select v::uuid from vt where k = 'm1'))::text;
 select pg_temp.check('virtual: asking again gives the same answer', public.virtual_rematch((select v::uuid from vt where k = 'm1'))::text = (select v from vt where k = 'r1'));
-select pg_temp.check('virtual: admin functions refused for players', not public.admin_has_perm(auth.uid(), 'virtual.manage'));
+do $$ begin
+  perform public.admin_virtual_overview();
+  perform pg_temp.check('virtual: admin overview refused for players', false);
+exception when others then perform pg_temp.check('virtual: admin overview refused for players', true, sqlerrm); end $$;
 do $$ begin
   perform public.admin_virtual_settings_save(false, null, null, 'test');
   perform pg_temp.check('virtual: a player can NOT switch virtual opponents off', false);
@@ -1018,7 +1024,7 @@ do $$ begin
   perform public.virtual_match(180);
   perform pg_temp.check('virtual: anon can NOT start virtual games', false);
 exception when others then perform pg_temp.check('virtual: anon can NOT start virtual games', true, sqlerrm); end $$;
-select pg_temp.check('virtual: profiles readable by everyone', (select count(*) = 10 from public.virtual_players));
+select pg_temp.check('virtual: profiles readable by everyone (12 enabled)', (select count(*) filter (where enabled) = 12 from public.virtual_players));
 reset role;
 -- old bot game / untimed games left behind → closed; and never shown live
 insert into public.matches (id, white_id, status, rated, vs_bot, bot_level, started_at, created_at, move_count)
@@ -1030,6 +1036,109 @@ select public.finish_expired_games();
 select pg_temp.check('abandoned untimed bot game with moves → finished (bot wins, unrated)', (select status = 'finished' and result = 'black' from public.matches where id = 'aaaaaaaa-1111-4000-8000-000000000001'));
 select pg_temp.check('abandoned untouched game → aborted', (select status = 'aborted' from public.matches where id = 'aaaaaaaa-1111-4000-8000-000000000002'));
 select pg_temp.check('a fresh untimed game is left alone', (select status = 'active' from public.matches where id = 'aaaaaaaa-1111-4000-8000-000000000003'));
+
+-- ===================== 0019: rating rules, anti-abuse, achievements, virtual v2
+reset role;
+-- the real random rule (0019) back in place
+create or replace function public._rand_delta(p_score numeric, p_me int, p_opp int) returns int
+language sql volatile as $$
+  select case when p_score = 1 then 15 + floor(random() * 16)::int
+              when p_score = 0 then -(15 + floor(random() * 16)::int)
+              else greatest(-5, least(5, round((coalesce(p_opp, 1200) - p_me) / 50.0)::int)) end;
+$$;
+insert into auth.users (id, email, raw_user_meta_data) values
+  ('f019f019-0000-4000-8000-000000000001', 'r1@x.io', '{"username":"rr_one"}'),
+  ('f019f019-0000-4000-8000-000000000002', 'r2@x.io', '{"username":"rr_two"}'),
+  ('f019f019-0000-4000-8000-000000000003', 'r3@x.io', '{"username":"rr_three"}'),
+  ('f019f019-0000-4000-8000-000000000004', 'r4@x.io', '{"username":"rr_four"}'),
+  ('f019f019-0000-4000-8000-000000000005', 'r5@x.io', '{"username":"rr_five"}');
+-- 40 games between two players, each more than a day apart (so the pair limit does not apply)
+create temp table rg as
+  select pg_temp.pvp('f019f019-0000-4000-8000-000000000001', 'f019f019-0000-4000-8000-000000000002', 'white', now() - (i || ' days')::interval - interval '2 days') as id
+  from generate_series(1, 40) i;
+grant all on rg to public;
+select pg_temp.check('rating: every win is +15…+30', (select bool_and(m.white_delta between 15 and 30) from public.matches m join rg on rg.id = m.id));
+select pg_temp.check('rating: every loss is −15…−30', (select bool_and(m.black_delta between -30 and -15) from public.matches m join rg on rg.id = m.id));
+select pg_temp.check('rating: points are random (not one fixed value)', (select count(distinct m.white_delta) >= 6 from public.matches m join rg on rg.id = m.id));
+select pg_temp.check('rating: history keeps every change with source and delta',
+  (select count(*) = 40 and bool_and(source = 'pvp' and delta between 15 and 30) from public.rating_history where user_id = 'f019f019-0000-4000-8000-000000000001' and match_id is not null));
+select pg_temp.check('rating: profile = sum of the changes', (select p.rating = 1200 + (select sum(white_delta) from public.matches m join rg on rg.id = m.id) from public.profiles p where p.id = 'f019f019-0000-4000-8000-000000000001'));
+-- draws: small and balanced (the lower-rated player gains)
+create temp table dg as select pg_temp.pvp('f019f019-0000-4000-8000-000000000002', 'f019f019-0000-4000-8000-000000000001', 'draw', now() - interval '60 days') as id;
+grant all on dg to public;
+select pg_temp.check('rating: draw — lower-rated gains, higher-rated loses, max 5',
+  (select white_delta between 1 and 5 and black_delta between -5 and -1 from public.matches where id = (select id from dg)));
+-- the same pair: 3 rated games per 24 h, then nothing changes
+create temp table pl as
+  select i, pg_temp.pvp('f019f019-0000-4000-8000-000000000003', 'f019f019-0000-4000-8000-000000000004', 'white', now() - (i || ' minutes')::interval) as id
+  from generate_series(5, 1, -1) i;
+grant all on pl to public;
+select pg_temp.check('anti-abuse: 4th+ game of the same pair in 24 h gives no points',
+  (select count(*) filter (where m.rating_note = 'pair-limit' and m.white_delta = 0 and m.black_delta = 0) = 2
+      and count(*) filter (where m.rating_note is null and m.white_delta > 0) = 3 from public.matches m join pl on pl.id = m.id));
+select pg_temp.check('anti-abuse: … and no stats either (3 wins counted, not 5)', (select wins = 3 from public.profiles where id = 'f019f019-0000-4000-8000-000000000003'));
+-- achievements: first win + 3 in a row → 25 + 100 coins, each once
+select pg_temp.check('achievements: rr_three unlocked first win + 3 in a row',
+  (select count(*) = 2 from public.user_achievements where user_id = 'f019f019-0000-4000-8000-000000000003' and code in ('first_win', 'streak_3')));
+select pg_temp.check('achievements: coins credited once through the ledger (125)',
+  (select sum(amount) = 125 and count(*) = 2 from public.wallet_transactions where user_id = 'f019f019-0000-4000-8000-000000000003' and kind = 'reward')
+  and (select balance = 125 from public.user_wallets where user_id = 'f019f019-0000-4000-8000-000000000003'));
+select pg_temp.check('achievements: streak 3, best 3', (select current_streak = 3 and best_streak = 3 from public.profiles where id = 'f019f019-0000-4000-8000-000000000003'));
+select pg_temp.check('achievements: a notification for each', (select count(*) = 2 from public.user_notifications where user_id = 'f019f019-0000-4000-8000-000000000003' and kind = 'achievement'));
+-- reapplying never pays again
+select public.apply_match_result(id) from pl;
+select public._ach_check('f019f019-0000-4000-8000-000000000003', null);
+select pg_temp.check('achievements: never paid twice', (select balance = 125 from public.user_wallets where user_id = 'f019f019-0000-4000-8000-000000000003'));
+-- streak 5 / 10 and reset on a loss (rr_five beats many different opponents, a day apart)
+select pg_temp.pvp('f019f019-0000-4000-8000-000000000005', o, 'white', now() - (i || ' days')::interval - interval '100 days')
+  from (select i, case i % 4 when 0 then 'f019f019-0000-4000-8000-000000000001'::uuid when 1 then 'f019f019-0000-4000-8000-000000000002'::uuid
+                         when 2 then 'f019f019-0000-4000-8000-000000000003'::uuid else 'f019f019-0000-4000-8000-000000000004'::uuid end o
+          from generate_series(10, 1, -1) i) x order by i desc;
+select pg_temp.check('achievements: 10 in a row unlocks all four (975 coins)',
+  (select count(*) = 4 from public.user_achievements where user_id = 'f019f019-0000-4000-8000-000000000005')
+  and (select balance = 975 from public.user_wallets where user_id = 'f019f019-0000-4000-8000-000000000005'));
+create temp table lg as select pg_temp.pvp('f019f019-0000-4000-8000-000000000001', 'f019f019-0000-4000-8000-000000000005', 'white', now() - interval '200 days') as id;
+grant all on lg to public;
+select pg_temp.check('achievements: a loss resets the streak, best stays', (select current_streak = 0 and best_streak = 10 from public.profiles where id = 'f019f019-0000-4000-8000-000000000005'));
+set role authenticated;
+select set_config('request.jwt.claim.sub', 'f019f019-0000-4000-8000-000000000005', false);
+select pg_temp.check('achievements_mine: 4 items, all unlocked, best streak 10',
+  (select json_array_length(r -> 'items') = 4 and (r ->> 'best_streak')::int = 10
+     and (select bool_and(x ->> 'unlocked_at' is not null) from json_array_elements(r -> 'items') x) from (select public.achievements_mine() r) z));
+select pg_temp.check('achievements_for_match: shows what that game unlocked',
+  (select json_array_length(public.achievements_for_match(m.match_id)) >= 1 from public.user_achievements m where m.user_id = auth.uid() and m.code = 'streak_10'));
+do $$ begin
+  insert into public.user_achievements (user_id, code) values (auth.uid(), 'streak_3');
+  perform pg_temp.check('achievements: players can NOT write achievements', false);
+exception when others then perform pg_temp.check('achievements: players can NOT write achievements', true, sqlerrm); end $$;
+do $$ begin
+  perform public._ach_check(auth.uid(), null);
+  perform pg_temp.check('achievements: players can NOT trigger rewards', false);
+exception when others then perform pg_temp.check('achievements: players can NOT trigger rewards', true, sqlerrm); end $$;
+do $$ begin
+  perform public.apply_match_result((select id from lg));
+  perform pg_temp.check('rating: players can NOT apply results', false);
+exception when others then perform pg_temp.check('rating: players can NOT apply results', true, sqlerrm); end $$;
+reset role;
+-- virtual: rated with source 'virtual', on-duty pool, on/off with hysteresis
+select pg_temp.check('virtual: games are recorded with source ''virtual''', exists (select 1 from public.rating_history where source = 'virtual'));
+select pg_temp.check('virtual: 4 opponents on duty', (select count(*) = 4 from public._virtual_on_duty()));
+update public.virtual_settings set pool_size = 3 where id;
+select pg_temp.check('virtual: pool size is adjustable (3)', (select count(*) = 3 from public._virtual_on_duty()));
+update public.virtual_settings set enabled = true, auto_off = true, auto_off_threshold = 2, auto_on_threshold = 1, auto_state = true where id;
+update public.profiles set last_seen = now();
+select pg_temp.check('virtual: many real players online → switched off', public._virtual_active() = false);
+update public.profiles set last_seen = now() - interval '1 hour' where id not in (select id from public.profiles order by id limit 2);
+select pg_temp.check('virtual: between the thresholds → stays off (hysteresis)', public._virtual_active() = false);
+update public.profiles set last_seen = now() - interval '1 hour';
+select pg_temp.check('virtual: below the lower threshold → back on', public._virtual_active() = true);
+update public.virtual_settings set auto_off = false, pool_size = 4 where id;
+set role anon;
+do $$ begin
+  truncate public.virtual_settings;
+  perform pg_temp.check('security: anon can NOT truncate virtual tables', false);
+exception when others then perform pg_temp.check('security: anon can NOT truncate virtual tables', true, sqlerrm); end $$;
+reset role;
 
 \set QUIET off
 select case when ok then 'PASS' else 'FAIL' end as status, name, left(detail, 70) as detail from results order by 1 desc, 2;

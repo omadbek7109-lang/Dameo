@@ -154,7 +154,8 @@ export interface VirtualAdminPlayer {
   playing: number;
 }
 export interface VirtualOverview {
-  settings: { enabled: boolean; auto_off: boolean; auto_off_threshold: number; updated_at: string };
+  settings: { enabled: boolean; auto_off: boolean; auto_off_threshold: number; auto_on_threshold: number; auto_state: boolean; pool_size: number; updated_at: string };
+  on_duty: string[];
   active_now: boolean;
   online_real: number;
   live_games: number;
@@ -165,3 +166,7 @@ export const adminVirtualSave = (id: string, enabled: boolean | null, level: str
   db.rpc('admin_virtual_save', { p_id: id, p_enabled: enabled, p_level: level, p_reason: reason });
 export const adminVirtualSettings = (enabled: boolean | null, autoOff: boolean | null, threshold: number | null, reason: string) =>
   db.rpc('admin_virtual_settings_save', { p_enabled: enabled, p_auto_off: autoOff, p_threshold: threshold, p_reason: reason });
+export const adminVirtualSettings2 = (p: { enabled?: boolean | null; autoOff?: boolean | null; off?: number | null; on?: number | null; pool?: number | null }, reason: string) =>
+  db.rpc('admin_virtual_settings_save2', {
+    p_enabled: p.enabled ?? null, p_auto_off: p.autoOff ?? null, p_off_threshold: p.off ?? null, p_on_threshold: p.on ?? null, p_pool: p.pool ?? null, p_reason: reason,
+  });

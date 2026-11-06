@@ -17,8 +17,9 @@ import { navigate, useRoute } from '../router.tsx';
 import { DEMO_PLAYERS } from '../services/demoData.ts';
 import { clockView, formatClock, GRACE_MS } from '../services/clock.ts';
 import { claimTimeout, commitBotMove, getMatch, getMoves, resignOnline, startBotMatch, submitMove, toLocalMs, virtualRematch, watchMatch, type OnlineMatch } from '../services/online.ts';
-import { AiBadge } from '../components/AiBadge.tsx';
 import { Link } from '../router.tsx';
+import { AchievementUnlocked } from '../components/Achievements.tsx';
+import { achievementsForMatch, type StreakCode } from '../services/achievements.ts';
 import { haptic, tg } from '../services/telegram.ts';
 import { offerDraw, offerRematch, setMatchVisibility, chatErrorKey } from '../services/live.ts';
 import { moveSound, playSound } from '../services/sound.ts';
@@ -365,8 +366,18 @@ function OnlineGame({ matchId }: { matchId: string }) {
     void refresh().then(() => {
       setResult({ outcome, winnerColor, reason, rated: match.rated, demo: false });
     });
+    // achievements this game unlocked (coins are paid by the server) → congratulations
+    if (match.rated && outcome === 'win') {
+      const look = (tries: number) =>
+        achievementsForMatch(match.id).then(
+          (a) => (a.length > 0 ? setAchPop(a) : tries > 0 && setTimeout(() => look(tries - 1), 2500)),
+          () => {},
+        );
+      setTimeout(() => look(2), 1200);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [match]);
+  const [achPop, setAchPop] = useState<Array<{ code: StreakCode; reward: number }> | null>(null);
 
   // fill in rating numbers once the refreshed history contains this match
   const mine = matches.find((m) => m.id === matchId);
@@ -407,7 +418,7 @@ function OnlineGame({ matchId }: { matchId: string }) {
   const pvp = !match.vsBot && !!match.blackId;
   const virtualOpp = match.virtual;
   const opp = virtualOpp
-    ? { name: match.blackName ?? 'AI', rating: match.blackRating ?? undefined, seed: virtualOpp.avatar ?? undefined, tag: 'AI', ai: true, link: `/vp/${virtualOpp.id}` }
+    ? { name: match.blackName ?? '', rating: match.blackRating ?? undefined, seed: virtualOpp.avatar ?? undefined, ai: true, link: `/vp/${virtualOpp.id}` }
     : match.vsBot
     ? { name: `${t('game.botName')} · ${t(`bot.${match.botLevel ?? 'medium'}` as 'bot.easy')}`, rating: undefined, tag: t('game.botTag') }
     : { name: (iAmWhite ? match.blackName : match.whiteName) ?? t('quick.opponent'), rating: (iAmWhite ? match.blackRating : match.whiteRating) ?? undefined, id: iAmWhite ? match.blackId : match.whiteId };
@@ -506,7 +517,9 @@ function OnlineGame({ matchId }: { matchId: string }) {
         )
       }
       overlay={
-        vr ? (
+        achPop ? (
+          <AchievementUnlocked items={achPop} onClose={() => setAchPop(null)} />
+        ) : vr ? (
           <Modal open onClose={() => vr !== 'asking' && setVr(null)} title={t('chat.rematch')}>
             {vr === 'asking' ? (
               <p className="muted vr-asking">
@@ -604,7 +617,7 @@ function GameScreen({ g, kind, humanColor, top, bottom, canRestart, canUndo, can
       <div className="player-info">
         <span className="player-name">
           {p.link ? <Link to={p.link} className="player-link">{p.name}</Link> : p.name}{' '}
-          {p.ai ? <AiBadge /> : p.tag && <span className="badge badge-demo">{p.tag}</span>}
+          {!p.ai && p.tag && <span className="badge badge-demo">{p.tag}</span>}
         </span>
         <span className="muted small">
           <span className={`mini-piece ${p.color === 'w' ? 'mini-w' : 'mini-b'}`} /> {t(p.color === 'w' ? 'side.white' : 'side.black')}

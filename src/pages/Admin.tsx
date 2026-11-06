@@ -1157,8 +1157,18 @@ function VirtualTab() {
   const [data, setData] = useState<A.VirtualOverview | null>(null);
   const [err, setErr] = useState(false);
   const [dlg, setDlg] = useState<null | { title: string; run: (reason: string) => Promise<unknown>; body?: ReactNode; danger?: boolean }>(null);
-  const [threshold, setThreshold] = useState('');
-  const load = useCallback(() => A.adminVirtual().then((d) => { setData(d); setThreshold(String(d.settings.auto_off_threshold)); }, () => setErr(true)), []);
+  const [form, setForm] = useState({ off: '', on: '', pool: '' });
+  const load = useCallback(
+    () =>
+      A.adminVirtual().then(
+        (d) => {
+          setData(d);
+          setForm({ off: String(d.settings.auto_off_threshold), on: String(d.settings.auto_on_threshold), pool: String(d.settings.pool_size) });
+        },
+        () => setErr(true),
+      ),
+    [],
+  );
   useEffect(() => void load(), [load]);
   if (err) return <ErrorState onRetry={() => { setErr(false); void load(); }} />;
   if (!data) return <Spinner />;
@@ -1183,23 +1193,44 @@ function VirtualTab() {
           <span><strong>{total.w}</strong> {L("botlar yutgan", 'bot wins')} · <strong>{total.l}</strong> {L("yutqazgan", 'losses')} · <strong>{total.d}</strong> {L('durang', 'draws')}</span>
         </div>
         <div className="row-actions">
-          <button className={`btn ${st.enabled ? 'btn-danger' : 'btn-primary'}`} onClick={() => ask(st.enabled ? L("Barcha virtual raqiblarni o'chirish", 'Switch all virtual opponents off') : L('Virtual raqiblarni yoqish', 'Switch virtual opponents on'), (r) => A.adminVirtualSettings(!st.enabled, null, null, r), st.enabled)}>
+          <button className={`btn ${st.enabled ? 'btn-danger' : 'btn-primary'}`} onClick={() => ask(st.enabled ? L("Barcha virtual raqiblarni o'chirish", 'Switch all virtual opponents off') : L('Virtual raqiblarni yoqish', 'Switch virtual opponents on'), (r) => A.adminVirtualSettings2({ enabled: !st.enabled }, r), st.enabled)}>
             <LuBot /> {st.enabled ? L("Hammasini o'chirish", 'Switch all off') : L('Yoqish', 'Switch on')}
           </button>
         </div>
         <label className="vadm-auto">
-          <input type="checkbox" checked={st.auto_off} onChange={() => ask(st.auto_off ? L("Avto-o'chirishni bekor qilish", 'Disable auto-off') : L("Avto-o'chirishni yoqish", 'Enable auto-off'), (r) => A.adminVirtualSettings(null, !st.auto_off, Number(threshold) || st.auto_off_threshold, r))} />{' '}
+          <input type="checkbox" checked={st.auto_off} onChange={() => ask(st.auto_off ? L("Avto-o'chirishni bekor qilish", 'Disable auto-off') : L("Avto-o'chirishni yoqish", 'Enable auto-off'), (r) => A.adminVirtualSettings2({ autoOff: !st.auto_off }, r))} />{' '}
           <span>{L("Haqiqiy o'yinchilar ko'p bo'lsa avtomatik o'chsin", 'Switch off automatically when enough real players are online')}</span>
         </label>
         <div className="vadm-threshold">
           <label className="field">
-            <span>{L('Chegara (onlayn haqiqiy o\'yinchilar soni)', 'Threshold (real players online)')}</span>
-            <input type="number" min={1} max={100000} value={threshold} onChange={(e: any) => setThreshold(e.target.value)} />
+            <span>{L("O'chadi: onlayn ko'proq bo'lsa", 'Off when online above')}</span>
+            <input type="number" min={1} max={100000} value={form.off} onChange={(e: any) => setForm({ ...form, off: e.target.value })} />
           </label>
-          <button className="btn btn-secondary btn-sm" disabled={!Number(threshold) || Number(threshold) === st.auto_off_threshold} onClick={() => ask(L('Chegarani saqlash', 'Save threshold'), (r) => A.adminVirtualSettings(null, null, Number(threshold), r))}>
+          <label className="field">
+            <span>{L('Qayta yonadi: onlayn kamroq bo\'lsa', 'Back on when online below')}</span>
+            <input type="number" min={0} max={100000} value={form.on} onChange={(e: any) => setForm({ ...form, on: e.target.value })} />
+          </label>
+          <label className="field">
+            <span>{L('Bir vaqtda tayyor botlar', 'Bots on duty at once')}</span>
+            <input type="number" min={1} max={12} value={form.pool} onChange={(e: any) => setForm({ ...form, pool: e.target.value })} />
+          </label>
+          <button
+            className="btn btn-secondary btn-sm"
+            disabled={
+              !Number(form.off) || !Number(form.pool) || Number(form.on) > Number(form.off) ||
+              (Number(form.off) === st.auto_off_threshold && Number(form.on) === st.auto_on_threshold && Number(form.pool) === st.pool_size)
+            }
+            onClick={() => ask(L('Sozlamalarni saqlash', 'Save settings'), (r) => A.adminVirtualSettings2({ off: Number(form.off), on: Number(form.on), pool: Number(form.pool) }, r))}
+          >
             <LuCheck /> {L('Saqlash', 'Save')}
           </button>
         </div>
+        <p className="muted small">
+          {st.auto_off
+            ? L(`Avto rejim: onlayn ${st.auto_off_threshold} dan oshsa o'chadi, ${st.auto_on_threshold} dan kamaysa qayta yonadi. Hozir: ${st.auto_state ? 'yoqiq' : "o'chiq"}.`,
+                `Auto: off above ${st.auto_off_threshold} online, back on below ${st.auto_on_threshold}. Now: ${st.auto_state ? 'on' : 'off'}.`)
+            : L('Avto rejim o\'chiq: faqat yuqoridagi tugma boshqaradi.', 'Auto mode off: only the switch above controls them.')}
+        </p>
       </section>
       <ul className="admin-list">
         {data.players.map((p) => (
@@ -1208,6 +1239,7 @@ function VirtualTab() {
             <span className="admin-row-main">
               <strong>
                 {p.nickname} <span className="ai-badge">AI</span> {!p.enabled && <span className="pay-status">{L("o'chiq", 'off')}</span>}
+                {data.on_duty.includes(p.id) && <span className="pay-status pay-paid">{L('navbatda', 'on duty')}</span>}
               </strong>
               <span className="muted small">
                 {p.rating} · {p.wins}{L('G', 'W')} {p.losses}{L('M', 'L')} {p.draws}{L('D', 'D')} · {L('bugun', 'today')} {p.games_today} · {p.style}

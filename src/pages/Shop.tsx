@@ -14,7 +14,7 @@ import { registerSkins } from '../services/skins.ts';
 import { SbError } from '../services/supabase.ts';
 import { haptic } from '../services/telegram.ts';
 
-const COLLECTION_ORDER = ['classic', 'girls', 'boys', 'chess', 'trend', 'premium', 'fx'];
+const COLLECTION_ORDER = ['football', 'signature', 'classic', 'girls', 'boys', 'chess', 'trend', 'premium', 'fx'];
 
 /** DAMEO Shop: categories, collections, previews, buying with DAMEO Coins and equipping. */
 export function Shop() {
@@ -45,7 +45,8 @@ export function Shop() {
     if (c) setCat(c);
   }, [route.query]);
 
-  const items = useMemo(() => (data?.items ?? []).filter((i) => i.category_id === cat), [data, cat]);
+  // the Football tab shows the football collection (those sets also stay on the main pieces page)
+  const items = useMemo(() => (data?.items ?? []).filter((i) => (cat === 'football' ? i.collection === 'football' : i.category_id === cat)), [data, cat]);
   const groups = useMemo(() => {
     const m = new Map<string, ShopItem[]>();
     for (const i of items) m.set(i.collection, [...(m.get(i.collection) ?? []), i]);

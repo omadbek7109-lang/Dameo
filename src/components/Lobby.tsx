@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { LuBot, LuCheck, LuClock, LuLoader, LuSend, LuSwords, LuUsers, LuX } from 'react-icons/lu';
+import { LuBot, LuCheck, LuClock, LuInfo, LuLoader, LuSend, LuSwords, LuUsers, LuX } from 'react-icons/lu';
 import { useAuth } from '../auth/AuthProvider.tsx';
 import { useI18n } from '../i18n/index.tsx';
 import { navigate, useRoute } from '../router.tsx';
@@ -22,7 +22,6 @@ import {
   type LobbyPlayer,
   type VirtualPlayer,
 } from '../services/online.ts';
-import { AiBadge } from './AiBadge.tsx';
 import { DEFAULT_TIME_CONTROL, isTimeControl, TIME_CONTROLS, type TimeControl } from '../services/clock.ts';
 import { SbError } from '../services/supabase.ts';
 import { haptic, tg } from '../services/telegram.ts';
@@ -321,6 +320,9 @@ export function LiveQuickPanel({ autoStart = 0 }: { autoStart?: number }) {
               ))}
             </div>
             <p className="muted small">{t('tc.rule')}</p>
+            <p className="muted small mm-rule">
+              <LuInfo /> {t('virtual.rule')}
+            </p>
           </div>
         )}
         {phase === 'searching' && (
@@ -342,6 +344,9 @@ export function LiveQuickPanel({ autoStart = 0 }: { autoStart?: number }) {
               </svg>
               <span>{left}</span>
             </div>
+            <p className="muted small mm-rule">
+              <LuInfo /> {t('virtual.rule')}
+            </p>
             <button className="btn btn-ghost" onClick={stop}>
               {t('common.cancel')}
             </button>
@@ -378,10 +383,11 @@ export function LiveQuickPanel({ autoStart = 0 }: { autoStart?: number }) {
                 <div className="vs-side">
                   <Avatar name={foundOpp.nickname} seed={foundOpp.avatar} size={64} />
                   <strong>
-                    {foundOpp.nickname} <AiBadge />
+                    {foundOpp.nickname}
                   </strong>
-                  <span className="muted small">
-                    {num(foundOpp.rating)} · {t(`virtual.level.${foundOpp.level}` as 'virtual.level.normal')}
+                  <span className="muted small">{num(foundOpp.rating)}</span>
+                  <span className="vs-stats">
+                    {t('vs.stats', { g: num(foundOpp.wins + foundOpp.losses + foundOpp.draws), w: num(foundOpp.wins) })}
                   </span>
                 </div>
               </div>
@@ -389,7 +395,6 @@ export function LiveQuickPanel({ autoStart = 0 }: { autoStart?: number }) {
             <p className="search-title">
               <LuCheck /> {t('quick.found')}
             </p>
-            {foundOpp && <p className="muted small">{t('virtual.foundNote')}</p>}
           </div>
         )}
       </div>

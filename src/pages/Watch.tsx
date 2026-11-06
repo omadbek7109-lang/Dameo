@@ -1,4 +1,3 @@
-import { AiBadge } from '../components/AiBadge.tsx';
 import { useMatchSkin } from '../cosmetics/CosmeticsProvider.tsx';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { LuArrowLeft, LuChevronFirst, LuChevronLast, LuChevronLeft, LuChevronRight, LuEye, LuFlag, LuRadio } from 'react-icons/lu';
@@ -129,7 +128,7 @@ export function Watch() {
         <Avatar name={name} size={36} userId={uid} seed={!white && match.virtual?.avatar ? match.virtual.avatar : undefined} />
         <div className="player-info">
           <span className="player-name">
-            {name} {!white && match.virtual && <AiBadge />}
+            {name}
           </span>
           <span className="muted small">
             <span className={`mini-piece ${white ? 'mini-w' : 'mini-b'}`} /> {t(white ? 'side.white' : 'side.black')}

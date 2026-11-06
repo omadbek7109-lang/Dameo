@@ -1,6 +1,5 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
-import { LuCamera, LuFlame, LuGamepad2, LuHandshake, LuLoader, LuLock, LuPencil, LuStar, LuTrendingUp, LuTrophy, LuBot } from 'react-icons/lu';
-import type { IconType } from 'react-icons';
+import { useEffect, useState, type FormEvent } from 'react';
+import { LuCamera, LuLoader, LuPencil } from 'react-icons/lu';
 import { useAuth } from '../auth/AuthProvider.tsx';
 import { Avatar, LevelBadge, isPhoto } from '../components/Avatar.tsx';
 import { Modal } from '../components/Modal.tsx';
@@ -12,7 +11,7 @@ import { DemoNotice, Delta, SectionHead, SignInPrompt, Stat, winRate } from '../
 import { useAsync } from '../hooks/useAsync.ts';
 import { useI18n, type TKey } from '../i18n/index.tsx';
 import { Link, useRoute } from '../router.tsx';
-import { computeAchievements, type AchievementId } from '../services/achievements.ts';
+import { AchievementStrip } from '../components/Achievements.tsx';
 import { DEMO_PLAYERS, isOnline } from '../services/demoData.ts';
 import { fetchLeaderboard } from '../services/leaderboard.ts';
 import { validateUsername } from '../services/localProfile.ts';
@@ -23,15 +22,6 @@ import { loadPublicProfile } from '../services/profiles.ts';
 import { SbError } from '../services/supabase.ts';
 import type { MatchSummary, Player, RatingPoint } from '../types/models.ts';
 
-const ICONS: Record<AchievementId, IconType> = {
-  firstWin: LuTrophy,
-  tenGames: LuGamepad2,
-  streak3: LuFlame,
-  rating1400: LuTrendingUp,
-  beatHard: LuBot,
-  firstDraw: LuHandshake,
-  veteran: LuStar,
-};
 const HUES = [212, 262, 330, 8, 32, 150, 180, 100];
 
 interface View {
@@ -80,8 +70,6 @@ function ProfileView({ view }: { view: View }) {
   const games = p.wins + p.losses + p.draws;
   const online = own ? true : isOnline(p);
   const lv = levelOf(p.rating);
-  const achievements = useMemo(() => computeAchievements(p, matches, history), [p, matches, history]);
-  const unlocked = achievements.filter((a) => a.unlocked).length;
 
   return (
     <div className="page">
@@ -153,22 +141,7 @@ function ProfileView({ view }: { view: View }) {
           </details>
         </section>
 
-        <section className="card">
-          <SectionHead title={t('profile.achievements')} sub={t('profile.unlocked', { n: unlocked, total: achievements.length })} />
-          <ul className="ach-grid">
-            {achievements.map((a) => {
-              const Icon = ICONS[a.id];
-              return (
-                <li key={a.id} className={`ach ${a.unlocked ? 'ach-on' : ''}`} title={t(`ach.${a.id}.desc` as 'ach.firstWin.desc')}>
-                  <span className="ach-icon">{a.unlocked ? <Icon /> : <LuLock />}</span>
-                  <span className="ach-name">{t(`ach.${a.id}` as 'ach.firstWin')}</span>
-                  <span className="ach-desc">{t(`ach.${a.id}.desc` as 'ach.firstWin.desc')}</span>
-                  {!a.unlocked && a.progress > 0 && <span className="ach-bar"><span style={{ width: `${Math.round(a.progress * 100)}%` }} /></span>}
-                </li>
-              );
-            })}
-          </ul>
-        </section>
+        <AchievementStrip player={p} matches={matches} history={history} own={own} />
       </div>
 
       <section className="card">

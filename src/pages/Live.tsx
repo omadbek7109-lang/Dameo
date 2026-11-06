@@ -1,4 +1,4 @@
-import { AiBadge } from '../components/AiBadge.tsx';
+import { subscribeChanges } from '../services/supabase.ts';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { LuArchive, LuClock, LuEye, LuRadio, LuSparkles, LuSwords } from 'react-icons/lu';
 import { Avatar } from '../components/Avatar.tsx';
@@ -58,14 +58,24 @@ export function Live() {
       setError(true);
     }
   }, [tab]);
-  // poll only while the page is visible (cheap RPCs; no long-lived subscriptions for the list)
+  // realtime: a game starting / finishing refreshes the list at once (debounced); a slow poll is the fallback
   useEffect(() => {
     void load();
-    const id = setInterval(() => document.visibilityState === 'visible' && void load(), 15_000);
+    let t: ReturnType<typeof setTimeout> | null = null;
+    const sub = subscribeChanges('public:live-list', [{ table: 'matches', event: 'INSERT' }, { table: 'matches', event: 'UPDATE' }], (e) => {
+      const r = (e.record ?? {}) as { status?: string };
+      // a move in a running game also updates its row — only starts and ends change the list
+      if (e.type === 'UPDATE' && r.status === 'active') return;
+      if (t) clearTimeout(t);
+      t = setTimeout(() => document.visibilityState === 'visible' && void load(), 800);
+    });
+    const id = setInterval(() => document.visibilityState === 'visible' && void load(), 20_000);
     const onWake = () => document.visibilityState === 'visible' && void load();
     document.addEventListener('visibilitychange', onWake);
     tg?.onEvent?.('activated', onWake);
     return () => {
+      sub.close();
+      if (t) clearTimeout(t);
       clearInterval(id);
       document.removeEventListener('visibilitychange', onWake);
       tg?.offEvent?.('activated', onWake);
@@ -124,7 +134,7 @@ export function Live() {
                     <Avatar name={g.white_name} seed={g.white_avatar} size={22} /> <strong>{g.white_name}</strong> <span className="muted">{g.white_rating}</span>
                   </span>
                   <span className="live-p">
-                    <Avatar name={g.black_name ?? '?'} seed={g.black_avatar ?? undefined} size={22} /> <strong>{g.black_name}</strong> {g.black_virtual && <AiBadge />} <span className="muted">{g.black_rating}</span>
+                    <Avatar name={g.black_name ?? '?'} seed={g.black_avatar ?? undefined} size={22} /> <strong>{g.black_name}</strong> <span className="muted">{g.black_rating}</span>
                   </span>
                 </div>
                 <div className="live-meta muted small">

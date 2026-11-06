@@ -4692,3 +4692,77 @@ button.bn-item {
 @media (max-width: 520px) {
   .vadm-actions { width: 100%; justify-content: flex-end; }
 }
+
+/* ===================================================== football sets: selected piece lights up (neon pulse) */
+.board-wrap[class*='sk-pw-fc-'] .sq-selected .piece-w,
+.board-wrap[class*='sk-pb-fc-'] .sq-selected .piece-b,
+.board-wrap[class*='sk-p-fc-'] .sq-selected .piece {
+  animation: fcSelected 1.1s ease-in-out infinite;
+}
+@keyframes fcSelected {
+  0%, 100% { filter: drop-shadow(0 0 4px rgba(255, 255, 255, 0.85)) drop-shadow(0 0 10px rgba(143, 179, 255, 0.8)); transform: translateY(-1px) scale(1.04); }
+  50% { filter: drop-shadow(0 0 7px rgba(255, 255, 255, 1)) drop-shadow(0 0 20px rgba(255, 213, 79, 0.9)); transform: translateY(-3px) scale(1.08); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .board-wrap[class*='sk-pw-fc-'] .sq-selected .piece-w,
+  .board-wrap[class*='sk-pb-fc-'] .sq-selected .piece-b,
+  .board-wrap[class*='sk-p-fc-'] .sq-selected .piece { animation: none; filter: drop-shadow(0 0 10px rgba(255, 213, 79, 0.9)); }
+}
+
+/* ===================================================== achievements v2 (compact strip, page, congratulations) */
+.ach-strip { align-self: start; align-content: start; display: grid; gap: 10px; padding: 14px 16px; text-decoration: none; color: inherit; }
+a.ach-strip:hover { border-color: rgba(143, 179, 255, 0.35); }
+.ach-strip-head { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.ach-strip-head strong { font-size: 1rem; }
+.ach-strip-go { margin-left: auto; color: var(--muted); flex: none; }
+.ach-streak-chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 999px; font-weight: 800; font-size: 0.8rem; color: #ffb74d; background: rgba(255, 152, 0, 0.14); }
+.ach-strip-row { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
+.ach-strip-row::-webkit-scrollbar { display: none; }
+.ach-dot { flex: none; display: grid; place-items: center; width: 38px; height: 38px; border-radius: 50%; font-size: 1.05rem;
+  color: var(--muted); background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.08); }
+.ach-dot-on { color: #ffd54f; background: radial-gradient(circle at 35% 30%, rgba(255, 213, 79, 0.28), rgba(91, 140, 255, 0.12));
+  border-color: rgba(255, 213, 79, 0.45); box-shadow: 0 0 12px rgba(255, 213, 79, 0.25); }
+.streak-card { display: flex; align-items: center; gap: 14px; padding: 16px; margin-bottom: 8px;
+  background: linear-gradient(135deg, rgba(255, 152, 0, 0.16), rgba(124, 77, 255, 0.1)); }
+.streak-flame { display: grid; place-items: center; width: 52px; height: 52px; border-radius: 16px; font-size: 1.7rem; color: #ffb74d; background: rgba(255, 152, 0, 0.16); flex: none; }
+.streak-main { display: grid; gap: 2px; }
+.streak-main strong { font-size: 1.1rem; }
+.ach-list { list-style: none; margin: 0 0 8px; padding: 0; display: grid; gap: 8px; }
+.ach-card { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 14px;
+  background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.07); }
+.ach-card-on { border-color: rgba(255, 213, 79, 0.35); background: linear-gradient(135deg, rgba(255, 213, 79, 0.09), rgba(91, 140, 255, 0.05)); }
+.ach-card-ico { display: grid; place-items: center; width: 42px; height: 42px; flex: none; border-radius: 12px; font-size: 1.25rem; color: var(--muted); background: rgba(255, 255, 255, 0.05); }
+.ach-card-on .ach-card-ico { color: #ffd54f; background: rgba(255, 213, 79, 0.14); }
+.ach-card-main { display: grid; gap: 3px; flex: 1; min-width: 0; }
+.ach-card-main .ach-bar { grid-area: auto; margin-top: 4px; }
+.ach-reward { flex: none; font-weight: 800; font-size: 0.85rem; color: var(--muted); white-space: nowrap; }
+.ach-reward-got { color: #e8bb4d; }
+.ach-pop-backdrop { z-index: 400; }
+.ach-pop { position: relative; width: min(360px, calc(100vw - 32px)); padding: 28px 22px 20px; border-radius: 24px; text-align: center; overflow: hidden;
+  background: radial-gradient(circle at 50% 0%, rgba(255, 213, 79, 0.22), transparent 60%), linear-gradient(180deg, #172452, #0b1330);
+  border: 1px solid rgba(255, 213, 79, 0.35); box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55), 0 0 40px rgba(255, 213, 79, 0.18);
+  animation: achPop 0.5s var(--ease) both; color: #eef3ff; }
+@keyframes achPop { from { transform: scale(0.85) translateY(12px); opacity: 0; } }
+.ach-pop-x { position: absolute; top: 8px; right: 8px; }
+.ach-pop-burst { position: absolute; left: 50%; top: 72px; width: 0; height: 0; pointer-events: none; }
+.ach-pop-burst span { position: absolute; width: 4px; height: 26px; border-radius: 2px; background: linear-gradient(#ffd54f, transparent);
+  transform: rotate(var(--a)) translateY(-70px); opacity: 0; animation: achRay 1.4s ease-out 0.15s both; }
+@keyframes achRay { 0% { opacity: 0; transform: rotate(var(--a)) translateY(-30px); } 40% { opacity: 1; } 100% { opacity: 0; transform: rotate(var(--a)) translateY(-90px); } }
+.ach-pop-ico { position: relative; display: inline-grid; place-items: center; width: 84px; height: 84px; border-radius: 50%; font-size: 2.6rem; color: #ffd54f;
+  background: radial-gradient(circle at 35% 30%, rgba(255, 213, 79, 0.35), rgba(124, 77, 255, 0.25)); box-shadow: 0 0 30px rgba(255, 213, 79, 0.45);
+  animation: achIco 1.6s ease-in-out infinite; }
+@keyframes achIco { 50% { transform: scale(1.06); box-shadow: 0 0 44px rgba(255, 213, 79, 0.6); } }
+.ach-pop-hello { margin: 14px 0 2px; font-size: 1.35rem; font-weight: 800; }
+.ach-pop-title { margin: 10px 0 2px; font-family: var(--font-display); letter-spacing: 0.06em; text-transform: uppercase; color: #ffd54f; font-size: 1.3rem; }
+.ach-pop-desc { margin: 0 0 10px; font-weight: 700; }
+.ach-pop-reward { margin: 6px 0 16px; font-size: 1.05rem; }
+.ach-pop-reward strong { color: #ffd54f; }
+.ach-pop-actions { justify-content: center; }
+@media (prefers-reduced-motion: reduce) { .ach-pop, .ach-pop-ico, .ach-pop-burst span { animation: none; } }
+
+/* matchmaking rule note + VS stats + virtual profile note */
+.mm-rule { display: flex; gap: 6px; align-items: flex-start; max-width: 420px; margin: 8px auto 0; text-align: left; line-height: 1.4; }
+.mm-rule svg { flex: none; margin-top: 2px; }
+.vs-stats { font-size: 0.75rem; color: var(--muted); }
+.vp-note { display: flex; gap: 6px; align-items: flex-start; }
+.vp-note svg { flex: none; margin-top: 2px; }

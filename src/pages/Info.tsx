@@ -19,6 +19,7 @@ const FAQ: Array<[TKey, TKey]> = [
   ['help.q.coins', 'help.a.coins'],
   ['help.q.skins', 'help.a.skins'],
   ['help.q.live', 'help.a.live'],
+  ['help.q.virtual', 'help.a.virtual'],
   ['help.q.private', 'help.a.private'],
   ['help.q.support', 'help.a.support'],
 ];
