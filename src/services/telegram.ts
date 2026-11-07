@@ -118,6 +118,17 @@ const BOT_KEY = 'dameo.tg.bot';
 export const botUsername = () => readString(BOT_KEY);
 export const rememberBotUsername = (u: string | null) => u && writeString(BOT_KEY, u);
 
+/** Open a t.me link inside Telegram (stays in the app). Returns false outside Telegram. */
+export function openTelegramUrl(url: string): boolean {
+  if (!tg?.openTelegramLink) return false;
+  try {
+    tg.openTelegramLink(url);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /** Share a room invitation inside Telegram. Returns false when not possible. */
 export function shareRoomInTelegram(code: string, text: string): boolean {
   const bot = botUsername();

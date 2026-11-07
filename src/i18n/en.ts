@@ -757,4 +757,7 @@ export const en: Record<TKey, string> = {
   'ach.reward': "Reward",
   'ach.view': "View achievements",
   'nav.shop': "Shop",
+  'flect.aria': "Open the FLECT STARS bot — Telegram Stars, Premium and Gifts",
+  'flect.and': "and",
+  'flect.tail': "services — all in one place!",
 };

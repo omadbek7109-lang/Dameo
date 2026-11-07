@@ -1,8 +1,8 @@
-import { LuBot, LuGraduationCap, LuRadio, LuSwords, LuUsers } from 'react-icons/lu';
+import { LuArrowRight, LuBot, LuGraduationCap, LuRadio, LuSwords, LuUsers } from 'react-icons/lu';
 import { useAuth } from '../auth/AuthProvider.tsx';
 import { Avatar, LevelBadge } from '../components/Avatar.tsx';
 import { levelOf } from '../services/levels.ts';
-import { HeroBoard } from '../components/HeroBoard.tsx';
+import { FlectBanner } from '../components/FlectBanner.tsx';
 import { EmptyState, ErrorState, Spinner } from '../components/States.tsx';
 import { DemoNotice, Delta, SectionHead, SeeAll, winRate } from '../components/ui.tsx';
 import { useAsync } from '../hooks/useAsync.ts';
@@ -11,7 +11,7 @@ import { backendConfigured } from '../services/config.ts';
 import { demoLiveMatches, isOnline } from '../services/demoData.ts';
 import { fetchLeaderboard, onlineCount, recentlyActive } from '../services/leaderboard.ts';
 import { listTournaments } from '../services/tournaments.ts';
-import { Link, navigate } from '../router.tsx';
+import { Link } from '../router.tsx';
 import { db } from '../services/supabase.ts';
 import type { LiveMatch } from '../types/models.ts';
 
@@ -31,7 +31,6 @@ export function Home() {
   const live = useAsync(loadLive, [mode]);
   const tours = useAsync(() => listTournaments(local?.tournaments ?? [], me?.id ?? null), [mode, me?.id]);
 
-  const greeting = signedIn && me ? t('home.greeting', { name: me.username }) : t('home.greetingGuest');
   const upcoming = (tours.data ?? []).filter((x) => x.status === 'upcoming').slice(0, 3);
   const modes = [
     { to: '/play?mode=quick&go=1', icon: LuSwords, key: 'mode.quick', desc: 'mode.quickDesc', accent: true },
@@ -41,42 +40,28 @@ export function Home() {
   ] as const;
 
   return (
-    <div className="page">
-      <section className="hero">
-        <div className="hero-copy">
-          <p className="eyebrow">{greeting}</p>
-          <h1>{t('hero.title')}</h1>
-          <p className="lead">{t('hero.sub')}</p>
-          <div className="hero-actions">
-            <button className="btn btn-primary btn-lg" onClick={() => navigate('/play?mode=quick&go=1')}>
-              <LuSwords /> {t('hero.playNow')}
-            </button>
-            <button className="btn btn-secondary btn-lg" onClick={() => navigate('/play?mode=friends')}>
-              <LuUsers /> {t('mode.friends')}
-            </button>
+    <div className="page page-home">
+      <FlectBanner />
+
+      {signedIn && me ? (
+        <section className="home-stats" aria-label={t('common.rating')}>
+          <div>
+            <span className="home-stat-v">{num(me.rating)}</span>
+            <span className="home-stat-l">{t('common.rating')}</span>
           </div>
-          {signedIn && me ? (
-            <div className="hero-stats">
-              <div>
-                <span className="hero-stat-v">{num(me.rating)}</span>
-                <span className="hero-stat-l">{t('common.rating')}</span>
-              </div>
-              <div>
-                <span className="hero-stat-v">{(rank ?? top.data?.me?.rank) ? `#${num((rank ?? top.data?.me?.rank)!)}` : '—'}</span>
-                <span className="hero-stat-l">{t('common.rank')}</span>
-              </div>
-              <div>
-                <span className="hero-stat-v">{winRate(me.wins, me.losses, me.draws)}%</span>
-                <span className="hero-stat-l">{t('common.winRate')}</span>
-              </div>
-              {mode === 'demo' && <span className="badge badge-demo">{t('demo.localRating')}</span>}
-            </div>
-          ) : (
-            <p className="muted small">{t('hero.guestHint')}</p>
-          )}
-        </div>
-        <HeroBoard />
-      </section>
+          <div>
+            <span className="home-stat-v">{(rank ?? top.data?.me?.rank) ? `#${num((rank ?? top.data?.me?.rank)!)}` : '—'}</span>
+            <span className="home-stat-l">{t('common.rank')}</span>
+          </div>
+          <div>
+            <span className="home-stat-v">{winRate(me.wins, me.losses, me.draws)}%</span>
+            <span className="home-stat-l">{t('common.winRate')}</span>
+          </div>
+          {mode === 'demo' && <span className="badge badge-demo home-stats-badge">{t('demo.localRating')}</span>}
+        </section>
+      ) : (
+        <p className="muted small home-guest">{t('hero.guestHint')}</p>
+      )}
 
       <DemoNotice text={t('demo.homeNotice')} />
 
@@ -88,6 +73,9 @@ export function Home() {
               <Link key={m.to} to={m.to} className={`mode-card ${'accent' in m ? 'mode-card-accent' : ''}`}>
                 <span className="mode-icon">
                   <Icon />
+                </span>
+                <span className="mode-go" aria-hidden="true">
+                  <LuArrowRight />
                 </span>
                 <span className="mode-title">{t(m.key)}</span>
                 <span className="mode-desc">{t(m.desc)}</span>

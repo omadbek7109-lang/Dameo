@@ -755,6 +755,9 @@ export const uz = {
   'ach.reward': "Mukofot",
   'ach.view': "Yutuqlarni ko'rish",
   'nav.shop': "Do'kon",
+  'flect.aria': "FLECT STARS botini ochish — Telegram Stars, Premium va Gifts",
+  'flect.and': "va",
+  'flect.tail': "xizmatlari — bir joyda!",
 } as const;
 
 export type TKey = keyof typeof uz;
