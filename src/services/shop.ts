@@ -100,3 +100,60 @@ export const markNotificationsRead = () => db.rpc('notifications_mark_read');
 export const coins = (n: number) => String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
 export const itemName = (i: Pick<ShopItem, 'name_uz' | 'name_en'>, lang: 'uz' | 'en') => (lang === 'uz' ? i.name_uz : i.name_en);
 export const itemDesc = (i: Pick<ShopItem, 'desc_uz' | 'desc_en'>, lang: 'uz' | 'en') => (lang === 'uz' ? i.desc_uz : i.desc_en);
+
+/* ------------------------------------------------------------------ Limited Board Collection (0020) */
+export interface BoardStock {
+  slug: string;
+  tier: number;
+  icon: string;
+  /** null = the admin has not set this board's copies limit yet */
+  supply: number | null;
+  sold: number;
+  remaining: number | null;
+  sold_out: boolean;
+  mine: { serial: number; acquired_at: string } | null;
+  name_uz: string;
+  name_en: string;
+  rarity: Rarity;
+  image_url: string | null;
+}
+export interface CollectionItem {
+  id: string;
+  slug: string;
+  serial: number;
+  supply: number | null;
+  acquired_at: string;
+  tier: number;
+  icon: string;
+  rarity: Rarity;
+  name_uz: string;
+  name_en: string;
+  image_url: string | null;
+  style: unknown;
+}
+export interface Collection {
+  visible: boolean;
+  public: boolean;
+  mine?: boolean;
+  owner: string;
+  total: number;
+  owned?: number;
+  limited?: number;
+  complete_pct?: number;
+  items?: CollectionItem[];
+}
+export interface Pricing {
+  stars_per_1000: number;
+  som_per_coin: number;
+}
+export const boardStock = () => db.rpc<BoardStock[]>('board_catalog_list');
+export const collectionOf = (userId: string) => db.rpc<Collection>('board_collection_of', { p_user: userId });
+export const setCollectionPublic = (on: boolean) => db.rpc<{ ok: boolean }>('collection_set_public', { p_public: on });
+export const pricingSettings = () => db.select<Pricing>('pricing_settings', { select: 'stars_per_1000,som_per_coin' }).then((r) => r[0] ?? { stars_per_1000: 25, som_per_coin: 10 });
+/** "#007/30" — a serial with its edition size (no size while the limit is not set) */
+export const serialLabel = (serial: number, supply: number | null) => {
+  const w = Math.max(3, String(supply ?? serial).length);
+  return `#${String(serial).padStart(w, '0')}${supply ? `/${supply}` : ''}`;
+};
+/** board artwork: stored as a path relative to the app (boards/<slug>.webp) */
+export const boardArt = (url: string | null) => (url ? new URL(url, document.baseURI).href : '');

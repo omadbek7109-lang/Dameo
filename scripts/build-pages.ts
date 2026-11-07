@@ -12,6 +12,7 @@ cpSync('dist/assets/bot/worker.js', 'docs/bot-worker.js');
 cpSync('public/favicon.svg', 'docs/favicon.svg');
 cpSync('public/vp', 'docs/vp', { recursive: true }); // virtual opponents' avatars (own artwork)
 cpSync('public/brand', 'docs/brand', { recursive: true }); // partner banner art
+cpSync('public/boards', 'docs/boards', { recursive: true }); // Limited board artwork + texture tiles
 writeFileSync('docs/.nojekyll', '');
 let html = readFileSync('dist/index.html', 'utf8')
   .replace('href="/favicon.svg"', 'href="favicon.svg"')

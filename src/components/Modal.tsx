@@ -17,6 +17,13 @@ export function Modal({ open, onClose, title, children, locked, wide }: Props) {
   const t = useT();
   const ref = useRef<HTMLDivElement>(null);
   const prev = useRef<Element | null>(null);
+  // Parents pass inline callbacks (a new function every render). Keeping them in refs means the effect below runs once
+  // per opening — before, every keystroke in a dialog re-ran it, which moved focus away from the input and closed the
+  // Android keyboard after each character.
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
+  const lockedRef = useRef(locked);
+  lockedRef.current = locked;
 
   useEffect(() => {
     if (!open) return;
@@ -25,7 +32,7 @@ export function Modal({ open, onClose, title, children, locked, wide }: Props) {
     const focusables = () => Array.from(el?.querySelectorAll<HTMLElement>('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])') ?? []).filter((n) => !n.hasAttribute('disabled'));
     (focusables()[0] ?? el)?.focus();
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !locked) onClose();
+      if (e.key === 'Escape' && !lockedRef.current) closeRef.current();
       if (e.key === 'Tab') {
         const f = focusables();
         if (f.length === 0) return;
@@ -47,7 +54,7 @@ export function Modal({ open, onClose, title, children, locked, wide }: Props) {
       document.body.classList.remove('no-scroll');
       (prev.current as HTMLElement | null)?.focus?.();
     };
-  }, [open, locked, onClose]);
+  }, [open]);
 
   if (!open) return null;
   // Rendered into <body>: inside a page it would share main's stacking context (z-index 1) and sit under the

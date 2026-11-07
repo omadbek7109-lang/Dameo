@@ -9,7 +9,8 @@ import { useToast } from '../components/Toast.tsx';
 import { useCosmetics } from '../cosmetics/CosmeticsProvider.tsx';
 import { useI18n, type TKey } from '../i18n/index.tsx';
 import { navigate, useRoute } from '../router.tsx';
-import { coins, equipItem, itemDesc, itemName, newKey, shopBuy, shopCatalog, type Catalog, type ShopItem } from '../services/shop.ts';
+import { LimitedShop } from '../components/LimitedBoards.tsx';
+import { boardStock, coins, equipItem, itemDesc, itemName, newKey, pricingSettings, shopBuy, shopCatalog, type BoardStock, type Catalog, type ShopItem } from '../services/shop.ts';
 import { registerSkins } from '../services/skins.ts';
 import { SbError } from '../services/supabase.ts';
 import { haptic } from '../services/telegram.ts';
@@ -26,11 +27,15 @@ export function Shop() {
   const [data, setData] = useState<Catalog | null>(null);
   const [error, setError] = useState(false);
   const [openSlug, setOpenSlug] = useState<string | null>(null);
+  const [stock, setStock] = useState<BoardStock[] | null>(null);
+  const [som, setSom] = useState(10);
 
   const load = async () => {
     try {
-      const c = await shopCatalog();
+      const [c, st, pr] = await Promise.all([shopCatalog(), boardStock(), pricingSettings().catch(() => null)]);
       registerSkins(c.items.map((i) => ({ slug: i.slug, slot: i.slot, style: i.style })));
+      setStock(Array.isArray(st) ? st : null);
+      if (pr) setSom(Number(pr.som_per_coin));
       setData(c);
       setError(false);
     } catch {
@@ -90,6 +95,17 @@ export function Shop() {
         <Spinner />
       ) : items.length === 0 ? (
         <EmptyState title={t('shop.empty')} />
+      ) : cat === 'boards' && stock ? (
+        <LimitedShop
+          items={items.filter((i) => i.collection === 'limited')}
+          stock={stock}
+          somPerCoin={som}
+          equippedSlug={equipped?.board ?? null}
+          onChanged={async () => {
+            await load();
+            await cos?.refreshWallet();
+          }}
+        />
       ) : (
         groups.map(([col, list]) => (
           <section key={col} className="shop-group" aria-label={t(`collection.${col}` as TKey)}>

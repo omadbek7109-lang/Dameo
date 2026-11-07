@@ -12,6 +12,7 @@ import { useAsync } from '../hooks/useAsync.ts';
 import { useI18n, type TKey } from '../i18n/index.tsx';
 import { Link, useRoute } from '../router.tsx';
 import { AchievementStrip } from '../components/Achievements.tsx';
+import { BoardCollection } from '../components/Collection.tsx';
 import { DEMO_PLAYERS, isOnline } from '../services/demoData.ts';
 import { fetchLeaderboard } from '../services/leaderboard.ts';
 import { validateUsername } from '../services/localProfile.ts';
@@ -146,6 +147,8 @@ function ProfileView({ view }: { view: View }) {
       </div>
 
       {own && <ProfileFriends />}
+
+      {mode === 'live' && !p.demo && <BoardCollection userId={p.id} own={own} />}
 
       <section className="card">
         <SectionHead title={t('profile.recentMatches')} />

@@ -10,6 +10,14 @@ describe('skins', () => {
     expect(css).toContain('content:"🔥"');
     expect(css).toContain('0 0 12px #ff7043');
   });
+  test('board textures: only bare names under boards/, never a URL', () => {
+    const ok = skinCss({ slug: 'royal-marble', slot: 'board', style: { light: '#eee', dark: '#111', edge: '#b8862b', lt: 'royal-marble-l', dt: 'royal-marble-d' } });
+    expect(ok).toContain('boards/royal-marble-l.webp');
+    expect(ok).toContain('background-size:cover');
+    const bad = skinCss({ slug: 'x', slot: 'board', style: { light: '#eee', dark: '#111', edge: '#000', lt: 'http://evil/a', dt: '../x")' } });
+    expect(bad).not.toContain('url(');
+    expect(bad).not.toContain('evil');
+  });
   test('board CSS sets squares, frame and highlight', () => {
     const css = skinCss({ slug: 'neon-arena', slot: 'board', style: { light: '#121a3a', dark: '#060a1c', edge: '#00e5ff', edge2: '#ff00d4', lp: 'grid', dp: 'grid', frame: 'neon', hl: '#ff00d4' } });
     expect(css).toContain('.sk-b-neon-arena{--sq-light:#121a3a;--sq-dark:#060a1c;--board-edge:#00e5ff;--hl:#ff00d4;}');

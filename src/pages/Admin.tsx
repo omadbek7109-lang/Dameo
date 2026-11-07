@@ -13,7 +13,7 @@ import { useToast } from '../components/Toast.tsx';
 import { useI18n } from '../i18n/index.tsx';
 import { navigate, useRoute } from '../router.tsx';
 import * as A from '../services/admin.ts';
-import { coins, newKey, RARITIES, type CoinPackage, type ShopItem } from '../services/shop.ts';
+import { boardArt, coins, newKey, RARITIES, serialLabel, type ShopItem } from '../services/shop.ts';
 import { registerSkins } from '../services/skins.ts';
 import { SbError } from '../services/supabase.ts';
 
@@ -30,7 +30,7 @@ const TABS: Array<{ id: Tab; perm: string; icon: typeof LuGauge; uz: string; en:
   { id: 'users', perm: 'users.view', icon: LuUsers, uz: 'Foydalanuvchilar', en: 'Users' },
   { id: 'payments', perm: 'payments.view', icon: LuCoins, uz: "To'lovlar", en: 'Payments' },
   { id: 'shop', perm: 'shop.manage', icon: LuShoppingBag, uz: "Do'kon", en: 'Shop' },
-  { id: 'packages', perm: 'shop.manage', icon: LuPackage, uz: 'Paketlar', en: 'Packages' },
+  { id: 'packages', perm: 'shop.manage', icon: LuPackage, uz: 'Narxlar', en: 'Pricing' },
   { id: 'reports', perm: 'reports.view', icon: LuTriangleAlert, uz: 'Shikoyatlar', en: 'Reports' },
   { id: 'weekly', perm: 'tournaments.manage', icon: LuTrophy, uz: 'Turnirlar', en: 'Tournaments' },
   { id: 'virtual', perm: 'virtual.manage', icon: LuBot, uz: 'Virtual raqiblar', en: 'Virtual opponents' },
@@ -89,7 +89,7 @@ export function Admin() {
       {current === 'users' && <UsersTab can={can} superAdmin={me.role === 'super_admin'} />}
       {current === 'payments' && <PaymentsTab canRefund={can('payments.refund')} />}
       {current === 'shop' && <ShopTab />}
-      {current === 'packages' && <PackagesTab />}
+      {current === 'packages' && <PricingTab />}
       {current === 'reports' && <ReportsTab canManage={can('reports.manage')} />}
       {current === 'weekly' && <WeeklyTab />}
       {current === 'virtual' && <VirtualTab />}
@@ -449,10 +449,7 @@ function AdjustDialog({ id, sign, amount, setAmount, onClose, onDone }: { id: st
   const [key] = useState(newKey); // one key per dialog: a double tap is never applied twice
   return (
     <ReasonDialog title={sign > 0 ? L("Coins qo'shish", 'Add coins') : L('Coins yechish', 'Remove coins')} danger={sign < 0} onClose={onClose} onSubmit={(r) => A.adminAdjust(id, sign * amount, r, key).then(onDone)}>
-      <label className="field">
-        <span>{L('Miqdor', 'Amount')}</span>
-        <input type="number" min={1} max={10000000} value={amount} onChange={(e: any) => setAmount(Math.max(1, Math.min(10000000, Number(e.target.value) || 0)))} />
-      </label>
+      <NumField label={L('Miqdor', 'Amount')} value={amount || null} onChange={(v) => setAmount(v ?? 0)} min={1} />
     </ReasonDialog>
   );
 }
@@ -748,18 +745,9 @@ function ItemEditor({ item, cats, onClose, onSaved }: { item: Partial<ShopItem>;
               ))}
             </select>
           </label>
-          <label className="field">
-            <span>{L('Narx (Coins)', 'Price (Coins)')}</span>
-            <input type="number" min={0} value={f.price ?? 0} onChange={(e: any) => set('price', Math.max(0, Number(e.target.value) || 0))} />
-          </label>
-          <label className="field">
-            <span>{L('Chegirma %', 'Discount %')}</span>
-            <input type="number" min={0} max={90} value={f.discount_percent ?? 0} onChange={(e: any) => set('discount_percent', Math.max(0, Math.min(90, Number(e.target.value) || 0)))} />
-          </label>
-          <label className="field">
-            <span>{L('Tartib', 'Order')}</span>
-            <input type="number" value={f.sort ?? 0} onChange={(e: any) => set('sort', Number(e.target.value) || 0)} />
-          </label>
+          <NumField label={L('Narx (Coins)', 'Price (Coins)')} value={f.price ?? 0} onChange={(v) => set('price', v)} />
+          <NumField label={L('Chegirma %', 'Discount %')} value={f.discount_percent ?? 0} onChange={(v) => set('discount_percent', v)} max={90} />
+          <NumField label={L('Tartib', 'Order')} value={f.sort ?? 0} onChange={(v) => set('sort', v)} max={100000} />
         </div>
         <div className="admin-checks">
           <label className="check">
@@ -793,7 +781,7 @@ function ItemEditor({ item, cats, onClose, onSaved }: { item: Partial<ShopItem>;
           )}
         </div>
         <div className="row-actions">
-          <button className="btn btn-primary" disabled={!styleOk || !f.slug || !f.name_uz || !f.name_en} onClick={() => setSaving(true)}>
+          <button className="btn btn-primary" disabled={!styleOk || !f.slug || !f.name_uz || !f.name_en || f.price === null || f.discount_percent === null || f.sort === null} onClick={() => setSaving(true)}>
             <LuCheck /> {L('Saqlash', 'Save')}
           </button>
           <button className="btn btn-ghost" onClick={onClose}>
@@ -805,72 +793,372 @@ function ItemEditor({ item, cats, onClose, onSaved }: { item: Partial<ShopItem>;
   );
 }
 
-/* ------------------------------------------------------------------ packages */
-function PackagesTab() {
+/* ------------------------------------------------------------------ number input
+ * Android + Telegram: a text input with a numeric keyboard. The typed text is kept as typed (no `Number(v) || 0`
+ * rewriting, which turned an emptied field into "0" and fought the keyboard); the parent gets the parsed value or null.
+ * Declared at module level so its identity is stable — an inline component would remount and drop focus. */
+function NumField({ label, value, onChange, min = 0, max = 10_000_000, decimals = false, hint, error, disabled }: {
+  label: string; value: number | null; onChange: (v: number | null) => void; min?: number; max?: number; decimals?: boolean; hint?: string; error?: string | null; disabled?: boolean;
+}) {
+  const [text, setText] = useState(value === null ? '' : String(value));
+  // follow outside changes (e.g. Cancel) without overwriting what is being typed
+  useEffect(() => {
+    setText((t) => (parseNum(t, decimals) === value ? t : value === null ? '' : String(value)));
+  }, [value, decimals]);
+  const n = parseNum(text, decimals);
+  const bad = error ?? (text.trim() === '' ? null : n === null ? 'nan' : n < min || n > max ? 'range' : null);
+  return (
+    <label className={`field ${bad ? 'field-bad' : ''}`}>
+      <span>{label}</span>
+      <input
+        type="text"
+        inputMode={decimals ? 'decimal' : 'numeric'}
+        pattern={decimals ? '[0-9]*[.,]?[0-9]*' : '[0-9]*'}
+        autoComplete="off"
+        enterKeyHint="done"
+        value={text}
+        disabled={disabled}
+        aria-invalid={bad ? true : undefined}
+        onChange={(e) => {
+          const t = e.target.value.replace(decimals ? /[^0-9.,]/g : /[^0-9]/g, '');
+          setText(t);
+          const v = parseNum(t, decimals);
+          onChange(v !== null && v >= min && v <= max ? v : null);
+        }}
+      />
+      {bad === 'nan' || bad === 'range' ? <small className="field-err">{bad === 'nan' ? 'Faqat raqam kiriting · Numbers only' : `${min} – ${max}`}</small> : bad ? <small className="field-err">{bad}</small> : hint ? <small className="muted">{hint}</small> : null}
+    </label>
+  );
+}
+function parseNum(t: string, decimals: boolean): number | null {
+  const s = t.trim().replace(',', '.');
+  if (s === '' || (decimals ? !/^\d+(\.\d+)?$/.test(s) : !/^\d+$/.test(s))) return null;
+  return Number(s);
+}
+
+/* ------------------------------------------------------------------ pricing: rate, packages, Limited boards, history */
+function PricingTab() {
   const L = useL();
-  const [rows, setRows] = useState<CoinPackage[] | null>(null);
-  const [edit, setEdit] = useState<CoinPackage | null>(null);
-  const load = useCallback(() => A.adminPackages().then(setRows), []);
+  const [data, setData] = useState<A.AdminPricing | null>(null);
+  const [boards, setBoards] = useState<A.AdminBoard[] | null>(null);
+  const [hist, setHist] = useState<A.PriceChange[] | null>(null);
+  const [failed, setFailed] = useState(false);
+  const [edit, setEdit] = useState<A.PricingPackage | null>(null);
+  const [rateEdit, setRateEdit] = useState(false);
+  const [boardEdit, setBoardEdit] = useState<A.AdminBoard | null>(null);
+  const [owners, setOwners] = useState<A.AdminBoard | null>(null);
+  const load = useCallback(async () => {
+    try {
+      const [p, b, h] = await Promise.all([A.adminPricing(), A.adminBoards(), A.adminPriceHistory()]);
+      if (!p?.settings || !Array.isArray(p.packages)) throw new Error('bad pricing response');
+      setData(p);
+      setBoards(Array.isArray(b) ? b : []);
+      setHist(Array.isArray(h) ? h : []);
+      setFailed(false);
+    } catch {
+      setFailed(true);
+    }
+  }, []);
   useEffect(() => {
     void load();
   }, [load]);
+  if (failed) return <ErrorState onRetry={load} />;
+  if (!data || !boards || !hist) return <Spinner />;
+  const rate = Number(data.settings.stars_per_1000);
+  const som = Number(data.settings.som_per_coin);
   return (
     <div className="admin-section">
-      <p className="muted small">{L("Narxlar Telegram Stars'da. O'zgarish faqat yangi to'lovlarga ta'sir qiladi.", 'Prices are in Telegram Stars. Changes apply to new payments only.')}</p>
-      <button className="btn btn-primary btn-sm" onClick={() => setEdit({ id: '', coins: 1000, bonus_coins: 0, stars: 10, active: true, sort: 10 })}>
+      <section className="card admin-rate">
+        <div>
+          <span className="muted small">{L('Asosiy kurs', 'Base rate')}</span>
+          <strong className="admin-rate-v">🪙 1 000 = ⭐ {fmtNum(rate)}</strong>
+          <span className="muted small">🪙 1 = {fmtNum(som)} so'm · {L("Paketlar shu kurs bo'yicha hisoblanadi (yuqoriga yaxlitlanadi)", 'Packages follow this rate (rounded up)')}</span>
+        </div>
+        <button className="btn btn-secondary btn-sm" onClick={() => setRateEdit(true)}>
+          ✎ {L("Kursni o'zgartirish", 'Change rate')}
+        </button>
+      </section>
+
+      <h2 className="h3">{L('Coin paketlari (Telegram Stars)', 'Coin packages (Telegram Stars)')}</h2>
+      <p className="muted small">{L("O'zgarish faqat yangi to'lovlarga ta'sir qiladi. To'lov narxini server bazadan oladi.", 'Changes apply to new payments only. The server takes the price from the database.')}</p>
+      <button className="btn btn-primary btn-sm" onClick={() => setEdit({ id: '', coins: 1000, bonus_coins: 0, stars: A.starsFor(1000, rate), stars_manual: false, active: true, sort: 10, updated_at: '' })}>
         <LuPlus /> {L('Yangi paket', 'New package')}
       </button>
-      {!rows ? (
-        <Spinner />
-      ) : (
-        <ul className="admin-list">
-          {rows.map((p) => (
-            <li key={p.id}>
-              <button className="admin-row" onClick={() => setEdit(p)}>
-                <span className="admin-row-main">
-                  <strong>
-                    🪙 {coins(p.coins)} {p.bonus_coins ? `+${coins(p.bonus_coins)}` : ''} → ⭐ {p.stars}
-                  </strong>
-                  <span className="muted small">
-                    {p.id} {p.active ? '' : `· ${L('nofaol', 'inactive')}`}
-                  </span>
+      <ul className="admin-list">
+        {data.packages.map((p) => (
+          <li key={p.id}>
+            <button className={`admin-row ${p.active ? '' : 'is-hidden'}`} onClick={() => setEdit(p)}>
+              <span className="admin-row-main">
+                <strong>
+                  🪙 {coins(p.coins)} {p.bonus_coins ? `+${coins(p.bonus_coins)}` : ''} → ⭐ {p.stars}
+                </strong>
+                <span className="muted small">
+                  {p.id} · {p.stars_manual ? L("qo'lda belgilangan", 'manual price') : L('kurs bo‘yicha', 'by rate')}
+                  {p.stars_manual && p.stars !== A.starsFor(p.coins + p.bonus_coins, rate) ? ` (${L('kurs', 'rate')}: ⭐ ${A.starsFor(p.coins + p.bonus_coins, rate)})` : ''}
+                  {p.active ? '' : ` · ${L('nofaol', 'inactive')}`}
                 </span>
-                <LuChevronRight />
-              </button>
+              </span>
+              <LuChevronRight />
+            </button>
+          </li>
+        ))}
+      </ul>
+
+      <h2 className="h3">{L('Limited doskalar', 'Limited boards')}</h2>
+      <ul className="admin-list">
+        {boards.map((b) => (
+          <li key={b.slug} className="admin-board-row">
+            <button className="admin-row" onClick={() => setBoardEdit(b)}>
+              <img src={boardArt(b.image_url)} alt="" width={44} height={44} loading="lazy" />
+              <span className="admin-row-main">
+                <strong>
+                  {b.name} · 🪙 {coins(b.price)}
+                </strong>
+                <span className="muted small">
+                  {L('Sotilgan', 'Sold')}: {b.sold}/{b.supply ?? '—'} {b.supply === null ? `· ${L('limit belgilanmagan', 'limit not set')}` : b.sold >= b.supply ? '· SOLD OUT' : ''} · 🪙 {coins(b.revenue)}
+                </span>
+              </span>
+              <LuChevronRight />
+            </button>
+            <button className="btn btn-ghost btn-sm" onClick={() => setOwners(b)} disabled={b.sold === 0}>
+              <LuUsers /> {b.sold}
+            </button>
+          </li>
+        ))}
+      </ul>
+
+      <h2 className="h3">{L('Narxlar tarixi', 'Price history')}</h2>
+      {hist.length === 0 ? (
+        <p className="muted small">{L("Hali o'zgarish yo'q", 'No changes yet')}</p>
+      ) : (
+        <ul className="admin-list admin-hist">
+          {hist.map((h) => (
+            <li key={h.id}>
+              <span className="admin-row-main">
+                <strong>
+                  {histLabel(h, L)}: {h.old_value === null ? '—' : fmtNum(Number(h.old_value))} → {h.new_value === null ? '—' : fmtNum(Number(h.new_value))}
+                </strong>
+                <span className="muted small">
+                  {when(h.created_at)} · {h.admin ?? L('tizim', 'system')}
+                  {h.reason ? ` · ${h.reason}` : ''}
+                </span>
+              </span>
             </li>
           ))}
         </ul>
       )}
-      {edit && (
-        <ReasonDialog title={L('Paket', 'Package')} onClose={() => setEdit(null)} onSubmit={(r) => A.adminPackageSave(edit, r).then(load)}>
-          <div className="admin-grid2">
-            <label className="field">
-              <span>ID</span>
-              <input value={edit.id} onChange={(e: any) => setEdit({ ...edit, id: e.target.value.toLowerCase() })} placeholder="coins_250k" />
-            </label>
-            <label className="field">
-              <span>Coins</span>
-              <input type="number" value={edit.coins} onChange={(e: any) => setEdit({ ...edit, coins: Number(e.target.value) || 0 })} />
-            </label>
-            <label className="field">
-              <span>{L('Bonus coins', 'Bonus coins')}</span>
-              <input type="number" value={edit.bonus_coins} onChange={(e: any) => setEdit({ ...edit, bonus_coins: Number(e.target.value) || 0 })} />
-            </label>
-            <label className="field">
-              <span>Stars ⭐</span>
-              <input type="number" value={edit.stars} onChange={(e: any) => setEdit({ ...edit, stars: Number(e.target.value) || 0 })} />
-            </label>
-            <label className="field">
-              <span>{L('Tartib', 'Order')}</span>
-              <input type="number" value={edit.sort} onChange={(e: any) => setEdit({ ...edit, sort: Number(e.target.value) || 0 })} />
-            </label>
-            <label className="check">
-              <input type="checkbox" checked={edit.active} onChange={(e: any) => setEdit({ ...edit, active: e.target.checked })} /> {L('Faol', 'Active')}
-            </label>
-          </div>
-        </ReasonDialog>
-      )}
+
+      {edit && <PackageEditor pkg={edit} rate={rate} onClose={() => setEdit(null)} onSaved={load} />}
+      {rateEdit && <RateEditor rate={rate} som={som} packages={data.packages} onClose={() => setRateEdit(false)} onSaved={load} />}
+      {boardEdit && <BoardEditor board={boardEdit} onClose={() => setBoardEdit(null)} onSaved={load} />}
+      {owners && <BoardOwners board={owners} onClose={() => setOwners(null)} />}
     </div>
+  );
+}
+const fmtNum = (n: number) => (Number.isInteger(n) ? coins(n) : String(n));
+function histLabel(h: A.PriceChange, L: (uz: string, en: string) => string) {
+  if (h.entity === 'rate') return h.field === 'som_per_coin' ? L("1 Coin, so'm", '1 Coin, so‘m') : L('Kurs: ⭐ / 1000 Coin', 'Rate: ⭐ / 1000 Coin');
+  if (h.entity === 'package') return `${L('Paket', 'Package')} ${h.entity_id} (${h.field === 'stars' ? '⭐' : '🪙'})`;
+  return `${h.entity === 'board' ? L('Doska', 'Board') : L('Mahsulot', 'Item')} ${h.entity_id} (🪙)`;
+}
+
+/** Save / Cancel dialog with the mandatory reason; fields are validated before Save is enabled. */
+function EditDialog({ title, children, valid, onSave, onClose }: { title: string; children: ReactNode; valid: boolean; onSave: (reason: string) => Promise<unknown>; onClose: () => void }) {
+  const L = useL();
+  const { toast } = useToast();
+  const [reason, setReason] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const save = async () => {
+    setBusy(true);
+    setErr(null);
+    try {
+      await onSave(reason.trim());
+      toast('success', L('Saqlandi', 'Saved'));
+      onClose();
+    } catch (e) {
+      setErr(errText(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Modal open onClose={onClose} title={title} locked={busy}>
+      <div className="admin-form">
+        {children}
+        <label className="field">
+          <span>{L('Sabab (majburiy)', 'Reason (required)')}</span>
+          <textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={2} maxLength={500} />
+        </label>
+        {err && <p className="field-err">{err}</p>}
+        <div className="row-actions">
+          <button className="btn btn-primary" onClick={save} disabled={busy || !valid || reason.trim().length < 3}>
+            {busy ? <LuLoader className="spin" /> : <LuCheck />} {L('Saqlash', 'Save')}
+          </button>
+          <button className="btn btn-ghost" onClick={onClose} disabled={busy}>
+            {L('Bekor qilish', 'Cancel')}
+          </button>
+        </div>
+        {!valid && <p className="muted small">{L("Qiymatlarni to'g'ri kiriting", 'Enter valid values')}</p>}
+      </div>
+    </Modal>
+  );
+}
+
+function PackageEditor({ pkg, rate, onClose, onSaved }: { pkg: A.PricingPackage; rate: number; onClose: () => void; onSaved: () => Promise<void> }) {
+  const L = useL();
+  const isNew = !pkg.id;
+  const [id, setId] = useState(pkg.id);
+  const [c, setC] = useState<number | null>(pkg.coins);
+  const [bonus, setBonus] = useState<number | null>(pkg.bonus_coins);
+  const [manual, setManual] = useState(pkg.stars_manual);
+  const [stars, setStars] = useState<number | null>(pkg.stars);
+  const [sort, setSort] = useState<number | null>(pkg.sort);
+  const [active, setActive] = useState(pkg.active);
+  const auto = c !== null ? A.starsFor(c + (bonus ?? 0), rate) : null;
+  const idOk = /^[a-z0-9_-]{2,32}$/.test(id);
+  const valid = idOk && c !== null && c >= 1 && bonus !== null && sort !== null && (!manual || (stars !== null && stars >= 1));
+  return (
+    <EditDialog
+      title={isNew ? L('Yangi paket', 'New package') : `${L('Paket', 'Package')} ${pkg.id}`}
+      valid={valid}
+      onClose={onClose}
+      onSave={async (r) => {
+        await A.adminPackageSave({ id, coins: c!, bonus_coins: bonus!, sort: sort!, active, stars_manual: manual, ...(manual ? { stars: stars! } : {}) } as any, r);
+        await onSaved();
+      }}
+    >
+      {!isNew && (
+        <p className="muted small">
+          {L('Hozirgi narx', 'Current price')}: 🪙 {coins(pkg.coins)} → ⭐ {pkg.stars} ({pkg.stars_manual ? L("qo'lda", 'manual') : L('kurs bo‘yicha', 'by rate')})
+        </p>
+      )}
+      <div className="admin-grid2">
+        <label className={`field ${id && !idOk ? 'field-bad' : ''}`}>
+          <span>ID</span>
+          <input value={id} disabled={!isNew} onChange={(e) => setId(e.target.value.toLowerCase())} placeholder="coins_2500" autoComplete="off" />
+          {id && !idOk && <small className="field-err">a-z 0-9 _ - (2–32)</small>}
+        </label>
+        <NumField label="Coins" value={c} onChange={setC} min={1} />
+        <NumField label={L('Bonus coins', 'Bonus coins')} value={bonus} onChange={setBonus} />
+        <NumField label={L('Tartib', 'Order')} value={sort} onChange={setSort} max={10000} />
+      </div>
+      <label className="check">
+        <input type="checkbox" checked={manual} onChange={(e) => (setManual(e.target.checked), e.target.checked && stars === null && setStars(auto))} /> {L("Stars narxini qo'lda belgilash", 'Set the Stars price manually')}
+      </label>
+      {manual ? (
+        <NumField label="Stars ⭐" value={stars} onChange={setStars} min={1} max={100000} hint={auto !== null ? `${L('Kurs bo‘yicha', 'By rate')}: ⭐ ${auto}` : undefined} />
+      ) : (
+        <p className="admin-auto">
+          ⭐ <strong>{auto ?? '—'}</strong> <span className="muted small">{L("kurs bo'yicha avtomatik", 'automatic, by rate')}</span>
+        </p>
+      )}
+      <label className="check">
+        <input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} /> {L('Faol', 'Active')}
+      </label>
+    </EditDialog>
+  );
+}
+
+function RateEditor({ rate, som, packages, onClose, onSaved }: { rate: number; som: number; packages: A.PricingPackage[]; onClose: () => void; onSaved: () => Promise<void> }) {
+  const L = useL();
+  const [r, setR] = useState<number | null>(rate);
+  const [s, setS] = useState<number | null>(som);
+  const auto = packages.filter((p) => !p.stars_manual && p.active);
+  return (
+    <EditDialog
+      title={L('Coin / Stars kursi', 'Coin / Stars rate')}
+      valid={r !== null && r > 0 && s !== null}
+      onClose={onClose}
+      onSave={async (reason) => {
+        await A.adminPricingSet(r!, s!, reason);
+        await onSaved();
+      }}
+    >
+      <p className="muted small">
+        {L('Hozir', 'Now')}: 🪙 1 000 = ⭐ {fmtNum(rate)} · 🪙 1 = {fmtNum(som)} so'm
+      </p>
+      <div className="admin-grid2">
+        <NumField label={L('⭐ 1 000 Coin uchun', '⭐ per 1 000 Coins')} value={r} onChange={setR} min={0.001} max={10000} decimals />
+        <NumField label={L("1 Coin = so'm", '1 Coin = so‘m')} value={s} onChange={setS} max={100000} decimals />
+      </div>
+      {r !== null && r > 0 && (
+        <ul className="admin-preview-list">
+          {auto.map((p) => (
+            <li key={p.id}>
+              🪙 {coins(p.coins + p.bonus_coins)}: ⭐ {p.stars} → <strong>⭐ {A.starsFor(p.coins + p.bonus_coins, r)}</strong>
+            </li>
+          ))}
+          <li className="muted small">{L("Qo'lda belgilangan narxlar o'zgarmaydi", 'Manual prices stay as they are')}</li>
+        </ul>
+      )}
+    </EditDialog>
+  );
+}
+
+function BoardEditor({ board, onClose, onSaved }: { board: A.AdminBoard; onClose: () => void; onSaved: () => Promise<void> }) {
+  const L = useL();
+  const [price, setPrice] = useState<number | null>(board.price);
+  const [supply, setSupply] = useState<number | null>(board.supply);
+  const supplyLocked = board.supply !== null;
+  const supplyErr = !supplyLocked && supply !== null && supply < Math.max(1, board.sold) ? `≥ ${Math.max(1, board.sold)}` : null;
+  return (
+    <EditDialog
+      title={board.name}
+      valid={price !== null && !supplyErr}
+      onClose={onClose}
+      onSave={async (r) => {
+        await A.adminBoardSave(board.slug, price!, supplyLocked ? board.supply : supply, r);
+        await onSaved();
+      }}
+    >
+      <p className="muted small">
+        {L('Hozirgi narx', 'Current price')}: 🪙 {coins(board.price)} · {L('Sotilgan', 'Sold')}: {board.sold}
+      </p>
+      <div className="admin-grid2">
+        <NumField label={L('Narx (Coin)', 'Price (Coins)')} value={price} onChange={setPrice} />
+        <NumField
+          label={L('Nusxalar limiti', 'Copies limit')}
+          value={supply}
+          onChange={setSupply}
+          min={1}
+          max={100000}
+          disabled={supplyLocked}
+          error={supplyErr}
+          hint={supplyLocked ? L("Limit belgilangan — o'zgartirib bo'lmaydi", 'Limit is final') : L("Bir marta belgilanadi, keyin o'zgarmaydi", 'Set once, final afterwards')}
+        />
+      </div>
+    </EditDialog>
+  );
+}
+
+function BoardOwners({ board, onClose }: { board: A.AdminBoard; onClose: () => void }) {
+  const L = useL();
+  const [rows, setRows] = useState<Awaited<ReturnType<typeof A.adminBoardOwners>> | null>(null);
+  useEffect(() => {
+    A.adminBoardOwners(board.slug).then(setRows, () => setRows([]));
+  }, [board.slug]);
+  return (
+    <Modal open onClose={onClose} title={`${board.name} — ${L('egalar', 'owners')}`}>
+      {!rows ? (
+        <Spinner />
+      ) : (
+        <ul className="admin-list">
+          {rows.map((o) => (
+            <li key={o.serial} className="admin-row admin-row-static">
+              <span className="admin-row-main">
+                <strong>
+                  {serialLabel(o.serial, board.supply)} · {o.username}
+                </strong>
+                <span className="muted small">
+                  {when(o.acquired_at)} · 🪙 {coins(o.price_paid)}
+                </span>
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Modal>
   );
 }
 

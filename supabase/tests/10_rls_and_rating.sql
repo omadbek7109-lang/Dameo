@@ -533,6 +533,8 @@ exception when others then perform pg_temp.check('11 purchase refused without en
 select pg_temp.check('… and nothing was given', (select count(*) from public.user_inventory where user_id = auth.uid()) = 0);
 reset role;
 
+-- (0020 switched the old big packages off and re-prices by the 1000 Coin = 25 Stars rate; these payment tests keep a fixed fixture)
+update public.coin_packages set active = true, stars = 120, stars_manual = true where id = 'coins_25k';
 -- 3-5 Telegram Stars top-up (what the payments + telegram-bot Edge Functions do with the service role)
 set role service_role;
 create temp table ord as select public.payment_create('eeeeeeee-0000-4000-8000-000000000001', 'coins_25k') as r;
@@ -1139,6 +1141,141 @@ do $$ begin
   perform pg_temp.check('security: anon can NOT truncate virtual tables', false);
 exception when others then perform pg_temp.check('security: anon can NOT truncate virtual tables', true, sqlerrm); end $$;
 reset role;
+
+-- ===================== 0020: Limited boards (serials, stock, collection) + Coin/Stars pricing
+insert into auth.users (id, email, raw_user_meta_data) values
+  ('bbbbbbbb-0000-4000-8000-000000000001', 'lb1@x.io', '{"username":"collector_one"}'),
+  ('bbbbbbbb-0000-4000-8000-000000000002', 'lb2@x.io', '{"username":"collector_two"}'),
+  ('bbbbbbbb-0000-4000-8000-000000000003', 'lb3@x.io', '{"username":"collector_three"}'),
+  ('bbbbbbbb-0000-4000-8000-000000000004', 'lb4@x.io', '{"username":"collector_four"}');
+select public._wallet_apply(('bbbbbbbb-0000-4000-8000-00000000000' || n)::uuid, 20000, 'admin_credit', 'test', null, 'seed-lb-' || n, 'seed', null) from generate_series(1, 4) n;
+select pg_temp.check('lb: 8 Limited boards on sale', (select count(*) = 8 from public.shop_items where collection = 'limited' and active and not retired));
+select pg_temp.check('lb: old boards hidden + off sale, not deleted', (select count(*) >= 12 and bool_and(not active and retired) from public.shop_items where slot = 'board' and collection <> 'limited'));
+select pg_temp.check('lb: backup of the old boards kept', (select count(*) >= 12 from public._backup_v32_board_items));
+select pg_temp.check('lb: supplies 200/100/80/30, first four not set', (select string_agg(coalesce(supply::text, '-'), ',' order by c.sort) = '-,-,-,-,200,100,80,30' from public.board_inventory s join public.board_catalog c using (slug)));
+select pg_temp.check('lb: prices 0/500/1200/1800/2200/3000/4000/5000', (select string_agg(price::text, ',' order by sort) = '0,500,1200,1800,2200,3000,4000,5000' from public.shop_items where collection = 'limited'));
+select pg_temp.check('lb: every board has its artwork', (select bool_and(image_url = 'boards/' || slug || '.webp') from public.shop_items where collection = 'limited'));
+select pg_temp.check('rate: 1000 Coin = 25 Stars; 500 → 13 (rounded up)',
+  public._stars_for(500) = 13 and public._stars_for(1000) = 25 and public._stars_for(1200) = 30 and public._stars_for(1800) = 45
+  and public._stars_for(2200) = 55 and public._stars_for(3000) = 75 and public._stars_for(4000) = 100 and public._stars_for(5000) = 125);
+select pg_temp.check('rate: packages priced by the rate', (select string_agg(id || '=' || stars, ',' order by sort) from public.coin_packages where active and not stars_manual)
+  = 'coins_500=13,coins_1k=25,coins_1200=30,coins_1800=45,coins_2200=55,coins_3k=75,coins_4k=100');
+
+set role authenticated;
+set request.jwt.claim.sub = 'bbbbbbbb-0000-4000-8000-000000000001';
+select pg_temp.check('lb: buy Celestial Crown → #1/30', (select (r->>'serial')::int = 1 and (r->>'supply')::int = 30 and (r->>'balance')::bigint = 15000 from (select public.board_buy('celestial-crown', 'lb-key-0001') r) x));
+select pg_temp.check('lb: same request again → no second charge, same serial', (select (r->>'duplicate')::boolean and (r->>'serial')::int = 1 from (select public.board_buy('celestial-crown', 'lb-key-0001') r) x)
+  and (public.wallet_me() ->> 'balance')::bigint = 15000);
+do $$ begin
+  perform public.board_buy('celestial-crown', 'lb-key-0002');
+  perform pg_temp.check('lb: a board can not be bought twice', false);
+exception when others then perform pg_temp.check('lb: a board can not be bought twice', sqlerrm like '%already owned%', sqlerrm); end $$;
+select pg_temp.check('lb: free Midnight Blue claimed with a serial, no coins', (select (r->>'serial')::int = 1 and (r->>'price')::int = 0 from (select public.shop_buy('midnight-blue', 'lb-key-0003') r) x)
+  and (public.wallet_me() ->> 'balance')::bigint = 15000);
+select pg_temp.check('lb: owned board can be equipped', (public.equip_item('board', 'celestial-crown') ->> 'ok')::boolean);
+do $$ begin
+  insert into public.user_board_collections (user_id, board_slug, serial, price_paid) values (auth.uid(), 'royal-marble', 1, 0);
+  perform pg_temp.check('lb: client can NOT write a collection row', false);
+exception when others then perform pg_temp.check('lb: client can NOT write a collection row', true, sqlerrm); end $$;
+do $$ begin
+  update public.board_inventory set sold = 0 where slug = 'celestial-crown';
+  perform pg_temp.check('lb: client can NOT touch the stock', false);
+exception when others then perform pg_temp.check('lb: client can NOT touch the stock', true, sqlerrm); end $$;
+do $$ begin
+  perform 1 from public.user_board_collections limit 1;
+  perform pg_temp.check('lb: collections are not readable directly (privacy goes through the function)', false);
+exception when others then perform pg_temp.check('lb: collections are not readable directly (privacy goes through the function)', true, sqlerrm); end $$;
+select pg_temp.check('lb: my collection: 2 of 8, 1 limited, 25%', (select (c->>'owned')::int = 2 and (c->>'limited')::int = 1 and (c->>'complete_pct')::int = 25
+  and (c->'items'->0->>'slug') = 'celestial-crown' from (select public.board_collection_of(auth.uid()) c) x));
+select pg_temp.check('lb: shop shows remaining copies and my serial', (select (x->>'remaining')::int = 29 and (x->'mine'->>'serial')::int = 1 from json_array_elements(public.board_catalog_list()) x where x->>'slug' = 'celestial-crown'));
+select pg_temp.check('lb: purchase history', (select count(*) = 2 from public.board_purchases_mine()));
+reset role;
+
+-- the last copies: #30 sells, then SOLD OUT for good
+update public.board_inventory set sold = 28 where slug = 'celestial-crown';
+set role authenticated;
+set request.jwt.claim.sub = 'bbbbbbbb-0000-4000-8000-000000000002';
+select pg_temp.check('lb: the next copy is #29', (public.board_buy('celestial-crown', 'lb-key-0101') ->> 'serial')::int = 29);
+select pg_temp.check('lb: other players see a public collection', (select (c->>'visible')::boolean and (c->>'owned')::int = 2 from (select public.board_collection_of('bbbbbbbb-0000-4000-8000-000000000001') c) x));
+reset role;
+set role authenticated;
+set request.jwt.claim.sub = 'bbbbbbbb-0000-4000-8000-000000000003';
+select pg_temp.check('lb: last copy #30/30', (public.board_buy('celestial-crown', 'lb-key-0201') ->> 'serial')::int = 30);
+reset role;
+set role authenticated;
+set request.jwt.claim.sub = 'bbbbbbbb-0000-4000-8000-000000000004';
+do $$ begin
+  perform public.board_buy('obsidian-gold', 'lb-key-0102');
+  perform public.board_buy('celestial-crown', 'lb-key-0103');
+  perform pg_temp.check('lb: SOLD OUT is enforced', false);
+exception when others then perform pg_temp.check('lb: SOLD OUT is enforced', sqlerrm like '%sold out%', sqlerrm); end $$;
+select pg_temp.check('lb: sold-out board is marked', (select (x->>'sold_out')::boolean and (x->>'remaining')::int = 0 from json_array_elements(public.board_catalog_list()) x where x->>'slug' = 'celestial-crown'));
+select pg_temp.check('lb: a failed purchase charges nothing (whole transaction rolled back)', (public.wallet_me() ->> 'balance')::bigint = 20000);
+reset role;
+select pg_temp.check('lb: serials unique and ≤ supply', (select count(*) = count(distinct serial) and max(serial) <= 30 from public.user_board_collections where board_slug = 'celestial-crown'));
+select pg_temp.check('lb: sold-out time stored', (select sold_out_at is not null from public.board_inventory where slug = 'celestial-crown'));
+do $$ begin
+  update public.user_board_collections set serial = 7 where board_slug = 'celestial-crown' and serial = 1;
+  perform pg_temp.check('lb: serial numbers never change (even for the server)', false);
+exception when others then perform pg_temp.check('lb: serial numbers never change (even for the server)', sqlerrm like '%permanent%', sqlerrm); end $$;
+do $$ begin
+  update public.board_inventory set supply = 40 where slug = 'celestial-crown';
+  perform pg_temp.check('lb: a sold-out board can not be restocked', false);
+exception when others then perform pg_temp.check('lb: a sold-out board can not be restocked', sqlerrm like '%final%', sqlerrm); end $$;
+
+-- privacy switch
+set role authenticated;
+set request.jwt.claim.sub = 'bbbbbbbb-0000-4000-8000-000000000001';
+select pg_temp.check('lb: owner hides the collection', (public.collection_set_public(false) ->> 'ok')::boolean);
+select pg_temp.check('lb: owner still sees a hidden collection', (public.board_collection_of(auth.uid()) ->> 'visible')::boolean);
+reset role;
+set role authenticated;
+set request.jwt.claim.sub = 'bbbbbbbb-0000-4000-8000-000000000002';
+select pg_temp.check('lb: others can not see a hidden collection', (select (c->>'visible')::boolean = false and c->'items' is null from (select public.board_collection_of('bbbbbbbb-0000-4000-8000-000000000001') c) x));
+do $$ begin
+  perform public.admin_board_save('graphite', 1, 10, 'urinish');
+  perform pg_temp.check('lb: players can NOT manage boards', false);
+exception when others then perform pg_temp.check('lb: players can NOT manage boards', sqlerrm like '%forbidden%', sqlerrm); end $$;
+do $$ begin
+  perform public.admin_pricing_set(1, 1, 'urinish');
+  perform pg_temp.check('rate: players can NOT change the rate', false);
+exception when others then perform pg_temp.check('rate: players can NOT change the rate', sqlerrm like '%forbidden%', sqlerrm); end $$;
+reset role;
+set role anon;
+select pg_temp.check('lb: guests see public collections', (public.board_collection_of('bbbbbbbb-0000-4000-8000-000000000002') ->> 'visible')::boolean);
+reset role;
+
+-- admin: limits, prices, rate, history
+set role authenticated;
+set request.jwt.claim.sub = 'eeeeeeee-0000-4000-8000-000000000002';
+select pg_temp.check('lb: admin sets the Graphite limit (once)', (public.admin_board_save('graphite', 500, 500, 'Limit belgilandi') ->> 'ok')::boolean);
+select pg_temp.check('lb: … limit stored', (select supply = 500 from public.board_inventory where slug = 'graphite'));
+do $$ begin
+  perform public.admin_board_save('graphite', 500, 900, 'Oshiramiz');
+  perform pg_temp.check('lb: a set limit can not be raised', false);
+exception when others then perform pg_temp.check('lb: a set limit can not be raised', sqlerrm like '%final%', sqlerrm); end $$;
+do $$ begin
+  perform public.admin_board_save('midnight-blue', 0, 0, 'Nol');
+  perform pg_temp.check('lb: limit can not be below copies sold', false);
+exception when others then perform pg_temp.check('lb: limit can not be below copies sold', true, sqlerrm); end $$;
+select pg_temp.check('lb: admin changes a board price', (public.admin_board_save('royal-wood', 1300, null, 'Narx yangilandi') ->> 'ok')::boolean);
+select pg_temp.check('lb: … new price stored', (select price = 1300 from public.shop_items where slug = 'royal-wood'));
+select pg_temp.check('history: board price change with old/new value and reason', exists (select 1 from public.admin_price_history(50) h
+  where h.entity = 'board' and h.entity_id = 'royal-wood' and h.old_value = 1200 and h.new_value = 1300 and h.reason = 'Narx yangilandi' and h.admin = 'owner_super'));
+select pg_temp.check('admin: owners list with serials', (select string_agg(serial::text, ',' order by serial) = '1,29,30' from public.admin_board_owners('celestial-crown')));
+select pg_temp.check('rate: manual package price', (public.admin_package_save('{"id":"coins_1k","coins":1000,"stars":22,"stars_manual":true,"sort":2,"active":true}', 'Aksiya') ->> 'stars')::int = 22);
+select pg_temp.check('rate: admin changes the rate (30 ⭐ / 1000)', (public.admin_pricing_set(30, 10, 'Yangi kurs') ->> 'ok')::boolean);
+select pg_temp.check('rate: automatic packages re-priced (500 → 15, 4000 → 120)', (select stars = 15 from public.coin_packages where id = 'coins_500') and (select stars = 120 from public.coin_packages where id = 'coins_4k'));
+select pg_temp.check('rate: manual price is not overwritten', (select stars = 22 and stars_manual from public.coin_packages where id = 'coins_1k'));
+select pg_temp.check('rate: back to automatic', (public.admin_package_save('{"id":"coins_1k","coins":1000,"stars_manual":false,"sort":2,"active":true}', 'Avtomatik') ->> 'stars')::int = 30);
+select pg_temp.check('history: rate change logged', exists (select 1 from public.admin_price_history(50) h where h.entity = 'rate' and h.old_value = 25 and h.new_value = 30 and h.reason = 'Yangi kurs'));
+select pg_temp.check('history: package re-price logged', exists (select 1 from public.admin_price_history(50) h where h.entity = 'package' and h.entity_id = 'coins_500' and h.old_value = 13 and h.new_value = 15));
+select public.admin_pricing_set(25, 10, 'Asosiy kurs');
+reset role;
+set role service_role;
+select pg_temp.check('invoice: the order takes the price from the DB (1000 → 25 ⭐)', (select (public.payment_create('bbbbbbbb-0000-4000-8000-000000000001', 'coins_1k') ->> 'stars')::int = 25));
+reset role;
+select pg_temp.check('lb: wallets still match the ledger', (select bool_and(w.balance = coalesce((select sum(amount) from public.wallet_transactions t where t.user_id = w.user_id), 0)) from public.user_wallets w));
 
 \set QUIET off
 select case when ok then 'PASS' else 'FAIL' end as status, name, left(detail, 70) as detail from results order by 1 desc, 2;

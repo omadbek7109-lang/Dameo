@@ -4,7 +4,7 @@
  *  - boards      → `.sk-b-<slug>` (square colours + textures, frame, glow, coordinates, highlight colour)
  *  - move effects→ `.fx-<kind>`  (static CSS in app.css; the item only picks the kind + colour)
  * The scope class sits on the board wrapper, so every board (game, previews, home) uses the same renderer.
- * Only gradients / box-shadows / transforms are used — no images to download, cheap on phones.
+ * Gradients / box-shadows / transforms, plus (Limited boards) two small texture tiles cut from the board artwork.
  */
 export type Slot = 'piece' | 'board' | 'effect';
 export type PiecePattern = 'none' | 'rings' | 'stripes' | 'carbon' | 'dots' | 'facets' | 'conic' | 'galaxy' | 'flames' | 'frost' | 'petals' | 'waves' | 'scales' | 'glitch' | 'marble' | 'brushed';
@@ -39,6 +39,9 @@ export interface BoardStyle {
   coord?: string;
   hl?: string;
   frame?: 'plain' | 'gold' | 'wood' | 'neon' | 'metal';
+  /** texture tiles cut from the board's original artwork: name of `boards/<name>.webp` (light / dark squares) */
+  lt?: string;
+  dt?: string;
 }
 export type FxKind = 'ripple' | 'sparkle' | 'fire' | 'lightning' | 'stardust';
 export interface EffectStyle {
@@ -58,6 +61,13 @@ const col = (v: unknown, fallback: string) => (typeof v === 'string' && COLOR.te
 const num01 = (v: unknown, d: number) => (typeof v === 'number' && v >= 0 && v <= 1 ? v : d);
 const cssString = (s: unknown) => (typeof s === 'string' && s.length > 0 && s.length <= 4 ? `"${s.replace(/["\\\n]/g, '')}"` : 'none');
 export const safeSlug = (s: string) => s.replace(/[^a-z0-9-]/g, '');
+// Board textures: only our own files under boards/ (a bare name, never a URL) — nothing else can reach url().
+const TEX = /^[a-z0-9-]{2,40}$/;
+const texUrl = (v: unknown) => {
+  if (typeof v !== 'string' || !TEX.test(v)) return null;
+  const base = typeof document !== 'undefined' ? document.baseURI : 'https://localhost/';
+  return `url("${new URL(`boards/${v}.webp`, base).href}")`;
+};
 const oneOf = <T extends string>(v: unknown, list: readonly T[], d: T): T => (list.includes(v as T) ? (v as T) : d);
 
 const PIECE_PATTERNS = ['none', 'rings', 'stripes', 'carbon', 'dots', 'facets', 'conic', 'galaxy', 'flames', 'frost', 'petals', 'waves', 'scales', 'glitch', 'marble', 'brushed'] as const;
@@ -204,8 +214,10 @@ function boardCss(scope: string, s: Partial<BoardStyle>): string {
   shadow.push('0 18px 44px rgba(0,0,0,.35)');
   let css = `.${scope}{--sq-light:${light};--sq-dark:${dark};--board-edge:${edge};--hl:${hl};}`;
   css += `.${scope} .board{border-color:${edge};box-shadow:${shadow.join(',')};}`;
-  css += `.${scope} .sq-light{background-color:${light};background-image:${squarePattern(oneOf(s.lp, SQ_PATTERNS, 'none'))};}`;
-  css += `.${scope} .sq-dark{background-color:${dark};background-image:${squarePattern(oneOf(s.dp, SQ_PATTERNS, 'sheen'))};}`;
+  const lt = texUrl(s.lt);
+  const dt = texUrl(s.dt);
+  css += `.${scope} .sq-light{background-color:${light};background-image:${lt ?? squarePattern(oneOf(s.lp, SQ_PATTERNS, 'none'))};${lt ? 'background-size:cover;' : ''}}`;
+  css += `.${scope} .sq-dark{background-color:${dark};background-image:${dt ?? squarePattern(oneOf(s.dp, SQ_PATTERNS, 'sheen'))};${dt ? 'background-size:cover;' : ''}}`;
   if (s.coord) css += `.${scope} .coord{color:${col(s.coord, '#ffffff')};opacity:.85;}`;
   return css;
 }

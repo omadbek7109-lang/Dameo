@@ -170,3 +170,56 @@ export const adminVirtualSettings2 = (p: { enabled?: boolean | null; autoOff?: b
   db.rpc('admin_virtual_settings_save2', {
     p_enabled: p.enabled ?? null, p_auto_off: p.autoOff ?? null, p_off_threshold: p.off ?? null, p_on_threshold: p.on ?? null, p_pool: p.pool ?? null, p_reason: reason,
   });
+
+/* ------------------------------------------------------------------ pricing + Limited boards (0020) */
+export interface PricingPackage {
+  id: string;
+  coins: number;
+  bonus_coins: number;
+  stars: number;
+  stars_manual: boolean;
+  active: boolean;
+  sort: number;
+  updated_at: string;
+}
+export interface AdminPricing {
+  settings: { stars_per_1000: number; som_per_coin: number; updated_at: string };
+  packages: PricingPackage[];
+}
+export interface AdminBoard {
+  slug: string;
+  name: string;
+  rarity: string;
+  tier: number;
+  price: number;
+  final_price: number;
+  active: boolean;
+  retired: boolean;
+  supply: number | null;
+  sold: number;
+  sold_out_at: string | null;
+  image_url: string | null;
+  revenue: number;
+}
+export interface PriceChange {
+  id: number;
+  entity: 'package' | 'board' | 'item' | 'rate';
+  entity_id: string;
+  field: string;
+  old_value: number | null;
+  new_value: number | null;
+  admin: string | null;
+  reason: string | null;
+  created_at: string;
+}
+export const adminPricing = () => db.rpc<AdminPricing>('admin_pricing');
+export const adminPricingSet = (starsPer1000: number, somPerCoin: number, reason: string) =>
+  db.rpc<{ ok: boolean; repriced: number }>('admin_pricing_set', { p_stars_per_1000: starsPer1000, p_som_per_coin: somPerCoin, p_reason: reason });
+export const adminPriceHistory = () => db.rpc<PriceChange[]>('admin_price_history', { p_limit: 60 });
+export const adminBoards = () => db.rpc<AdminBoard[]>('admin_boards');
+export const adminBoardSave = (slug: string, price: number, supply: number | null, reason: string) =>
+  db.rpc('admin_board_save', { p_slug: slug, p_price: price, p_supply: supply, p_reason: reason });
+export const adminBoardOwners = (slug: string) =>
+  db.rpc<Array<{ serial: number; user_id: string; username: string; price_paid: number; acquired_at: string }>>('admin_board_owners', { p_slug: slug, p_limit: 200 });
+/** Stars for a coin amount at a rate — the same rounding as the server (_stars_for: whole Stars, rounded up). */
+export const starsFor = (coins: number, starsPer1000: number) => Math.max(1, Math.ceil((coins * starsPer1000) / 1000 - 1e-9));

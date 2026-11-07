@@ -4995,3 +4995,112 @@ html.app-paused *::after {
   .flect-banner { grid-template-columns: 220px 1px minmax(0, 1fr); min-height: 0; padding: 10px 22px 10px 14px; }
   .flect-logo img { max-width: 170px; }
 }
+
+/* ================================================================ v3.2 — admin number fields + pricing */
+.field-bad input { border-color: var(--danger); }
+.field-err { color: var(--danger); font-size: 0.78rem; }
+.admin-rate { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; }
+.admin-rate > div { display: grid; gap: 2px; }
+.admin-rate-v { font-size: 1.25rem; font-family: var(--font-display); }
+.admin-auto { margin: 0; display: flex; gap: 6px; align-items: baseline; }
+.admin-preview-list { margin: 0; padding-left: 18px; display: grid; gap: 4px; font-size: 0.9rem; }
+.admin-board-row { display: flex; gap: 6px; align-items: center; }
+.admin-board-row .admin-row { flex: 1; min-width: 0; }
+.admin-board-row img { width: 44px; height: 44px; border-radius: 8px; flex: none; object-fit: cover; }
+.admin-hist li { padding: 8px 10px; border-bottom: 1px solid var(--border); }
+.admin-row-static { cursor: default; }
+
+/* ================================================================ v3.2 — Limited Collection (shop) */
+.ltd-head { display: grid; gap: 2px; margin-bottom: 10px; }
+.ltd-head .h2 { margin: 0; background: linear-gradient(90deg, #ffd56b, #f0b429 40%, #c084fc); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.ltd-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(46%, 210px), 1fr)); gap: 12px; }
+.ltd-card {
+  --lb-glow: rgba(110, 140, 255, 0.35);
+  display: flex; flex-direction: column; min-width: 0; border-radius: 18px; overflow: hidden;
+  background: linear-gradient(180deg, #121a33, #0b1124); border: 1px solid rgba(255, 255, 255, 0.09);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  content-visibility: auto; contain-intrinsic-size: auto 360px;
+}
+.ltd-card.is-on { border-color: color-mix(in srgb, var(--accent) 70%, transparent); }
+.ltd-card.is-out .board-art { filter: grayscale(0.7) brightness(0.7); }
+.ltd-tier-5 { --lb-glow: rgba(168, 85, 247, 0.45); }
+.ltd-tier-6, .ltd-tier-7 { --lb-glow: rgba(240, 180, 41, 0.45); }
+.ltd-tier-8 { --lb-glow: rgba(80, 120, 255, 0.55); }
+.ltd-card-art { display: block; padding: 0; border: 0; background: radial-gradient(70% 70% at 50% 45%, var(--lb-glow), transparent 70%), #070b18; cursor: pointer; }
+.board-art { display: block; width: 100%; height: auto; aspect-ratio: 1; object-fit: cover; }
+.ltd-card-body { display: grid; gap: 7px; padding: 10px 11px 12px; }
+.ltd-name { margin: 0; font-family: var(--font-display); font-size: 0.95rem; letter-spacing: 0.04em; text-transform: uppercase; color: #fff; overflow-wrap: anywhere; }
+.ltd-tags { display: flex; flex-wrap: wrap; gap: 5px; }
+.ltd-badge {
+  display: inline-block; padding: 2px 7px; border-radius: 999px; font-size: 0.66rem; font-weight: 700; letter-spacing: 0.05em; white-space: nowrap;
+  color: #ffe2a0; background: linear-gradient(90deg, rgba(240, 180, 41, 0.22), rgba(168, 85, 247, 0.28)); border: 1px solid rgba(240, 180, 41, 0.45);
+}
+.ltd-badge-out { color: #ffb3b3; background: rgba(239, 68, 68, 0.18); border-color: rgba(239, 68, 68, 0.5); }
+.ltd-out-lg { font-size: 0.95rem; padding: 8px 14px; text-align: center; }
+.ltd-left { display: grid; gap: 4px; color: #cfd8ee; }
+.ltd-bar { height: 5px; border-radius: 99px; background: rgba(255, 255, 255, 0.1); overflow: hidden; }
+.ltd-bar i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #f0b429, #c084fc); }
+.ltd-mine { display: inline-flex; align-items: center; gap: 5px; color: #6ee7b7; font-weight: 700; font-size: 0.85rem; }
+.ltd-mine-lg { font-size: 1.05rem; margin: 0; }
+.ltd-price { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; }
+.ltd-price strong { color: #ffd56b; font-size: 1.02rem; white-space: nowrap; }
+.ltd-price-lg strong { font-size: 1.35rem; }
+.ltd-kicker { margin: 0; font-size: 0.72rem; font-weight: 800; letter-spacing: 0.22em; color: #f0b429; }
+.ltd-detail { display: grid; gap: 14px; }
+@media (min-width: 720px) { .ltd-detail { grid-template-columns: 1.15fr 1fr; align-items: start; } }
+.ltd-detail-view { display: grid; gap: 10px; min-width: 0; }
+.ltd-detail-art { border-radius: 16px; background: #070b18; }
+.seg { display: inline-flex; gap: 2px; padding: 3px; border-radius: 12px; background: var(--surface-2); border: 1px solid var(--border); justify-self: start; }
+.seg-btn { border: 0; background: transparent; color: var(--muted); padding: 6px 14px; border-radius: 9px; font: inherit; font-size: 0.85rem; cursor: pointer; }
+.seg-on { background: var(--accent); color: var(--on-accent); }
+
+/* ================================================================ v3.2 — DAMEO Collection (profile) */
+.col-card { display: grid; gap: 12px; }
+.col-head { display: flex; align-items: center; gap: 10px; }
+.col-ico { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 12px; flex: none; color: #ffd56b; background: linear-gradient(145deg, rgba(240, 180, 41, 0.25), rgba(168, 85, 247, 0.25)); border: 1px solid rgba(240, 180, 41, 0.35); font-size: 1.2rem; }
+.col-title { display: grid; min-width: 0; }
+.col-title .h3 { margin: 0; }
+.col-hidden { display: flex; align-items: center; gap: 8px; margin: 0; }
+.col-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); text-align: center; }
+.col-stats > div { display: grid; gap: 2px; padding: 0 6px; }
+.col-stats > div + div { border-left: 1px solid var(--border); }
+.col-stats strong { font-family: var(--font-display); font-size: 1.4rem; }
+.col-stats strong small { font-size: 0.8rem; color: var(--muted); }
+.col-stats span { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+.col-progress { height: 6px; border-radius: 99px; background: var(--surface-2); overflow: hidden; }
+.col-progress i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #f0b429, #c084fc); }
+.col-sub { margin: 0; font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+.col-showcase { display: grid; gap: 8px; }
+.col-showcase ol { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.col-show {
+  --lb-glow: rgba(110, 140, 255, 0.35);
+  display: grid; width: 100%; padding: 0; overflow: hidden; border-radius: 14px; cursor: pointer; text-align: left;
+  border: 1px solid rgba(240, 180, 41, 0.45); background: radial-gradient(80% 60% at 50% 35%, var(--lb-glow), transparent 70%), #0a1022; color: #fff;
+}
+.col-show-txt { display: grid; gap: 2px; padding: 6px 8px 8px; min-width: 0; }
+.col-show-name { font-size: 0.74rem; font-weight: 700; line-height: 1.2; overflow-wrap: anywhere; }
+.col-serial { font-family: var(--font-display); color: #ffd56b; font-size: 0.9rem; letter-spacing: 0.03em; }
+.col-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.col-grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(30%, 150px), 1fr)); gap: 8px; }
+.col-item {
+  display: grid; gap: 3px; justify-items: start; width: 100%; height: 100%; padding: 0 0 8px; overflow: hidden; border-radius: 14px; cursor: pointer;
+  border: 1px solid var(--border); background: var(--surface-2); color: var(--text); text-align: left; text-decoration: none; font: inherit;
+}
+.col-item > :not(.board-art) { margin: 0 8px; }
+.col-item-name { font-size: 0.8rem; font-weight: 700; line-height: 1.2; overflow-wrap: anywhere; }
+.col-item .rarity { font-size: 0.62rem; }
+.col-locked .board-art { filter: grayscale(1) brightness(0.45); }
+.col-locked { opacity: 0.8; }
+.col-empty { display: grid; gap: 6px; justify-items: start; }
+.col-empty p { margin: 0; }
+.col-public { margin-top: 2px; }
+.col-cert { text-align: center; justify-items: center; }
+.col-cert p { margin: 0; }
+.col-cert-name { font-family: var(--font-display); font-size: 1.3rem; letter-spacing: 0.08em; }
+.col-cert-serial { font-family: var(--font-display); font-size: 2.2rem; color: #ffd56b; letter-spacing: 0.04em; }
+@media (max-width: 380px) {
+  .ltd-grid { gap: 10px; }
+  .ltd-card-body { padding: 9px; }
+  .ltd-name { font-size: 0.86rem; }
+  .col-showcase ol { gap: 6px; }
+}
