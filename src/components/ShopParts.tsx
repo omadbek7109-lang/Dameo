@@ -4,7 +4,7 @@ import { useCosmetics } from '../cosmetics/CosmeticsProvider.tsx';
 import { initialState } from '../engine/index.ts';
 import { useI18n, type TKey } from '../i18n/index.tsx';
 import { Link } from '../router.tsx';
-import { coins, type Rarity, type ShopItem } from '../services/shop.ts';
+import { boardArt, coins, type Rarity, type ShopItem } from '../services/shop.ts';
 import { fxOf, registerSkins, skinClasses } from '../services/skins.ts';
 import { appActive } from '../services/telegram.ts';
 import { Board } from './Board.tsx';
@@ -65,8 +65,13 @@ function useLoop(ms: number, on: boolean) {
 }
 
 /** Small 4×4 board with one white and one black piece (cards). */
-export function MiniPreview({ item }: { item: Pick<ShopItem, 'slug' | 'slot' | 'style'> }) {
+export function MiniPreview({ item }: { item: Pick<ShopItem, 'slug' | 'slot' | 'style'> & { image_url?: string | null } }) {
   const cls = usePreviewClass(item);
+  // boards with their own artwork (Limited Collection) are shown as the artwork, not as a generic 4×4 sample
+  if (item.slot === 'board' && item.image_url) {
+    const full = boardArt(item.image_url);
+    return <img className="board-art mini-art" src={full.replace(/\.webp$/, '-sm.webp')} width={256} height={256} alt="" loading="lazy" decoding="async" />;
+  }
   const loop = useLoop(2200, item.slot === 'effect');
   const sq = Array.from({ length: 16 }, (_, i) => i);
   return (

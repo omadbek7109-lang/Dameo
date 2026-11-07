@@ -5104,3 +5104,4 @@ html.app-paused *::after {
   .ltd-name { font-size: 0.86rem; }
   .col-showcase ol { gap: 6px; }
 }
+.mini-art { border-radius: 12px; background: #070b18; }
