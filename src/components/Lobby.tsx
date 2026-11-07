@@ -24,7 +24,7 @@ import {
 } from '../services/online.ts';
 import { DEFAULT_TIME_CONTROL, isTimeControl, TIME_CONTROLS, type TimeControl } from '../services/clock.ts';
 import { SbError } from '../services/supabase.ts';
-import { haptic, tg } from '../services/telegram.ts';
+import { haptic, tg, everyActive } from '../services/telegram.ts';
 import { Avatar, LevelBadge } from './Avatar.tsx';
 import { Modal } from './Modal.tsx';
 import { useToast } from './Toast.tsx';
@@ -102,14 +102,12 @@ export function LiveQuickPanel({ autoStart = 0 }: { autoStart?: number }) {
   }, []);
   useEffect(() => {
     void refreshLobby();
-    const id = setInterval(refreshLobby, POLL_MS);
-    return () => clearInterval(id);
+    return everyActive(refreshLobby, POLL_MS);
   }, [refreshLobby]);
 
   /* ---- 1 s clock for countdowns ---- */
   useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(id);
+    return everyActive(() => setNow(Date.now()), 1000);
   }, []);
 
   /* ---- my challenge: accepted → play; declined → tell me ---- */
@@ -471,17 +469,16 @@ export function ChallengeInbox() {
     if (mode !== 'live' || !signedIn || !me) return;
     void load();
     const stop = watchIncomingChallenges(me.id, () => void load());
-    const id = setInterval(load, 15000); // safety net if realtime drops
+    const off = everyActive(load, 30_000); // safety net if realtime drops
     return () => {
       stop();
-      clearInterval(id);
+      off();
     };
   }, [mode, signedIn, me?.id, load]);
   useEffect(() => {
     if (list.length === 0) return;
     haptic('move');
-    const id = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(id);
+    return everyActive(() => setNow(Date.now()), 1000);
   }, [list.length]);
 
   const c = list.find((x) => now - new Date(x.created_at).getTime() < CHALLENGE_TTL_MS) ?? null;

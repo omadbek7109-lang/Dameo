@@ -754,6 +754,7 @@ export const uz = {
   'ach.newOne': "Siz yangi yutuqqa erishdingiz!",
   'ach.reward': "Mukofot",
   'ach.view': "Yutuqlarni ko'rish",
+  'nav.shop': "Do'kon",
 } as const;
 
 export type TKey = keyof typeof uz;

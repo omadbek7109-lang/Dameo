@@ -20,7 +20,7 @@ import { claimTimeout, commitBotMove, getMatch, getMoves, resignOnline, startBot
 import { Link } from '../router.tsx';
 import { AchievementUnlocked } from '../components/Achievements.tsx';
 import { achievementsForMatch, type StreakCode } from '../services/achievements.ts';
-import { haptic, tg } from '../services/telegram.ts';
+import { haptic, tg, everyActive } from '../services/telegram.ts';
 import { offerDraw, offerRematch, setMatchVisibility, chatErrorKey } from '../services/live.ts';
 import { moveSound, playSound } from '../services/sound.ts';
 import { MatchChat } from '../components/MatchChat.tsx';
@@ -265,8 +265,7 @@ function OnlineGame({ matchId }: { matchId: string }) {
   const ticking = Boolean(match?.clock) && match?.status === 'active';
   useEffect(() => {
     if (!ticking) return;
-    const id = setInterval(() => setNow(Date.now()), 250);
-    return () => clearInterval(id);
+    return everyActive(() => setNow(Date.now()), 250);
   }, [ticking]);
   const view = match?.clock ? clockView(match.clock, match.status === 'active' ? now : match.clock.turnStartedAt) : null;
   // the side to move is out of time → ask the server to end the game (either player may ask; the server re-checks)

@@ -61,6 +61,28 @@ export function initTelegram(theme: 'light' | 'dark') {
   setTelegramColors(theme);
 }
 
+/* ------------------------------------------------------------------ app activity
+ * A Telegram Mini App that is minimised (or the phone screen is off) keeps running: the page stays
+ * "visible" while Telegram reports `deactivated`. Everything decorative or periodic checks appActive()
+ * so a backgrounded DAMEO costs no CPU/GPU: CSS animations pause via `html.app-paused`, polls skip. */
+let tgActive = true;
+export const appActive = () => (typeof document === 'undefined' || document.visibilityState === 'visible') && tgActive;
+const applyActivity = () => document.documentElement.classList.toggle('app-paused', !appActive());
+if (typeof document !== 'undefined') {
+  document.addEventListener('visibilitychange', applyActivity);
+  try {
+    tg?.onEvent('activated', () => ((tgActive = true), applyActivity()));
+    tg?.onEvent('deactivated', () => ((tgActive = false), applyActivity()));
+  } catch {
+    /* older clients have no activity events */
+  }
+}
+/** setInterval that only runs `fn` while the app is in the foreground. */
+export function everyActive(fn: () => void, ms: number): () => void {
+  const id = setInterval(() => appActive() && fn(), ms);
+  return () => clearInterval(id);
+}
+
 export function setTelegramColors(theme: 'light' | 'dark') {
   if (!tg) return;
   const bg = theme === 'dark' ? '#0a1020' : '#f2f5fb';

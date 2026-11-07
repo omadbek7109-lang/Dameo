@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useAuth } from '../auth/AuthProvider.tsx';
 import { framesActive, type FrameId } from '../services/frames.ts';
+import { appActive } from '../services/telegram.ts';
 
 /**
  * Which avatars wear a frame right now (one small list for the whole app, refreshed every few minutes and after
@@ -24,7 +25,7 @@ export function FramesProvider({ children }: { children: ReactNode }) {
   }, [mode]);
   useEffect(() => {
     refresh();
-    const t = setInterval(() => document.visibilityState === 'visible' && refresh(), 3 * 60_000);
+    const t = setInterval(() => appActive() && refresh(), 3 * 60_000);
     return () => clearInterval(t);
     // re-check when my rating changes (I may have taken or lost #1)
   }, [refresh, me?.rating]);

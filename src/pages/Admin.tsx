@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { appActive } from '../services/telegram.ts';
 import {
   LuBan, LuCheck, LuChevronRight, LuCoins, LuGauge, LuHistory, LuImage, LuLoader, LuPackage, LuPlus, LuRefreshCw, LuSearch,
   LuBot, LuShieldCheck, LuShoppingBag, LuTrophy, LuTriangleAlert, LuUndo2, LuUserCog, LuUsers, LuVolumeX,
@@ -147,7 +148,7 @@ function DashboardTab() {
   const load = useCallback(() => A.adminDashboard().then(setD, () => setErr(true)), []);
   useEffect(() => {
     void load();
-    const id = setInterval(load, 30_000);
+    const id = setInterval(() => appActive() && void load(), 30_000);
     return () => clearInterval(id);
   }, [load]);
   if (err && !d) return <ErrorState onRetry={load} />;

@@ -1,4 +1,4 @@
-import { LuBell, LuCheck, LuGlobe, LuMenu, LuMoon, LuSun, LuTrophy, LuUser, LuUsers, LuHouse, LuSwords } from 'react-icons/lu';
+import { LuBell, LuCheck, LuGlobe, LuMenu, LuMoon, LuSun, LuTrophy, LuUser, LuHouse, LuSwords, LuStore } from 'react-icons/lu';
 import type { IconType } from 'react-icons';
 import { useAuth } from '../auth/AuthProvider.tsx';
 import { LANGS, useI18n, type TKey } from '../i18n/index.tsx';
@@ -20,9 +20,9 @@ export const NAV: Array<{ to: string; key: TKey; short?: TKey; icon: IconType; m
   { to: '/play', key: 'nav.play', icon: LuSwords, match: (p) => p.startsWith('/play') || p.startsWith('/game') },
   // tournaments live inside the rating page (its third tab)
   { to: '/leaderboard', key: 'nav.leaderboard', short: 'nav.leaderboard.short', icon: LuTrophy, match: (p) => p.startsWith('/leaderboard') || p.startsWith('/tournaments') },
-  { to: '/friends', key: 'nav.friends', icon: LuUsers, match: (p) => p.startsWith('/friends') },
-  // on phones the Profil tab opens the main menu (which links to the profile page)
-  { to: '/profile', key: 'nav.profile', icon: LuUser, match: (p) => p.startsWith('/profile'), menu: true },
+  { to: '/shop', key: 'nav.shop', icon: LuStore, match: (p) => p.startsWith('/shop') || p.startsWith('/inventory') || p.startsWith('/wallet') },
+  // on phones the Profil tab opens the main menu (which links to the profile page); friends live inside the profile
+  { to: '/profile', key: 'nav.profile', icon: LuUser, match: (p) => p.startsWith('/profile') || p.startsWith('/friends') || p.startsWith('/achievements'), menu: true },
 ];
 
 export function Header() {

@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { LuCamera, LuLoader, LuPencil } from 'react-icons/lu';
+import { LuCamera, LuLoader, LuPencil, LuSearch, LuUserPlus, LuUsers } from 'react-icons/lu';
 import { useAuth } from '../auth/AuthProvider.tsx';
 import { Avatar, LevelBadge, isPhoto } from '../components/Avatar.tsx';
 import { Modal } from '../components/Modal.tsx';
@@ -19,6 +19,7 @@ import { levelOf } from '../services/levels.ts';
 import { prepareAvatar, uploadAvatar } from '../services/profiles.ts';
 import { tg } from '../services/telegram.ts';
 import { loadPublicProfile } from '../services/profiles.ts';
+import { demoRelations, liveRelations, type Relations } from '../services/friends.ts';
 import { SbError } from '../services/supabase.ts';
 import type { MatchSummary, Player, RatingPoint } from '../types/models.ts';
 
@@ -143,6 +144,8 @@ function ProfileView({ view }: { view: View }) {
 
         <AchievementStrip player={p} matches={matches} history={history} own={own} />
       </div>
+
+      {own && <ProfileFriends />}
 
       <section className="card">
         <SectionHead title={t('profile.recentMatches')} />
@@ -289,5 +292,35 @@ function EditProfile({ open, onClose, player }: { open: boolean; onClose: () => 
         </div>
       </form>
     </Modal>
+  );
+}
+
+/** Friends live inside the profile now (the bottom bar has the shop instead): counts + the three sections. */
+function ProfileFriends() {
+  const { t } = useI18n();
+  const { mode, signedIn, local } = useAuth();
+  const [rel, setRel] = useState<Relations | null>(null);
+  useEffect(() => {
+    if (mode === 'demo') setRel(demoRelations({ friends: local?.friends ?? [], outgoing: local?.outgoing ?? [], handledIncoming: local?.handledIncoming ?? [] }));
+    else if (signedIn) liveRelations().then(setRel, () => setRel(null));
+  }, [mode, signedIn, local?.friends, local?.outgoing, local?.handledIncoming]);
+  const items: Array<{ tab: string; key: TKey; icon: typeof LuUsers; n?: number; alert?: boolean }> = [
+    { tab: 'friends', key: 'friends.tabFriends', icon: LuUsers, n: rel?.friends.length },
+    { tab: 'requests', key: 'friends.tabRequests', icon: LuUserPlus, n: rel?.incoming.length, alert: true },
+    { tab: 'find', key: 'friends.tabFind', icon: LuSearch },
+  ];
+  return (
+    <section className="card pf-friends" aria-label={t('nav.friends')}>
+      <SectionHead title={t('nav.friends')} sub={t('friends.sub')} />
+      <div className="pf-friends-row">
+        {items.map((i) => (
+          <Link key={i.tab} to={`/friends?tab=${i.tab}`} className="pf-friends-btn">
+            <i.icon />
+            <span>{t(i.key)}</span>
+            {i.n ? <span className={`tab-count ${i.alert ? 'tab-count-alert' : ''}`}>{i.n}</span> : null}
+          </Link>
+        ))}
+      </div>
+    </section>
   );
 }

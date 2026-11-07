@@ -137,20 +137,26 @@ function pieceSideCss(scopes: string[], cls: 'piece-w' | 'piece-b', s: Partial<P
   let css = `${disc}{--ring-c:${ring};background:${layers.join(',')};box-shadow:${shadow.join(',')};${glow ? `--glow:${glow};` : ''}}`;
   if (s.motif) css += `${sel('.piece-disc::before')}{content:${cssString(s.motif)};}`;
   if (s.crown) css += `${sel('.piece-crown')}{color:${col(s.crown, '#e8bb4d')};}`;
-  if (anim !== 'none') css += `${disc}{animation:var(--pa-${anim});}` + `${sel('.pfx')}{${pfxFor(anim)}}`;
+  if (anim !== 'none') {
+    const [fx, after] = pfxFor(anim);
+    css += `${disc}{animation:var(--pa-${anim});}` + `${sel('.pfx')}{${fx}}` + (after ? `${sel('.pfx::after')}{${after}}` : '');
+  }
   return css;
 }
-// overlay layer inside the disc for animated light effects
-function pfxFor(anim: PieceAnim): string {
+// overlay layer inside the disc for animated light effects. Every loop animates only transform/opacity,
+// which the GPU compositor runs without repainting (background-position / box-shadow loops repaint every frame).
+function pfxFor(anim: PieceAnim): [string, string?] {
   switch (anim) {
     case 'shimmer':
-      return 'background:linear-gradient(115deg,transparent 35%,rgba(255,255,255,.55) 48%,transparent 60%) 0 0/250% 100%;animation:sk-shine 3.2s linear infinite;';
+      return ['display:block;overflow:hidden;', "content:'';position:absolute;inset:0 -70%;background:linear-gradient(115deg,transparent 42%,rgba(255,255,255,.55) 50%,transparent 58%);animation:sk-sweep 3.2s linear infinite;"];
     case 'sparkle':
-      return 'background:radial-gradient(1.5px 1.5px at 30% 28%,#fff,transparent),radial-gradient(1.2px 1.2px at 70% 40%,#fff,transparent),radial-gradient(1.6px 1.6px at 46% 72%,#fff,transparent);animation:sk-twinkle 1.8s ease-in-out infinite;';
+      return ['display:block;background:radial-gradient(1.5px 1.5px at 30% 28%,#fff,transparent),radial-gradient(1.2px 1.2px at 70% 40%,#fff,transparent),radial-gradient(1.6px 1.6px at 46% 72%,#fff,transparent);animation:sk-twinkle 1.8s ease-in-out infinite;'];
     case 'glitch':
-      return 'background:linear-gradient(90deg,rgba(0,255,255,.35),transparent 30%,transparent 70%,rgba(255,0,80,.35));animation:sk-glitch 2.4s steps(1) infinite;';
+      return ['display:block;background:linear-gradient(90deg,rgba(0,255,255,.35),transparent 30%,transparent 70%,rgba(255,0,80,.35));animation:sk-glitch 2.4s steps(1) infinite;'];
+    case 'pulse':
+      return ['display:block;box-shadow:0 0 18px var(--glow,rgba(255,255,255,.6)),inset 0 0 0 2px var(--ring-c);opacity:0;animation:sk-glow 1.8s ease-in-out infinite;'];
     default:
-      return 'display:none;';
+      return ['display:none;'];
   }
 }
 

@@ -6,6 +6,7 @@ import { useI18n, type TKey } from '../i18n/index.tsx';
 import { Link } from '../router.tsx';
 import { coins, type Rarity, type ShopItem } from '../services/shop.ts';
 import { fxOf, registerSkins, skinClasses } from '../services/skins.ts';
+import { appActive } from '../services/telegram.ts';
 import { Board } from './Board.tsx';
 
 /** 🪙 12 500 */
@@ -54,7 +55,7 @@ function useLoop(ms: number, on: boolean) {
   useEffect(() => {
     if (!on) return;
     tickers++;
-    const id = setInterval(() => setN((x) => x + 1), ms);
+    const id = setInterval(() => appActive() && setN((x) => x + 1), ms);
     return () => {
       tickers--;
       clearInterval(id);

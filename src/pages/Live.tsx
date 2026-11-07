@@ -8,7 +8,7 @@ import { replay } from '../engine/index.ts';
 import { useI18n, type TKey } from '../i18n/index.tsx';
 import { Link, useRoute } from '../router.tsx';
 import { featuredGames, liveList, liveStats, type FeaturedGame, type LiveGame } from '../services/live.ts';
-import { tg } from '../services/telegram.ts';
+import { tg, appActive, everyActive } from '../services/telegram.ts';
 
 const noop = () => {};
 /** small static board for a list card */
@@ -62,14 +62,14 @@ export function Live() {
   useEffect(() => {
     void load();
     let t: ReturnType<typeof setTimeout> | null = null;
-    const sub = subscribeChanges('public:live-list', [{ table: 'matches', event: 'INSERT' }, { table: 'matches', event: 'UPDATE' }], (e) => {
+    const sub = subscribeChanges('public:live-list', [{ table: 'matches', event: 'INSERT' }, { table: 'matches', event: 'UPDATE', filter: 'status=neq.active' }], (e) => {
       const r = (e.record ?? {}) as { status?: string };
-      // a move in a running game also updates its row — only starts and ends change the list
+      // moves in running games are filtered out on the server (status=neq.active); this is a second guard
       if (e.type === 'UPDATE' && r.status === 'active') return;
       if (t) clearTimeout(t);
-      t = setTimeout(() => document.visibilityState === 'visible' && void load(), 800);
+      t = setTimeout(() => appActive() && void load(), 800);
     });
-    const id = setInterval(() => document.visibilityState === 'visible' && void load(), 20_000);
+    const id = setInterval(() => appActive() && void load(), 30_000);
     const onWake = () => document.visibilityState === 'visible' && void load();
     document.addEventListener('visibilitychange', onWake);
     tg?.onEvent?.('activated', onWake);
@@ -82,8 +82,7 @@ export function Live() {
     };
   }, [load]);
   useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(id);
+    return everyActive(() => setNow(Date.now()), 1000);
   }, []);
 
   return (

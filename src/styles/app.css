@@ -4766,3 +4766,130 @@ a.ach-strip:hover { border-color: rgba(143, 179, 255, 0.35); }
 .vs-stats { font-size: 0.75rem; color: var(--muted); }
 .vp-note { display: flex; gap: 6px; align-items: flex-start; }
 .vp-note svg { flex: none; margin-top: 2px; }
+
+
+/* ===================================================== performance (v3.1): no endless repaint, no live blur
+   Measured idle on every page: ~60 style recalcs/s and a full repaint each frame, caused by the drifting
+   .ambient background under ~15 kinds of backdrop-filter glass (the GPU re-blurred the whole screen 60×/s),
+   endless background-position / box-shadow loops (avatar shine, online dots, skin previews) and, in the shop,
+   110 looping previews. Now: static background, opaque glass, loops on transform/opacity only, and
+   everything decorative pauses while DAMEO is minimised in Telegram or the screen is off. */
+:root,
+:root[data-theme='light'],
+:root[data-theme='dark'] {
+  --glass-blur: none;
+}
+.ambient {
+  animation: none;
+}
+.header,
+.bottom-nav,
+.sheet-backdrop,
+.modal-backdrop {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+/* things that float over scrolling content get an opaque base instead of the blur */
+.header {
+  background: var(--glass-fill), color-mix(in srgb, var(--bg) 95%, transparent);
+}
+.bottom-nav {
+  background: var(--glass-fill-strong), var(--surface);
+}
+.modal,
+.toast {
+  background: var(--glass-fill-strong), var(--surface);
+}
+.modal-backdrop,
+.sheet-backdrop {
+  background: rgba(5, 10, 25, 0.7);
+}
+/* avatar sheen: once, not forever */
+.avatar::before {
+  animation: shine 2.2s ease-in-out 1;
+}
+/* online / live dots: the ring grows on its own layer (transform + opacity) */
+.dot-on,
+.wk-dot {
+  position: relative;
+  animation: none;
+  box-shadow: none;
+}
+.dot-on::after,
+.wk-dot::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: inherit;
+  opacity: 0.55;
+  animation: dot-ring 2.2s ease-out infinite;
+}
+@keyframes dot-ring {
+  70%, 100% { transform: scale(2.3); opacity: 0; }
+}
+/* skins: pulse glow lives on the overlay (opacity), shimmer is a moving band (transform) */
+.piece-disc {
+  --pa-pulse: none;
+}
+@keyframes sk-sweep {
+  from { transform: translateX(-45%); }
+  to { transform: translateX(45%); }
+}
+@keyframes sk-glow {
+  50% { opacity: 1; }
+}
+/* football selection: static glow, only the lift animates */
+.board-wrap[class*='sk-pw-fc-'] .sq-selected .piece-w,
+.board-wrap[class*='sk-pb-fc-'] .sq-selected .piece-b,
+.board-wrap[class*='sk-p-fc-'] .sq-selected .piece {
+  filter: drop-shadow(0 0 5px rgba(255, 255, 255, 0.9)) drop-shadow(0 0 14px rgba(255, 213, 79, 0.85));
+  animation: fcLift 1.1s ease-in-out infinite;
+}
+@keyframes fcLift {
+  0%, 100% { transform: translateY(-1px) scale(1.04); }
+  50% { transform: translateY(-3px) scale(1.08); }
+}
+/* shop grid: previews are still frames; the card you touch / open plays them */
+.shop-card {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 230px;
+}
+.shop-grid .piece-disc,
+.shop-grid .pfx,
+.shop-grid .pfx::after,
+.shop-grid .fx-burst,
+.shop-grid .fx-burst::before,
+.shop-grid .fx-burst::after {
+  animation-play-state: paused !important;
+}
+.shop-grid .shop-card:hover .piece-disc,
+.shop-grid .shop-card:hover .pfx,
+.shop-grid .shop-card:hover .pfx::after,
+.shop-grid .shop-card:hover .fx-burst,
+.shop-grid .shop-card:hover .fx-burst::before,
+.shop-grid .shop-card:hover .fx-burst::after {
+  animation-play-state: running !important;
+}
+/* minimised in Telegram / screen off / other tab: freeze every animation */
+html.app-paused *,
+html.app-paused *::before,
+html.app-paused *::after {
+  animation-play-state: paused !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  .dot-on::after,
+  .wk-dot::after,
+  .avatar::before {
+    animation: none;
+  }
+}
+
+/* ===================================================== profile: friends block (moved from the bottom bar) */
+.pf-friends-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.pf-friends-btn { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; min-height: 76px; padding: 10px 6px;
+  border-radius: 14px; border: 1px solid var(--border); background: var(--surface-2); color: inherit; text-decoration: none; text-align: center;
+  font-size: 0.82rem; font-weight: 700; position: relative; line-height: 1.2; }
+.pf-friends-btn svg { font-size: 1.3rem; color: var(--accent); }
+.pf-friends-btn .tab-count { position: absolute; top: 6px; right: 8px; }
+.pf-friends-btn:active { transform: scale(0.97); }

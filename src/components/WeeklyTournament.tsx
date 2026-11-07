@@ -4,7 +4,7 @@ import { useAuth } from '../auth/AuthProvider.tsx';
 import { useI18n, type TKey } from '../i18n/index.tsx';
 import { Link } from '../router.tsx';
 import { SbError } from '../services/supabase.ts';
-import { haptic, tg } from '../services/telegram.ts';
+import { haptic, tg, appActive } from '../services/telegram.ts';
 import {
   formatTashkent,
   formatWeekRange,
@@ -86,7 +86,7 @@ export function WeeklyTournament() {
   // live: poll, and re-read at once when the app comes back to the foreground
   useEffect(() => {
     void load();
-    const id = setInterval(() => document.visibilityState === 'visible' && void load(), POLL_MS);
+    const id = setInterval(() => appActive() && void load(), POLL_MS);
     const onWake = () => document.visibilityState === 'visible' && void load();
     document.addEventListener('visibilitychange', onWake);
     tg?.onEvent?.('activated', onWake);
@@ -99,7 +99,7 @@ export function WeeklyTournament() {
 
   // 1 s countdown (server-anchored)
   useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 1000);
+    const id = setInterval(() => appActive() && setNow(Date.now()), 1000);
     return () => clearInterval(id);
   }, []);
   const endsAt = ov ? Date.parse(ov.current.ends_at) - skew.current : 0;

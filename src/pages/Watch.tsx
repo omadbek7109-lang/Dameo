@@ -16,7 +16,7 @@ import { getMatch, getMoves, watchMatch, type OnlineMatch, type OnlineMove } fro
 import { reportCreate } from '../services/shop.ts';
 import { SbError } from '../services/supabase.ts';
 import { playSound } from '../services/sound.ts';
-import { tg } from '../services/telegram.ts';
+import { tg, appActive } from '../services/telegram.ts';
 import { modeLabel } from './Live.tsx';
 
 const noop = () => {};
@@ -97,12 +97,12 @@ export function Watch() {
     if (!match || !active || isPlayer) return;
     const ping = () => livePing(id).then((r) => setViewers(r.viewers)).catch(() => {});
     void ping();
-    const t2 = setInterval(() => document.visibilityState === 'visible' && void ping(), 20_000);
+    const t2 = setInterval(() => appActive() && void ping(), 20_000);
     return () => clearInterval(t2);
   }, [match?.id, active, isPlayer, id]);
   useEffect(() => {
     if (!active) return;
-    const t3 = setInterval(() => setNow(Date.now()), 500);
+    const t3 = setInterval(() => appActive() && setNow(Date.now()), 500);
     return () => clearInterval(t3);
   }, [active]);
 

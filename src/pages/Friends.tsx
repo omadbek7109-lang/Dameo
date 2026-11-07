@@ -7,7 +7,7 @@ import { EmptyState, ErrorState, Spinner } from '../components/States.tsx';
 import { useToast } from '../components/Toast.tsx';
 import { DemoNotice, SignInPrompt } from '../components/ui.tsx';
 import { useI18n, type TKey } from '../i18n/index.tsx';
-import { Link, navigate } from '../router.tsx';
+import { Link, navigate, useRoute } from '../router.tsx';
 import { isOnline } from '../services/demoData.ts';
 import { demoRelations, demoSearch, inviteFriendLive, liveRelations, liveSearch, removeFriendLive, respondRequestLive, sendRequestLive, type Relations } from '../services/friends.ts';
 import { subscribeChanges } from '../services/supabase.ts';
@@ -19,7 +19,12 @@ export function Friends() {
   const { t, num } = useI18n();
   const { mode, signedIn, local, mutateLocal } = useAuth();
   const { toast } = useToast();
-  const [tab, setTab] = useState<Tab>('friends');
+  const { query: rq } = useRoute();
+  const qt = rq.get('tab');
+  const [tab, setTab] = useState<Tab>(qt === 'requests' || qt === 'find' ? qt : 'friends');
+  useEffect(() => {
+    if (qt === 'requests' || qt === 'find' || qt === 'friends') setTab(qt);
+  }, [qt]);
   const [rel, setRel] = useState<Relations | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);

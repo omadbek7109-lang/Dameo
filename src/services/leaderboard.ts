@@ -1,4 +1,5 @@
 import type { Player } from '../types/models.ts';
+import { appActive } from './telegram.ts';
 import { backendConfigured } from './config.ts';
 import { DEMO_PLAYERS, isOnline } from './demoData.ts';
 import { db, subscribeChanges, type ConnectionState } from './supabase.ts';
@@ -95,15 +96,28 @@ async function liveRows(q: LeaderboardQuery): Promise<{ rows: RankedPlayer[]; to
 }
 
 /** Subscribe to rating changes; callback is debounced. Returns an unsubscribe function. */
-export function subscribeLeaderboard(onUpdate: () => void, onStatus?: (s: ConnectionState) => void): () => void {
+export function subscribeLeaderboard(onUpdate: () => void, onStatus?: (s: ConnectionState) => void, relevant?: (r: { id: string; rating: number }) => boolean): () => void {
   if (!backendConfigured) return () => {};
   let t: any;
+  let last = 0;
+  // every player's presence heartbeat updates their profile row once a minute: refetch only when a
+  // rating (or name/avatar) actually changed, and not more often than every 5 s
+  const seen = new Map<string, string>();
   const sub = subscribeChanges(
     'public:leaderboard',
     [{ table: 'profiles', event: 'UPDATE' }],
-    () => {
+    (e) => {
+      const r = e.record as { id: string; rating: number; wins?: number; losses?: number; draws?: number; username?: string; avatar?: string };
+      const sig = `${r.rating}|${r.wins}|${r.losses}|${r.draws}|${r.username}|${r.avatar}`;
+      const prev = seen.get(r.id);
+      seen.set(r.id, sig);
+      if (prev === sig) return;
+      if (prev === undefined && relevant && !relevant(r)) return;
       clearTimeout(t);
-      t = setTimeout(onUpdate, 400);
+      t = setTimeout(() => {
+        last = Date.now();
+        onUpdate();
+      }, Math.max(400, 5000 - (Date.now() - last)));
     },
     (s) => {
       onStatus?.(s);
@@ -133,7 +147,7 @@ export async function recentlyActive(limit = 6): Promise<Player[]> {
 export function startPresence(): () => void {
   if (!backendConfigured) return () => {};
   const beat = () => {
-    if (document.visibilityState === 'visible' && navigator.onLine) db.rpc('touch_presence').catch(() => {});
+    if (appActive() && navigator.onLine) db.rpc('touch_presence').catch(() => {});
   };
   beat();
   const id = setInterval(beat, 60_000);

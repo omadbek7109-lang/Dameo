@@ -11,6 +11,10 @@ import { adoptSession, auth, db, getSession, onAuthChange, subscribeChanges, typ
 import { inTelegram, rememberBotUsername, tg } from '../services/telegram.ts';
 import type { AppNotification, MatchSummary, Player, RatingPoint } from '../types/models.ts';
 
+/** A profile row without the presence fields: equal signatures mean nothing visible changed. */
+export const profileSig = (r: Record<string, unknown>) =>
+  JSON.stringify(Object.keys(r ?? {}).filter((k) => !/seen|updated_at|presence/.test(k)).sort().map((k) => [k, r[k]]));
+
 export type AuthMode = 'demo' | 'live';
 
 export interface DemoResultInput {
@@ -127,7 +131,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (mode !== 'live' || !session) return;
     const stop = startPresence();
     // own profile changes (e.g. rating applied by the server) update the UI without reload
-    const sub = subscribeChanges('public:me', [{ table: 'profiles', event: 'UPDATE', filter: `id=eq.${session.user.id}` }], () => void refresh());
+    // the presence heartbeat also updates this row every minute — only real changes (rating, name, avatar…) reload
+    let lastSig = '';
+    const sub = subscribeChanges('public:me', [{ table: 'profiles', event: 'UPDATE', filter: `id=eq.${session.user.id}` }], (e) => {
+      const sig = profileSig(e.record);
+      if (sig === lastSig) return;
+      lastSig = sig;
+      void refresh();
+    });
     const inv = subscribeChanges('public:invites', [{ table: 'game_invites', event: 'INSERT', filter: `to_id=eq.${session.user.id}` }], (e) => {
       notify('friend', translate(currentLang(), 'friends.inviteReceived'), `/play?mode=friends&join=${e.record.code}`);
     });

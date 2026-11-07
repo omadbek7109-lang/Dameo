@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { everyActive } from '../services/telegram.ts';
 import { LuChevronLeft, LuChevronRight, LuCrown, LuSearch } from 'react-icons/lu';
 import { useAuth } from '../auth/AuthProvider.tsx';
 import { Avatar, LevelBadge } from '../components/Avatar.tsx';
@@ -73,12 +74,35 @@ export function Leaderboard({ initialTab }: { initialTab?: View } = {}) {
   // real-time: refetch quietly whenever the server reports a rating change
   const loadRef = useRef(load);
   loadRef.current = load;
-  useEffect(() => subscribeLeaderboard(() => void loadRef.current(true), setConn), []);
-
-  // keep "updated x ago" fresh
+  // a change matters if a shown player's rating moved, or someone else's rating now falls inside the shown range
+  const shown = useRef<{ ids: Map<string, number>; min: number; max: number; top: boolean }>({ ids: new Map(), min: 0, max: Infinity, top: true });
   useEffect(() => {
-    const id = setInterval(() => tick((n) => n + 1), 15_000);
-    return () => clearInterval(id);
+    const rows = [...(data?.rows ?? []), ...podium];
+    const r = rows.map((p) => p.rating);
+    shown.current = { ids: new Map(rows.map((p) => [p.id, p.rating])), min: r.length ? Math.min(...r) : 0, max: r.length ? Math.max(...r) : Infinity, top: page === 0 };
+  }, [data, podium, page]);
+  useEffect(
+    () =>
+      subscribeLeaderboard(
+        () => void loadRef.current(true),
+        setConn,
+        (p) => {
+          const s = shown.current;
+          const was = s.ids.get(p.id);
+          return was !== undefined ? was !== p.rating : p.rating >= s.min && (s.top || p.rating <= s.max);
+        },
+      ),
+    [],
+  );
+
+  // keep "updated x ago" and online dots fresh — only while the app is open
+  useEffect(() => {
+    const offTick = everyActive(() => tick((n) => n + 1), 15_000);
+    const offLoad = everyActive(() => void loadRef.current(true), 60_000);
+    return () => {
+      offTick();
+      offLoad();
+    };
   }, []);
 
   const totalPages = Math.max(1, Math.ceil((data?.total ?? 0) / PAGE_SIZE));

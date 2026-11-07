@@ -756,4 +756,5 @@ export const en: Record<TKey, string> = {
   'ach.newOne': "You unlocked a new achievement!",
   'ach.reward': "Reward",
   'ach.view': "View achievements",
+  'nav.shop': "Shop",
 };

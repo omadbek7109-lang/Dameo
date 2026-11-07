@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import type { IconType } from 'react-icons';
 import {
   LuArchive, LuBackpack, LuBan, LuChevronRight, LuCircleHelp, LuCircleUser, LuFrame, LuGraduationCap, LuInfo, LuLayoutGrid, LuLogIn, LuLogOut,
-  LuMessageSquareWarning, LuMoon, LuPlus, LuRadio, LuSettings, LuShieldCheck, LuSparkles, LuStar, LuSun, LuX,
+  LuMessageSquareWarning, LuMoon, LuPlus, LuRadio, LuSettings, LuShieldCheck, LuSparkles, LuStar, LuSun, LuUsers, LuX,
 } from 'react-icons/lu';
 import { useAuth } from '../auth/AuthProvider.tsx';
 import { useCosmetics } from '../cosmetics/CosmeticsProvider.tsx';
@@ -67,13 +67,14 @@ export function MenuSheet() {
   ];
   const mine: Item[] = account
     ? [
+        { to: '/friends', key: 'nav.friends', icon: LuUsers },
         { to: '/profile?section=frames', key: 'menu.frames', icon: LuFrame },
         { to: '/inventory', key: 'inv.title', icon: LuBackpack },
         { to: '/settings', key: 'nav.settings', icon: LuSettings },
         { to: '/blocked', key: 'menu.blocked', icon: LuBan },
         ...(isAdmin ? [{ to: '/admin', key: 'menu.admin' as TKey, icon: LuShieldCheck }] : []),
       ]
-    : [{ to: '/settings', key: 'nav.settings', icon: LuSettings }];
+    : [{ to: '/friends', key: 'nav.friends', icon: LuUsers }, { to: '/settings', key: 'nav.settings', icon: LuSettings }];
   const help: Item[] = [
     { to: '/help', key: 'menu.help', icon: LuCircleHelp },
     ...(account ? [{ to: '/feedback', key: 'menu.feedback' as TKey, icon: LuMessageSquareWarning }] : []),
