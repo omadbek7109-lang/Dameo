@@ -5129,3 +5129,5 @@ html.in-telegram .modal { margin-top: 4px; }
   background: linear-gradient(180deg, #fff1c1, #f0b429 55%, #b8862b); -webkit-background-clip: text; background-clip: text; color: transparent;
 }
 .ltd-plate-sub { font-size: 0.78rem; color: #cdb88a; }
+.ltd-stars { color: #ffd56b; font-weight: 700; font-size: 0.86rem; white-space: nowrap; padding: 1px 8px; border-radius: 999px; background: rgba(255, 213, 107, 0.12); border: 1px solid rgba(255, 213, 107, 0.3); }
+.ltd-price-lg .ltd-stars { font-size: 1rem; }

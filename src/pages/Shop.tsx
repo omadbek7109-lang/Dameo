@@ -28,14 +28,14 @@ export function Shop() {
   const [error, setError] = useState(false);
   const [openSlug, setOpenSlug] = useState<string | null>(null);
   const [stock, setStock] = useState<BoardStock[] | null>(null);
-  const [som, setSom] = useState(10);
+  const [rate, setRate] = useState(25); // Telegram Stars per 1 000 coins
 
   const load = async () => {
     try {
       const [c, st, pr] = await Promise.all([shopCatalog(), boardStock(), pricingSettings().catch(() => null)]);
       registerSkins(c.items.map((i) => ({ slug: i.slug, slot: i.slot, style: i.style })));
       setStock(Array.isArray(st) ? st : null);
-      if (pr) setSom(Number(pr.som_per_coin));
+      if (pr) setRate(Number(pr.stars_per_1000));
       setData(c);
       setError(false);
     } catch {
@@ -99,7 +99,7 @@ export function Shop() {
         <LimitedShop
           items={items.filter((i) => i.collection === 'limited')}
           stock={stock}
-          somPerCoin={som}
+          starsPer1000={rate}
           equippedSlug={equipped?.board ?? null}
           onChanged={async () => {
             await load();

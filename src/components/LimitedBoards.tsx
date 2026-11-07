@@ -12,6 +12,9 @@ import { Modal } from './Modal.tsx';
 import { FullPreview, RarityBadge } from './ShopParts.tsx';
 import { useToast } from './Toast.tsx';
 
+/** a coin price in Telegram Stars at the current rate (whole Stars, rounded up — the same rule as the server's packages) */
+const starsFor = (coinsAmount: number, starsPer1000: number) => Math.max(1, Math.ceil((coinsAmount * starsPer1000) / 1000 - 1e-9));
+
 /** board artwork (thumbnail on cards, full size when opened) */
 export function BoardArt({ url, size = 'sm', alt, className = '' }: { url: string | null; size?: 'sm' | 'lg'; alt: string; className?: string }) {
   if (!url) return null;
@@ -73,10 +76,10 @@ function Remaining({ stock }: { stock: BoardStock }) {
 }
 
 /** The Limited Collection grid in the shop's Boards category. */
-export function LimitedShop({ items, stock, somPerCoin, equippedSlug, onChanged }: {
+export function LimitedShop({ items, stock, starsPer1000, equippedSlug, onChanged }: {
   items: ShopItem[];
   stock: BoardStock[];
-  somPerCoin: number;
+  starsPer1000: number;
   equippedSlug: string | null;
   onChanged: () => Promise<void>;
 }) {
@@ -93,15 +96,15 @@ export function LimitedShop({ items, stock, somPerCoin, equippedSlug, onChanged 
       </div>
       <div className="ltd-grid">
         {rows.map((s) => (
-          <LimitedCard key={s.slug} item={bySlug.get(s.slug)!} stock={s} somPerCoin={somPerCoin} equipped={equippedSlug === s.slug} onOpen={() => setOpen(s.slug)} />
+          <LimitedCard key={s.slug} item={bySlug.get(s.slug)!} stock={s} starsPer1000={starsPer1000} equipped={equippedSlug === s.slug} onOpen={() => setOpen(s.slug)} />
         ))}
       </div>
-      {cur && <LimitedModal item={bySlug.get(cur.slug)!} stock={cur} somPerCoin={somPerCoin} equipped={equippedSlug === cur.slug} onClose={() => setOpen(null)} onChanged={onChanged} />}
+      {cur && <LimitedModal item={bySlug.get(cur.slug)!} stock={cur} starsPer1000={starsPer1000} equipped={equippedSlug === cur.slug} onClose={() => setOpen(null)} onChanged={onChanged} />}
     </section>
   );
 }
 
-function LimitedCard({ item, stock, somPerCoin, equipped, onOpen }: { item: ShopItem; stock: BoardStock; somPerCoin: number; equipped: boolean; onOpen: () => void }) {
+function LimitedCard({ item, stock, starsPer1000, equipped, onOpen }: { item: ShopItem; stock: BoardStock; starsPer1000: number; equipped: boolean; onOpen: () => void }) {
   const { t, lang } = useI18n();
   const price = item.final_price;
   return (
@@ -128,7 +131,7 @@ function LimitedCard({ item, stock, somPerCoin, equipped, onOpen }: { item: Shop
           ) : (
             <>
               <strong>🪙 {coins(price)}</strong>
-              <span className="muted small">{t('lb.som', { n: coins(price * somPerCoin) })}</span>
+              <span className="ltd-stars">⭐ {coins(starsFor(price, starsPer1000))}</span>
             </>
           )}
         </div>
@@ -140,8 +143,8 @@ function LimitedCard({ item, stock, somPerCoin, equipped, onOpen }: { item: Shop
   );
 }
 
-function LimitedModal({ item, stock, somPerCoin, equipped, onClose, onChanged }: {
-  item: ShopItem; stock: BoardStock; somPerCoin: number; equipped: boolean; onClose: () => void; onChanged: () => Promise<void>;
+function LimitedModal({ item, stock, starsPer1000, equipped, onClose, onChanged }: {
+  item: ShopItem; stock: BoardStock; starsPer1000: number; equipped: boolean; onClose: () => void; onChanged: () => Promise<void>;
 }) {
   const { t, lang } = useI18n();
   const { signedIn } = useAuth();
@@ -263,7 +266,7 @@ function LimitedModal({ item, stock, somPerCoin, equipped, onClose, onChanged }:
                 ) : (
                   <>
                     <strong>🪙 {coins(price)}</strong>
-                    <span className="muted">{t('lb.som', { n: coins(price * somPerCoin) })}</span>
+                    <span className="ltd-stars">⭐ {coins(starsFor(price, starsPer1000))}</span>
                   </>
                 )}
               </div>

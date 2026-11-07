@@ -18,6 +18,13 @@ describe('skins', () => {
     expect(bad).not.toContain('url(');
     expect(bad).not.toContain('evil');
   });
+  test('artwork frame: wrapper padding puts the board in the opening; bad values are ignored', () => {
+    const css = skinCss({ slug: 'celestial-crown', slot: 'board', style: { light: '#eee', dark: '#123', edge: '#ccc', fr: 'celestial-crown-frame', fi: [0.1, 0.2, 0.9, 0.9] } });
+    expect(css).toContain('.sk-b-celestial-crown.board-wrap:not(.mini-skin){position:relative;padding:22.857% 10.000% 11.429% 10.000%;}');
+    expect(css).toContain('boards/celestial-crown-frame.webp');
+    expect(skinCss({ slug: 'x', slot: 'board', style: { fr: 'x-frame', fi: [0.1, 0.1, 2, 0.9] } })).not.toContain('::after');
+    expect(skinCss({ slug: 'x', slot: 'board', style: { fr: 'https://evil/x', fi: [0.1, 0.1, 0.9, 0.9] } })).not.toContain('::after');
+  });
   test('board CSS sets squares, frame and highlight', () => {
     const css = skinCss({ slug: 'neon-arena', slot: 'board', style: { light: '#121a3a', dark: '#060a1c', edge: '#00e5ff', edge2: '#ff00d4', lp: 'grid', dp: 'grid', frame: 'neon', hl: '#ff00d4' } });
     expect(css).toContain('.sk-b-neon-arena{--sq-light:#121a3a;--sq-dark:#060a1c;--board-edge:#00e5ff;--hl:#ff00d4;}');

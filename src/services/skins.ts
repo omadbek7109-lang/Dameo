@@ -42,6 +42,9 @@ export interface BoardStyle {
   /** texture tiles cut from the board's original artwork: name of `boards/<name>.webp` (light / dark squares) */
   lt?: string;
   dt?: string;
+  /** ornamental frame from the artwork (`boards/<fr>.webp`, transparent centre) and where its opening is: [x0, y0, x1, y1] (0–1) */
+  fr?: string;
+  fi?: [number, number, number, number];
 }
 export type FxKind = 'ripple' | 'sparkle' | 'fire' | 'lightning' | 'stardust';
 export interface EffectStyle {
@@ -219,7 +222,29 @@ function boardCss(scope: string, s: Partial<BoardStyle>): string {
   css += `.${scope} .sq-light{background-color:${light};background-image:${lt ?? squarePattern(oneOf(s.lp, SQ_PATTERNS, 'none'))};${lt ? 'background-size:cover;' : ''}}`;
   css += `.${scope} .sq-dark{background-color:${dark};background-image:${dt ?? squarePattern(oneOf(s.dp, SQ_PATTERNS, 'sheen'))};${dt ? 'background-size:cover;' : ''}}`;
   if (s.coord) css += `.${scope} .coord{color:${col(s.coord, '#ffffff')};opacity:.85;}`;
+  css += frameCss(scope, s);
   return css;
+}
+
+/* Limited boards: the artwork's own frame (jewels, gold, glow) drawn around the real 8×8 board. The wrapper gets padding
+ * so the board lands exactly in the frame's opening; the frame image is stretched to the wrapper and sits above the
+ * board (its opening is transparent). Static: no animation. Small previews (.mini-skin) keep the plain board. */
+function frameCss(scope: string, s: Partial<BoardStyle>): string {
+  const url = texUrl(s.fr);
+  const f = s.fi;
+  if (!url || !Array.isArray(f) || f.length !== 4 || !f.every((n) => typeof n === 'number' && n >= 0 && n <= 1)) return '';
+  const [x0, y0, x1, y1] = f;
+  if (x1 - x0 < 0.3 || y1 - y0 < 0.3) return '';
+  const k = (x1 - x0) / (y1 - y0); // vertical paddings are % of the width: scale so the opening is square
+  const pc = (n: number) => `${(n * 100).toFixed(3)}%`;
+  const sel = `.${scope}.board-wrap:not(.mini-skin)`;
+  return (
+    `${sel}{position:relative;padding:${pc(y0 * k)} ${pc(1 - x1)} ${pc((1 - y1) * k)} ${pc(x0)};}` +
+    `${sel}::after{content:'';position:absolute;inset:0;background:${url} 0 0/100% 100% no-repeat;pointer-events:none;z-index:4;}` +
+    `${sel} .board{border-width:0;border-radius:10px;box-shadow:0 0 0 1px rgba(0,0,0,.35);}` +
+    // in a game the frame may use the page gutters, so the board itself stays as big as a plain board
+    `.game-main>.${scope}.board-wrap{width:min(calc(100% + 2 * var(--gutter, 16px) - 8px), calc(100vw - 8px), 700px, calc(100svh - 250px));}`
+  );
 }
 
 /* ------------------------------------------------------------- registry */
