@@ -172,5 +172,7 @@ export function useMatchSkin(
   const lb = pick(b);
   const wr = players?.whiteRating ?? null;
   const br = players?.blackRating ?? null;
-  return useMemo(() => (players ? matchSkin(lw, lb, wr, br) : undefined), [!!players, lw, lb, wr, br]);
+  // a player sees their own board; spectators see the shared one
+  const viewer: 'w' | 'b' | null = isMe(w) ? 'w' : isMe(b) ? 'b' : null;
+  return useMemo(() => (players ? matchSkin(lw, lb, wr, br, viewer) : undefined), [!!players, lw, lb, wr, br, viewer]);
 }

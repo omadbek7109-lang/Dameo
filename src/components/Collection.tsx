@@ -3,7 +3,7 @@ import { LuEyeOff, LuGem, LuLock, LuStore } from 'react-icons/lu';
 import { useI18n } from '../i18n/index.tsx';
 import { Link } from '../router.tsx';
 import { boardStock, collectionOf, serialLabel, setCollectionPublic, type BoardStock, type Collection as Coll, type CollectionItem } from '../services/shop.ts';
-import { BoardArt } from './LimitedBoards.tsx';
+import { BoardArt, EditionPlate } from './LimitedBoards.tsx';
 import { Modal } from './Modal.tsx';
 import { FullPreview, RarityBadge } from './ShopParts.tsx';
 import { Spinner } from './States.tsx';
@@ -198,7 +198,7 @@ function CopyDetail({ item, owner, onClose }: { item: CollectionItem; owner: str
     <Modal open onClose={onClose} title={name} wide>
       <div className="ltd-detail">
         <div className="ltd-detail-view">
-          <div className="seg" role="tablist">
+          <div className="seg ltd-tabs" role="tablist">
             <button role="tab" aria-selected={tab === 'art'} className={`seg-btn ${tab === 'art' ? 'seg-on' : ''}`} onClick={() => setTab('art')}>
               {t('lb.artwork')}
             </button>
@@ -207,11 +207,10 @@ function CopyDetail({ item, owner, onClose }: { item: CollectionItem; owner: str
             </button>
           </div>
           {tab === 'art' ? <BoardArt url={item.image_url} size="lg" alt={name} className="ltd-detail-art" /> : <FullPreview item={{ slug: item.slug, slot: 'board', style: item.style }} />}
+          <EditionPlate serial={item.serial} supply={item.supply} />
         </div>
         <div className="item-info col-cert">
           <p className="col-cert-name">{name.toUpperCase()}</p>
-          <p className="ltd-kicker">LIMITED EDITION</p>
-          <p className="col-cert-serial">{serialLabel(item.serial, item.supply)}</p>
           <RarityBadge r={item.rarity} />
           <p>{t('col.ownedBy', { name: owner })}</p>
           <p className="muted small">{t('col.acquired', { d: fmtDate(item.acquired_at, lang) })}</p>

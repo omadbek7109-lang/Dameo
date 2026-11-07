@@ -264,23 +264,30 @@ export function skinClasses(c: { piece?: string | null; board?: string | null; e
 /**
  * Cosmetics of a two-player game:
  *  - pieces: every player sees each side in its OWNER's set (a player without a set keeps the standard pieces),
- *  - board: one board for both — if both players own one, the higher-rated player's board (white on a tie);
- *    if only one owns a board, that board, whatever the ratings; otherwise the standard board,
+ *  - board: each PLAYER sees the board they equipped themselves (v3.2) — the opponent's choice never replaces it;
+ *    a player without a board sees the standard board. SPECTATORS (viewer = null) see one board for both: the
+ *    higher-rated player's when both own one (white on a tie), else the only one, else the standard board,
  *  - move effect: plays only on the moves of the player who owns it.
- * Pure and deterministic, so both players and spectators see the same board.
+ * Pure and deterministic.
  */
 export interface Loadout {
   piece?: { slug: string } | null;
   board?: { slug: string } | null;
   effect?: { slug: string; style: unknown } | null;
 }
-export function matchSkin(w: Loadout | null, b: Loadout | null, whiteRating?: number | null, blackRating?: number | null): { cls: string; fx: { w?: string; b?: string } } {
+export function matchSkin(
+  w: Loadout | null,
+  b: Loadout | null,
+  whiteRating?: number | null,
+  blackRating?: number | null,
+  viewer: 'w' | 'b' | null = null,
+): { cls: string; fx: { w?: string; b?: string } } {
   const out: string[] = [];
   if (w?.piece) out.push(`sk-pw-${safeSlug(w.piece.slug)}`);
   if (b?.piece) out.push(`sk-pb-${safeSlug(b.piece.slug)}`);
   const wb = w?.board ?? null;
   const bb = b?.board ?? null;
-  const board = wb && bb ? ((blackRating ?? 0) > (whiteRating ?? 0) ? bb : wb) : (wb ?? bb);
+  const board = viewer === 'w' ? wb : viewer === 'b' ? bb : wb && bb ? ((blackRating ?? 0) > (whiteRating ?? 0) ? bb : wb) : (wb ?? bb);
   if (board) out.push(`sk-b-${safeSlug(board.slug)}`);
   const fx = (l: Loadout | null) => (l?.effect ? `fx-${fxOf(l.effect.style)} fxs-${safeSlug(l.effect.slug)}` : undefined);
   return { cls: out.join(' '), fx: { w: fx(w), b: fx(b) } };

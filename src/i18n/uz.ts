@@ -797,6 +797,8 @@ export const uz = {
   'col.locked': "Hali yo'q",
   'col.toShop': "Do'konga o'tish",
   'col.all': "Barcha doskalar",
+  'lb.plateTotal': "Jami {n} dona · seriya raqami xariddan so'ng beriladi",
+  'lb.plateOpen': "Seriya raqami xariddan so'ng beriladi",
 } as const;
 
 export type TKey = keyof typeof uz;

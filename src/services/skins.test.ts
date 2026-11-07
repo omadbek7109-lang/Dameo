@@ -50,7 +50,15 @@ describe('skins', () => {
     expect(matchSkin({ piece: { slug: 'a' } }, { piece: { slug: 'b' } }).cls).toBe('sk-pw-a sk-pb-b');
     expect(matchSkin(null, null).cls).toBe('');
   });
-  test('game board: higher rating wins when both own one; a sole owner always wins', () => {
+  test('players: each one sees their own board, never the opponent\'s', () => {
+    const W = { board: { slug: 'royal-marble' } };
+    const B = { board: { slug: 'cyber-purple' } };
+    expect(matchSkin(W, B, 1200, 1900, 'w').cls).toBe('sk-b-royal-marble');
+    expect(matchSkin(W, B, 1900, 1200, 'b').cls).toBe('sk-b-cyber-purple');
+    expect(matchSkin({}, B, 1200, 1200, 'w').cls).toBe('');      // no board of my own → standard, not the opponent's
+    expect(matchSkin(W, {}, 1200, 1200, 'b').cls).toBe('');
+  });
+  test('spectators: higher rating wins when both own one; a sole owner always wins', () => {
     const W = { board: { slug: 'gold' } };
     const B = { board: { slug: 'neon' } };
     expect(matchSkin(W, B, 1300, 1200).cls).toBe('sk-b-gold');

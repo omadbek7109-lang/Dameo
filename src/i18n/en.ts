@@ -799,4 +799,6 @@ export const en: Record<TKey, string> = {
   'col.locked': "Not owned",
   'col.toShop': "Go to the shop",
   'col.all': "All boards",
+  'lb.plateTotal': "{n} copies in total · your serial is assigned on purchase",
+  'lb.plateOpen': "Your serial is assigned on purchase",
 };

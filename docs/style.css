@@ -5050,9 +5050,6 @@ html.app-paused *::after {
 @media (min-width: 720px) { .ltd-detail { grid-template-columns: 1.15fr 1fr; align-items: start; } }
 .ltd-detail-view { display: grid; gap: 10px; min-width: 0; }
 .ltd-detail-art { border-radius: 16px; background: #070b18; }
-.seg { display: inline-flex; gap: 2px; padding: 3px; border-radius: 12px; background: var(--surface-2); border: 1px solid var(--border); justify-self: start; }
-.seg-btn { border: 0; background: transparent; color: var(--muted); padding: 6px 14px; border-radius: 9px; font: inherit; font-size: 0.85rem; cursor: pointer; }
-.seg-on { background: var(--accent); color: var(--on-accent); }
 
 /* ================================================================ v3.2 — DAMEO Collection (profile) */
 .col-card { display: grid; gap: 12px; }
@@ -5105,3 +5102,30 @@ html.app-paused *::after {
   .col-showcase ol { gap: 6px; }
 }
 .mini-art { border-radius: 12px; background: #070b18; }
+.ltd-tabs { justify-self: start; }
+
+/* ================================================================ v3.2 — modal safe area (Telegram fullscreen)
+ * In fullscreen Telegram draws its own Close / minimise / menu buttons over the top of the page (--tg-top = device
+ * safe area + Telegram's content inset, set in initTelegram). Dialogs start below that band and stay inside the screen,
+ * so their single close button never sits under Telegram's controls. Telegram's own buttons are not touched. */
+.modal-backdrop {
+  --modal-top: calc(12px + max(var(--tg-top, 0px), env(safe-area-inset-top, 0px)));
+  --modal-bottom: calc(12px + max(var(--tg-bottom, 0px), env(safe-area-inset-bottom, 0px)));
+  padding: var(--modal-top) 12px var(--modal-bottom);
+}
+.modal { max-height: calc(100svh - var(--modal-top) - var(--modal-bottom)); }
+html.in-telegram .modal-backdrop { align-items: start; }   /* tall dialogs start right under Telegram's bar */
+html.in-telegram .modal { margin-top: 4px; }
+
+/* ================================================================ v3.2 — LIMITED EDITION plate under the board preview */
+.ltd-plate {
+  display: grid; justify-items: center; gap: 2px; padding: 10px 12px 12px; margin-top: 2px; text-align: center;
+  border-radius: 14px; border: 1px solid rgba(240, 180, 41, 0.35);
+  background: radial-gradient(120% 140% at 50% 0%, rgba(240, 180, 41, 0.14), transparent 60%), #0a0f1f;
+}
+.ltd-plate-k { font-size: 0.7rem; font-weight: 800; letter-spacing: 0.32em; padding-left: 0.32em; color: #e9c46a; }
+.ltd-plate-serial {
+  font-family: var(--font-display); font-size: clamp(1.7rem, 8vw, 2.3rem); line-height: 1.05; letter-spacing: 0.04em;
+  background: linear-gradient(180deg, #fff1c1, #f0b429 55%, #b8862b); -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.ltd-plate-sub { font-size: 0.78rem; color: #cdb88a; }

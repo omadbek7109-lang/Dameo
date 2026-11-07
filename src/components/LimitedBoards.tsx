@@ -32,6 +32,21 @@ export function BoardArt({ url, size = 'sm', alt, className = '' }: { url: strin
   );
 }
 
+/** Gold plate under a board preview: LIMITED EDITION + the player's own serial (from the database) or the edition size. */
+export function EditionPlate({ serial, supply }: { serial: number | null; supply: number | null }) {
+  const { t, num } = useI18n();
+  return (
+    <div className="ltd-plate" aria-label={serial ? `LIMITED EDITION ${serialLabel(serial, supply)}` : 'LIMITED EDITION'}>
+      <span className="ltd-plate-k">LIMITED EDITION</span>
+      {serial ? (
+        <strong className="ltd-plate-serial">{serialLabel(serial, supply)}</strong>
+      ) : (
+        <span className="ltd-plate-sub">{supply ? t('lb.plateTotal', { n: num(supply) }) : t('lb.plateOpen')}</span>
+      )}
+    </div>
+  );
+}
+
 /** "LIMITED — 30 DONA" / limit not set / SOLD OUT */
 export function EditionBadge({ stock }: { stock: Pick<BoardStock, 'supply' | 'sold_out'> }) {
   const { t, num } = useI18n();
@@ -181,7 +196,7 @@ function LimitedModal({ item, stock, somPerCoin, equipped, onClose, onChanged }:
     <Modal open onClose={onClose} title={name} wide>
       <div className="ltd-detail">
         <div className="ltd-detail-view">
-          <div className="seg" role="tablist">
+          <div className="seg ltd-tabs" role="tablist">
             <button role="tab" aria-selected={tab === 'art'} className={`seg-btn ${tab === 'art' ? 'seg-on' : ''}`} onClick={() => setTab('art')}>
               {t('lb.artwork')}
             </button>
@@ -190,9 +205,9 @@ function LimitedModal({ item, stock, somPerCoin, equipped, onClose, onChanged }:
             </button>
           </div>
           {tab === 'art' ? <BoardArt url={item.image_url} size="lg" alt={name} className="ltd-detail-art" /> : <FullPreview item={item} />}
+          <EditionPlate serial={stock.mine?.serial ?? null} supply={stock.supply} />
         </div>
         <div className="item-info">
-          <p className="ltd-kicker">LIMITED EDITION</p>
           <div className="item-tags">
             <EditionBadge stock={stock} />
             <RarityBadge r={item.rarity} />
