@@ -509,6 +509,9 @@ update public.profiles set tg_id = 7550418397 where id = 'eeeeeeee-0000-4000-800
 update public.profiles set tg_id = 111000111 where id = 'eeeeeeee-0000-4000-8000-000000000001';
 select pg_temp.check('1-2 new player gets a wallet with 0 coins', (select balance = 0 from public.user_wallets where user_id = 'eeeeeeee-0000-4000-8000-000000000001'));
 select pg_temp.check('every existing player has a wallet', (select count(*) from public.profiles p left join public.user_wallets w on w.user_id = p.id where w.user_id is null) = 0);
+-- (0023 took the older piece sets off sale; the shop tests below still exercise buying with a few of them)
+update public.shop_items set active = true, retired = false where slug in ('gold-classic', 'titanium', 'chrome', 'emperor', 'shadow-king');
+update public.shop_categories set visible = true where id = 'pieces';
 select pg_temp.check('catalog seeded (pieces, boards, animations)', (select count(*) filter (where slot = 'piece') >= 28 and count(*) filter (where slot = 'board') >= 12 and count(*) filter (where slot = 'effect') >= 5 from public.shop_items));
 
 set role authenticated;
@@ -1286,7 +1289,10 @@ select pg_temp.check('st: 8 stones in the Stones category', (select count(*) = 8
   from public.shop_items where category_id = 'stones' and active));
 select pg_temp.check('st: Limited stones 200/100/80/30', (select string_agg(s.supply::text, ',' order by c.sort) = '200,100,80,30'
   from public.board_inventory s join public.board_catalog c using (slug) join public.shop_items i using (slug) where i.slot = 'piece'));
-select pg_temp.check('st: older piece sets untouched', (select count(*) >= 48 from public.shop_items where slot = 'piece' and collection <> 'stones' and active));
+select pg_temp.check('st: older piece sets kept in the database (off sale, not deleted)', (select count(*) >= 48 from public.shop_items where slot = 'piece' and collection <> 'stones'));
+select pg_temp.check('st: backup of the older piece sets', (select count(*) >= 48 from public._backup_v32_piece_items));
+select pg_temp.check('st: only the Stones (and the test fixtures) on sale', (select count(*) filter (where collection = 'stones') = 8 and count(*) filter (where collection <> 'stones') <= 5 from public.shop_items where slot = 'piece' and active));
+select pg_temp.check('st: Football / Donachalar tabs hidden', (select bool_and(not visible) from public.shop_categories where id in ('football', 'trend')));
 select pg_temp.check('st: board shop still lists boards only', (select count(*) = 8 from json_array_elements(public.board_catalog_list())));
 set role authenticated;
 set request.jwt.claim.sub = 'dddddddd-0000-4000-8000-000000000001';

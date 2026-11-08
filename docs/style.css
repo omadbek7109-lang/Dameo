@@ -5138,7 +5138,7 @@ html.in-telegram .modal { margin-top: 4px; }
  * loops, and only on large avatars (.af-live, ≥ 48 px) — lists of small avatars stay static. */
 .av-frame-art {
   position: absolute;
-  inset: -23%;
+  inset: -15%;      /* ring = 1.30× the avatar: tidy in every layout; the ring only overlaps the photo's outer rim */
   pointer-events: none;
   z-index: 1;
   background: center / 100% 100% no-repeat;
@@ -5157,13 +5157,17 @@ html.in-telegram .modal { margin-top: 4px; }
 .af-golden-legend { background-image: url('frames/golden-legend.webp'); }
 .af-dragon-fury { background-image: url('frames/dragon-fury.webp'); }
 .avatar:has(.av-frame-art) { box-shadow: none; }
-.af-live.af-crimson-queen::after { animation: af-glow 4s ease-in-out infinite; --af-max: 0.5; }
-.af-live.af-mystic-blossom::after { animation: af-glow 3.6s ease-in-out infinite; --af-max: 0.42; }
-.af-live.af-frost-guardian::after { animation: af-glint 3.2s ease-in-out infinite; --af-max: 0.45; }
-.af-live.af-golden-legend::after { animation: af-glint 3.8s ease-in-out infinite; --af-max: 0.55; }
-.af-live.af-dragon-fury::after { animation: af-glow 4s ease-in-out infinite; --af-max: 0.32; }
-@keyframes af-glow { 0%, 100% { opacity: 0; } 50% { opacity: var(--af-max, 0.4); } }
-@keyframes af-glint { 0%, 100% { opacity: 0; transform: scale(1); } 50% { opacity: var(--af-max, 0.4); transform: scale(1.012); } }
+.avatar .dot { z-index: 2; }
+/* glow in / fade out: a brighter copy of the ring in the frame's own colour; opacity only, 2.6–3 s */
+.af-live::after { filter: drop-shadow(0 0 4px var(--af-c)); animation: af-pulse 2.8s ease-in-out infinite; }
+.af-crimson-queen { --af-c: #ff4fa3; }
+.af-mystic-blossom { --af-c: #c77dff; }
+.af-frost-guardian { --af-c: #5ab0ff; }
+.af-golden-legend { --af-c: #ffcf4a; }
+.af-dragon-fury { --af-c: #ff3b2f; }
+.af-live.af-frost-guardian::after { animation-duration: 2.4s; }
+.af-live.af-golden-legend::after { animation-duration: 3s; }
+@keyframes af-pulse { 0%, 100% { opacity: 0.05; } 50% { opacity: 0.85; } }
 
 /* Stones: soft highlight drifting ≤ 2 px */
 @keyframes sk-gleam { 0%, 100% { opacity: 0.18; transform: translate(0, 0); } 50% { opacity: 0.42; transform: translate(2px, 1px); } }
