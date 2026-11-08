@@ -8,7 +8,7 @@
  */
 export type Slot = 'piece' | 'board' | 'effect';
 export type PiecePattern = 'none' | 'rings' | 'stripes' | 'carbon' | 'dots' | 'facets' | 'conic' | 'galaxy' | 'flames' | 'frost' | 'petals' | 'waves' | 'scales' | 'glitch' | 'marble' | 'brushed';
-export type PieceAnim = 'none' | 'shimmer' | 'sparkle' | 'pulse' | 'hue' | 'glitch';
+export type PieceAnim = 'none' | 'shimmer' | 'sparkle' | 'pulse' | 'hue' | 'glitch' | 'gleam';
 export interface PieceSide {
   c1: string;
   c2: string;
@@ -22,6 +22,8 @@ export interface PieceSide {
   glow?: string;
   crown?: string;
   edge?: string;
+  /** Stones Collection: face texture `stones/<tex>.webp` */
+  tex?: string;
 }
 export interface PieceStyle {
   w: PieceSide;
@@ -66,15 +68,15 @@ const cssString = (s: unknown) => (typeof s === 'string' && s.length > 0 && s.le
 export const safeSlug = (s: string) => s.replace(/[^a-z0-9-]/g, '');
 // Board textures: only our own files under boards/ (a bare name, never a URL) — nothing else can reach url().
 const TEX = /^[a-z0-9-]{2,40}$/;
-const texUrl = (v: unknown) => {
+const texUrl = (v: unknown, dir: 'boards' | 'stones' = 'boards') => {
   if (typeof v !== 'string' || !TEX.test(v)) return null;
   const base = typeof document !== 'undefined' ? document.baseURI : 'https://localhost/';
-  return `url("${new URL(`boards/${v}.webp`, base).href}")`;
+  return `url("${new URL(`${dir}/${v}.webp`, base).href}")`;
 };
 const oneOf = <T extends string>(v: unknown, list: readonly T[], d: T): T => (list.includes(v as T) ? (v as T) : d);
 
 const PIECE_PATTERNS = ['none', 'rings', 'stripes', 'carbon', 'dots', 'facets', 'conic', 'galaxy', 'flames', 'frost', 'petals', 'waves', 'scales', 'glitch', 'marble', 'brushed'] as const;
-const PIECE_ANIMS = ['none', 'shimmer', 'sparkle', 'pulse', 'hue', 'glitch'] as const;
+const PIECE_ANIMS = ['none', 'shimmer', 'sparkle', 'pulse', 'hue', 'glitch', 'gleam'] as const;
 const SQ_PATTERNS = ['none', 'sheen', 'wood', 'marble', 'carbon', 'grid', 'stars', 'nebula', 'velvet', 'circuit', 'petals'] as const;
 const FRAMES = ['plain', 'gold', 'wood', 'neon', 'metal'] as const;
 export const FX_KINDS = ['ripple', 'sparkle', 'fire', 'lightning', 'stardust'] as const;
@@ -138,7 +140,11 @@ function pieceSideCss(scopes: string[], cls: 'piece-w' | 'piece-b', s: Partial<P
   const c3 = col(s.c3, white ? '#aebbd9' : '#080c1a');
   const ring = col(s.ring, white ? 'rgba(90,120,200,.4)' : 'rgba(140,170,250,.7)');
   const pattern = oneOf(s.pattern, PIECE_PATTERNS, 'none');
-  const layers = [...piecePattern(pattern, num01(s.po, 0.3)), `radial-gradient(circle at 34% 28%, ${c1}, ${c2} 55%, ${c3})`];
+  // Stones Collection: the stone's own face, cut from the artwork (`stones/<tex>.webp`), with a soft top light
+  const tex = texUrl(s.tex, 'stones');
+  const layers = tex
+    ? ['radial-gradient(circle at 35% 25%,rgba(255,255,255,.22),transparent 45%)', `${tex} center/cover no-repeat`, c3]
+    : [...piecePattern(pattern, num01(s.po, 0.3)), `radial-gradient(circle at 34% 28%, ${c1}, ${c2} 55%, ${c3})`];
   const glow = s.glow ? col(s.glow, '') : '';
   const edge = s.edge ? col(s.edge, '') : '';
   const anim = oneOf(s.anim, PIECE_ANIMS, 'none');
@@ -149,6 +155,7 @@ function pieceSideCss(scopes: string[], cls: 'piece-w' | 'piece-b', s: Partial<P
   const disc = sel('.piece-disc');
   let css = `${disc}{--ring-c:${ring};background:${layers.join(',')};box-shadow:${shadow.join(',')};${glow ? `--glow:${glow};` : ''}}`;
   if (s.motif) css += `${sel('.piece-disc::before')}{content:${cssString(s.motif)};}`;
+  if (tex) css += `${sel('.piece-disc::after')}{display:none;}`; // the stone face has its own rim
   if (s.crown) css += `${sel('.piece-crown')}{color:${col(s.crown, '#e8bb4d')};}`;
   if (anim !== 'none') {
     const [fx, after] = pfxFor(anim);
@@ -166,6 +173,9 @@ function pfxFor(anim: PieceAnim): [string, string?] {
       return ['display:block;background:radial-gradient(1.5px 1.5px at 30% 28%,#fff,transparent),radial-gradient(1.2px 1.2px at 70% 40%,#fff,transparent),radial-gradient(1.6px 1.6px at 46% 72%,#fff,transparent);animation:sk-twinkle 1.8s ease-in-out infinite;'];
     case 'glitch':
       return ['display:block;background:linear-gradient(90deg,rgba(0,255,255,.35),transparent 30%,transparent 70%,rgba(255,0,80,.35));animation:sk-glitch 2.4s steps(1) infinite;'];
+    case 'gleam':
+      // Stones: a soft highlight drifting at most 2px over a 3.6 s cycle (transform + opacity only)
+      return ["display:block;background:radial-gradient(circle at 32% 26%,rgba(255,255,255,.5),transparent 38%);opacity:.25;animation:sk-gleam 3.6s ease-in-out infinite;"];
     case 'pulse':
       return ['display:block;box-shadow:0 0 18px var(--glow,rgba(255,255,255,.6)),inset 0 0 0 2px var(--ring-c);opacity:0;animation:sk-glow 1.8s ease-in-out infinite;'];
     default:

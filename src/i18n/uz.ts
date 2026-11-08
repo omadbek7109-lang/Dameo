@@ -799,6 +799,23 @@ export const uz = {
   'col.all': "Barcha doskalar",
   'lb.plateTotal': "Jami {n} dona · seriya raqami xariddan so'ng beriladi",
   'lb.plateOpen': "Seriya raqami xariddan so'ng beriladi",
+  'settings.animations': "Bezak animatsiyalari",
+  'settings.animationsHint': "Toshlar yaltirashi va profil ramkalari harakati. Quvvat 20% dan kam bo'lsa, o'zi to'xtaydi.",
+  'frame.collection': "Profile Frames",
+  'frame.collectionSub': "Avataringiz uchun premium ramkalar",
+  'frame.classic': "Classic",
+  'frame.buyHint': "Ramka avatar atrofida turadi va hamma joyda ko'rinadi: profil, reyting, do'stlar va o'yin.",
+  'frame.buyWear': "Sotib olish va taqish",
+  'stones.title': "DAMEO Stones Collection",
+  'stones.sub': "8 ta premium tosh. Limited toshlarga noyob seriya raqami beriladi.",
+  'stones.standard': "Standard",
+  'stones.premium': "Premium",
+  'stones.limited': "Limited · {n} dona",
+  'stones.view3d': "3D",
+  'stones.man': "Dona",
+  'stones.king': "Damka",
+  'stones.onBoard': "Doskada",
+  'stones.select': "Tanlash",
 } as const;
 
 export type TKey = keyof typeof uz;

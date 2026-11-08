@@ -5131,3 +5131,97 @@ html.in-telegram .modal { margin-top: 4px; }
 .ltd-plate-sub { font-size: 0.78rem; color: #cdb88a; }
 .ltd-stars { color: #ffd56b; font-weight: 700; font-size: 0.86rem; white-space: nowrap; padding: 1px 8px; border-radius: 999px; background: rgba(255, 213, 107, 0.12); border: 1px solid rgba(255, 213, 107, 0.3); }
 .ltd-price-lg .ltd-stars { font-size: 1rem; }
+
+/* ===================================================== Profile Frames collection (artwork rings, /frames/<slug>.webp)
+ * The ring image is 1.46× the avatar (its opening = the avatar), drawn above the photo; the opening is fully clear so the
+ * face is never covered. A second copy of the ring (::after) carries the effect: opacity + a tiny scale only, slow 3–4 s
+ * loops, and only on large avatars (.af-live, ≥ 48 px) — lists of small avatars stay static. */
+.av-frame-art {
+  position: absolute;
+  inset: -23%;
+  pointer-events: none;
+  z-index: 1;
+  background: center / 100% 100% no-repeat;
+}
+.av-frame-art::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: inherit;
+  opacity: 0;
+  mix-blend-mode: screen;
+}
+.af-crimson-queen { background-image: url('frames/crimson-queen.webp'); }
+.af-mystic-blossom { background-image: url('frames/mystic-blossom.webp'); }
+.af-frost-guardian { background-image: url('frames/frost-guardian.webp'); }
+.af-golden-legend { background-image: url('frames/golden-legend.webp'); }
+.af-dragon-fury { background-image: url('frames/dragon-fury.webp'); }
+.avatar:has(.av-frame-art) { box-shadow: none; }
+.af-live.af-crimson-queen::after { animation: af-glow 4s ease-in-out infinite; --af-max: 0.5; }
+.af-live.af-mystic-blossom::after { animation: af-glow 3.6s ease-in-out infinite; --af-max: 0.42; }
+.af-live.af-frost-guardian::after { animation: af-glint 3.2s ease-in-out infinite; --af-max: 0.45; }
+.af-live.af-golden-legend::after { animation: af-glint 3.8s ease-in-out infinite; --af-max: 0.55; }
+.af-live.af-dragon-fury::after { animation: af-glow 4s ease-in-out infinite; --af-max: 0.32; }
+@keyframes af-glow { 0%, 100% { opacity: 0; } 50% { opacity: var(--af-max, 0.4); } }
+@keyframes af-glint { 0%, 100% { opacity: 0; transform: scale(1); } 50% { opacity: var(--af-max, 0.4); transform: scale(1.012); } }
+
+/* Stones: soft highlight drifting ≤ 2 px */
+@keyframes sk-gleam { 0%, 100% { opacity: 0.18; transform: translate(0, 0); } 50% { opacity: 0.42; transform: translate(2px, 1px); } }
+
+/* decorative loops off: setting, low battery (html.calm), reduced motion */
+html.calm .pfx, html.calm .pfx::after, html.calm .av-frame-art::after, html.calm .av-frame-champion { animation: none !important; }
+@media (prefers-reduced-motion: reduce) {
+  .pfx, .pfx::after, .av-frame-art::after { animation: none !important; }
+}
+
+/* ================================================================ v3.2 — DAMEO Stones Collection (shop) */
+.st-shop {
+  position: relative; display: grid; gap: 12px; padding: 16px 12px 14px; border-radius: 22px;
+  background: radial-gradient(120% 60% at 50% 0%, rgba(240, 180, 41, 0.12), transparent 60%), #07080d;
+  border: 1px solid rgba(240, 180, 41, 0.28);
+}
+.st-head { display: flex; align-items: center; justify-content: center; gap: 10px; }
+.st-crown { color: #f0b429; font-size: 1.9rem; display: grid; filter: drop-shadow(0 0 6px rgba(240, 180, 41, 0.45)); }
+.st-title { margin: 0; font-family: Georgia, 'Times New Roman', serif; font-size: 1.9rem; letter-spacing: 0.04em; line-height: 1;
+  background: linear-gradient(180deg, #fff6d8, #f0c25a 55%, #b8862b); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.st-kicker { margin: 2px 0 0; font-family: Georgia, serif; font-size: 0.72rem; letter-spacing: 0.32em; color: #e9c46a; }
+.st-sub { text-align: center; margin: 0; }
+.st-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(46%, 220px), 1fr)); gap: 10px; }
+.st-card {
+  display: grid; justify-items: center; gap: 6px; padding: 8px 8px 10px; min-width: 0; text-align: center; cursor: pointer; font: inherit; color: #fff;
+  border-radius: 16px; border: 1px solid rgba(240, 180, 41, 0.55);
+  background: radial-gradient(90% 70% at 50% 30%, rgba(255, 255, 255, 0.05), transparent 70%), linear-gradient(180deg, #13120f, #0a0a0c);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6), 0 0 14px rgba(240, 180, 41, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  content-visibility: auto; contain-intrinsic-size: auto 230px;
+}
+.st-card-ltd { border-color: rgba(192, 132, 252, 0.6); box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6), 0 0 16px rgba(168, 85, 247, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.06); }
+.st-card.is-on { border-color: #6ee7b7; }
+.st-card.is-out .st-art img { filter: grayscale(0.6) brightness(0.7); }
+.st-art { display: block; width: 100%; border-radius: 12px; overflow: hidden; background: #050507; }
+.st-art img { display: block; width: 100%; height: auto; aspect-ratio: 374 / 212; object-fit: cover; }
+.st-name { font-family: Georgia, 'Times New Roman', serif; font-size: 1.05rem; color: #f6e7c1; line-height: 1.15; overflow-wrap: anywhere; }
+.st-tags { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px; }
+.st-badge { padding: 2px 9px; border-radius: 999px; font-size: 0.7rem; font-weight: 700; white-space: nowrap; }
+.st-badge-std { background: #2a2d3a; color: #cfd6e6; }
+.st-badge-prem { background: linear-gradient(90deg, #6b4a12, #8a6418); color: #ffe7a6; }
+.st-badge-ltd { background: linear-gradient(90deg, #4c1d95, #6d28d9); color: #f3e8ff; }
+.st-badge-out { background: rgba(239, 68, 68, 0.2); color: #ffb3b3; border: 1px solid rgba(239, 68, 68, 0.5); }
+.st-price { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 4px 8px; width: 100%; padding: 6px 4px 0; border-top: 1px solid rgba(240, 180, 41, 0.18); }
+.st-coin { color: #ffd56b; font-weight: 800; white-space: nowrap; }
+.st-owned { display: inline-flex; align-items: center; gap: 4px; color: #6ee7b7; font-weight: 700; font-size: 0.85rem; }
+.st-stage { display: grid; place-items: center; min-height: 200px; padding: 12px; border-radius: 16px; background: radial-gradient(70% 70% at 50% 45%, rgba(255, 255, 255, 0.07), transparent 70%), #07080d; }
+.st-stage-art { width: 100%; height: auto; border-radius: 12px; }
+.st-pair { display: flex; gap: 18px; align-items: center; justify-content: center; }
+.board-wrap.stone-solo { position: relative; display: inline-grid; place-items: center; min-width: 0; flex: none; }
+.stone-solo .piece { position: relative; width: 100%; height: 100%; transform: none; transition: none; }
+.stone-solo .piece-disc { width: 88%; height: 88%; }
+@media (max-width: 380px) { .st-name { font-size: 0.95rem; } .st-title { font-size: 1.6rem; } .st-pair { gap: 10px; } }
+
+/* ================================================================ v3.2 — Profile Frames picker */
+.frame-opt-art .frame-price { color: #ffd56b; font-weight: 700; }
+.frame-opt-av-art { padding: 10px 0 6px; }
+.frame-card-shop { background: radial-gradient(120% 60% at 50% 0%, rgba(240, 120, 200, 0.08), transparent 60%), var(--surface); }
+.frame-buy { display: grid; justify-items: center; gap: 10px; text-align: center; }
+.frame-buy-av { padding: 34px 0 26px; }
+.frame-buy-price { margin: 0; font-size: 1.4rem; font-weight: 800; color: #ffd56b; }
+.st-serial { margin-left: 6px; font-family: var(--font-display); color: #ffd56b; }

@@ -1152,7 +1152,7 @@ select public._wallet_apply(('bbbbbbbb-0000-4000-8000-00000000000' || n)::uuid, 
 select pg_temp.check('lb: 8 Limited boards on sale', (select count(*) = 8 from public.shop_items where collection = 'limited' and active and not retired));
 select pg_temp.check('lb: old boards hidden + off sale, not deleted', (select count(*) >= 12 and bool_and(not active and retired) from public.shop_items where slot = 'board' and collection <> 'limited'));
 select pg_temp.check('lb: backup of the old boards kept', (select count(*) >= 12 from public._backup_v32_board_items));
-select pg_temp.check('lb: supplies 200/100/80/30, first four not set', (select string_agg(coalesce(supply::text, '-'), ',' order by c.sort) = '-,-,-,-,200,100,80,30' from public.board_inventory s join public.board_catalog c using (slug)));
+select pg_temp.check('lb: supplies 200/100/80/30, first four not set', (select string_agg(coalesce(supply::text, '-'), ',' order by c.sort) = '-,-,-,-,200,100,80,30' from public.board_inventory s join public.board_catalog c using (slug) join public.shop_items i using (slug) where i.slot = 'board'));
 select pg_temp.check('lb: prices 0/500/1200/1800/2200/3000/4000/5000', (select string_agg(price::text, ',' order by sort) = '0,500,1200,1800,2200,3000,4000,5000' from public.shop_items where collection = 'limited'));
 select pg_temp.check('lb: every board has its artwork', (select bool_and(image_url = 'boards/' || slug || '.webp') from public.shop_items where collection = 'limited'));
 select pg_temp.check('rate: 1000 Coin = 25 Stars; 500 → 13 (rounded up)',
@@ -1276,6 +1276,85 @@ set role service_role;
 select pg_temp.check('invoice: the order takes the price from the DB (1000 → 25 ⭐)', (select (public.payment_create('bbbbbbbb-0000-4000-8000-000000000001', 'coins_1k') ->> 'stars')::int = 25));
 reset role;
 select pg_temp.check('lb: wallets still match the ledger', (select bool_and(w.balance = coalesce((select sum(amount) from public.wallet_transactions t where t.user_id = w.user_id), 0)) from public.user_wallets w));
+
+-- ===================== 0022: Stones Collection + Profile Frames
+insert into auth.users (id, email, raw_user_meta_data) values
+  ('dddddddd-0000-4000-8000-000000000001', 'st1@x.io', '{"username":"stone_one"}'),
+  ('dddddddd-0000-4000-8000-000000000002', 'st2@x.io', '{"username":"stone_two"}');
+select public._wallet_apply(('dddddddd-0000-4000-8000-00000000000' || n)::uuid, 9000, 'admin_credit', 'test', null, 'seed-st-' || n, 'seed', null) from generate_series(1, 2) n;
+select pg_temp.check('st: 8 stones in the Stones category', (select count(*) = 8 and string_agg(price::text, ',' order by sort) = '0,500,1200,1800,2200,3000,4000,5000'
+  from public.shop_items where category_id = 'stones' and active));
+select pg_temp.check('st: Limited stones 200/100/80/30', (select string_agg(s.supply::text, ',' order by c.sort) = '200,100,80,30'
+  from public.board_inventory s join public.board_catalog c using (slug) join public.shop_items i using (slug) where i.slot = 'piece'));
+select pg_temp.check('st: older piece sets untouched', (select count(*) >= 48 from public.shop_items where slot = 'piece' and collection <> 'stones' and active));
+select pg_temp.check('st: board shop still lists boards only', (select count(*) = 8 from json_array_elements(public.board_catalog_list())));
+set role authenticated;
+set request.jwt.claim.sub = 'dddddddd-0000-4000-8000-000000000001';
+select pg_temp.check('st: Classic Stone is free to equip', (public.equip_item('piece', 'st-classic') ->> 'ok')::boolean);
+select pg_temp.check('st: buy Royal Gold (Premium, no serial)', (select (r->>'price')::int = 500 and r->>'serial' is null from (select public.shop_buy('st-royal-gold', 'st-key-0001') r) x));
+do $$ begin
+  perform public.shop_buy('st-royal-gold', 'st-key-0002');
+  perform pg_temp.check('st: a stone can not be bought twice', false);
+exception when others then perform pg_temp.check('st: a stone can not be bought twice', sqlerrm like '%already owned%', sqlerrm); end $$;
+select pg_temp.check('st: buy Celestial (Limited) → #1/30', (select (r->>'serial')::int = 1 and (r->>'supply')::int = 30 from (select public.shop_buy('st-celestial', 'st-key-0003') r) x));
+select pg_temp.check('st: retry of the same request → same serial, no charge', (select (r->>'duplicate')::boolean and (r->>'serial')::int = 1 from (select public.shop_buy('st-celestial', 'st-key-0003') r) x)
+  and (public.wallet_me() ->> 'balance')::bigint = 9000 - 500 - 5000);
+select pg_temp.check('st: stone stock shows my serial', (select (x->'mine'->>'serial')::int = 1 and (x->>'remaining')::int = 29 from json_array_elements(public.limited_stock('piece')) x where x->>'slug' = 'st-celestial'));
+select pg_temp.check('st: equip the Limited stone', (public.equip_item('piece', 'st-celestial') ->> 'ok')::boolean);
+select pg_temp.check('st: stones are not counted in the board collection', (public.board_collection_of(auth.uid()) ->> 'owned')::int = 0);
+reset role;
+update public.board_inventory set sold = 30 where slug = 'st-celestial';
+set role authenticated;
+set request.jwt.claim.sub = 'dddddddd-0000-4000-8000-000000000002';
+do $$ begin
+  perform public.shop_buy('st-celestial', 'st-key-0101');
+  perform pg_temp.check('st: SOLD OUT stone is refused', false);
+exception when others then perform pg_temp.check('st: SOLD OUT stone is refused', sqlerrm like '%sold out%', sqlerrm); end $$;
+do $$ begin
+  perform public.equip_item('piece', 'st-ruby');
+  perform pg_temp.check('st: can not equip a stone you do not own', false);
+exception when others then perform pg_temp.check('st: can not equip a stone you do not own', sqlerrm like '%not owned%', sqlerrm); end $$;
+-- frames
+select pg_temp.check('fr: 5 frames with admin prices', (select string_agg(x->>'slug' || '=' || (x->>'price'), ',') from json_array_elements(public.frame_catalog()) x)
+  = 'crimson-queen=400,mystic-blossom=500,frost-guardian=1000,golden-legend=1500,dragon-fury=2000');
+do $$ begin
+  perform public.frame_equip('dragon-fury');
+  perform pg_temp.check('fr: can not wear a frame you do not own', false);
+exception when others then perform pg_temp.check('fr: can not wear a frame you do not own', sqlerrm like '%not owned%', sqlerrm); end $$;
+select pg_temp.check('fr: buy Dragon Fury (2 000)', (public.frame_buy('dragon-fury', 'fr-key-0001') ->> 'balance')::bigint = 7000);
+select pg_temp.check('fr: same request again → not charged twice', (public.frame_buy('dragon-fury', 'fr-key-0001') ->> 'duplicate')::boolean and (public.wallet_me() ->> 'balance')::bigint = 7000);
+do $$ begin
+  perform public.frame_buy('dragon-fury', 'fr-key-0002');
+  perform pg_temp.check('fr: a frame can not be bought twice', false);
+exception when others then perform pg_temp.check('fr: a frame can not be bought twice', sqlerrm like '%already owned%', sqlerrm); end $$;
+select pg_temp.check('fr: wear it', (public.frame_equip('dragon-fury') ->> 'ok')::boolean);
+select pg_temp.check('fr: visible to everyone (frames_active)', exists (select 1 from public.frames_active() where user_id = auth.uid() and frame = 'dragon-fury'));
+select pg_temp.check('fr: frames_mine lists owned + equipped', (select (m->>'equipped') = 'dragon-fury' and (m->'owned')::text like '%dragon-fury%' from (select public.frames_mine() m) x));
+select pg_temp.check('fr: switch to the free Classic frame', (public.frame_equip('dameo') ->> 'ok')::boolean);
+select pg_temp.check('fr: … Classic now shown', exists (select 1 from public.frames_active() where user_id = auth.uid() and frame = 'dameo'));
+select pg_temp.check('fr: and take it off', (public.frame_equip(null) ->> 'ok')::boolean);
+select pg_temp.check('fr: … no frame shown', not exists (select 1 from public.frames_active() where user_id = auth.uid()));
+do $$ begin
+  update public.profiles set equipped_frame_item = 'golden-legend' where id = auth.uid();
+  perform pg_temp.check('fr: client can NOT set the frame column directly', not exists (select 1 from public.profiles where id = auth.uid() and equipped_frame_item = 'golden-legend'));
+exception when others then perform pg_temp.check('fr: client can NOT set the frame column directly', true, sqlerrm); end $$;
+do $$ begin
+  insert into public.user_frames (user_id, frame_slug, price_paid, idem_key) values (auth.uid(), 'golden-legend', 0, 'forged-key-1');
+  perform pg_temp.check('fr: client can NOT forge ownership', false);
+exception when others then perform pg_temp.check('fr: client can NOT forge ownership', true, sqlerrm); end $$;
+do $$ begin
+  perform public.admin_frame_save('crimson-queen', 1, true, 'urinish');
+  perform pg_temp.check('fr: players can NOT change frame prices', false);
+exception when others then perform pg_temp.check('fr: players can NOT change frame prices', sqlerrm like '%forbidden%', sqlerrm); end $$;
+reset role;
+set role authenticated;
+set request.jwt.claim.sub = 'eeeeeeee-0000-4000-8000-000000000002';
+select pg_temp.check('fr: admin changes a frame price', (public.admin_frame_save('crimson-queen', 450, true, 'Narx') ->> 'ok')::boolean);
+select pg_temp.check('fr: … price applies + history', (select price = 450 from public.frame_items where slug = 'crimson-queen')
+  and exists (select 1 from public.admin_price_history(50) h where h.entity_id = 'frame:crimson-queen' and h.old_value = 400 and h.new_value = 450));
+select pg_temp.check('st: admin sees Limited stones next to boards', (select count(*) = 12 and count(*) filter (where x->>'slot' = 'piece') = 4 from json_array_elements(public.admin_boards()) x));
+reset role;
+select pg_temp.check('st/fr: wallets still match the ledger', (select bool_and(w.balance = coalesce((select sum(amount) from public.wallet_transactions t where t.user_id = w.user_id), 0)) from public.user_wallets w));
 
 \set QUIET off
 select case when ok then 'PASS' else 'FAIL' end as status, name, left(detail, 70) as detail from results order by 1 desc, 2;

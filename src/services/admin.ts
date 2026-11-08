@@ -223,3 +223,18 @@ export const adminBoardOwners = (slug: string) =>
   db.rpc<Array<{ serial: number; user_id: string; username: string; price_paid: number; acquired_at: string }>>('admin_board_owners', { p_slug: slug, p_limit: 200 });
 /** Stars for a coin amount at a rate — the same rounding as the server (_stars_for: whole Stars, rounded up). */
 export const starsFor = (coins: number, starsPer1000: number) => Math.max(1, Math.ceil((coins * starsPer1000) / 1000 - 1e-9));
+
+/* ------------------------------------------------------------------ Profile Frames (0022) */
+export interface AdminFrame {
+  slug: string;
+  name_uz: string;
+  name_en: string;
+  price: number;
+  active: boolean;
+  sort: number;
+  owners: number;
+  revenue: number;
+}
+export const adminFrames = () => db.rpc<AdminFrame[]>('admin_frames');
+export const adminFrameSave = (slug: string, price: number, active: boolean, reason: string) =>
+  db.rpc('admin_frame_save', { p_slug: slug, p_price: price, p_active: active, p_reason: reason });

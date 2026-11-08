@@ -847,9 +847,12 @@ function PricingTab() {
   const [rateEdit, setRateEdit] = useState(false);
   const [boardEdit, setBoardEdit] = useState<A.AdminBoard | null>(null);
   const [owners, setOwners] = useState<A.AdminBoard | null>(null);
+  const [frames, setFrames] = useState<A.AdminFrame[]>([]);
+  const [frameEdit, setFrameEdit] = useState<A.AdminFrame | null>(null);
   const load = useCallback(async () => {
     try {
-      const [p, b, h] = await Promise.all([A.adminPricing(), A.adminBoards(), A.adminPriceHistory()]);
+      const [p, b, h, fr] = await Promise.all([A.adminPricing(), A.adminBoards(), A.adminPriceHistory(), A.adminFrames().catch(() => [])]);
+      setFrames(Array.isArray(fr) ? fr : []);
       if (!p?.settings || !Array.isArray(p.packages)) throw new Error('bad pricing response');
       setData(p);
       setBoards(Array.isArray(b) ? b : []);
@@ -904,7 +907,7 @@ function PricingTab() {
         ))}
       </ul>
 
-      <h2 className="h3">{L('Limited doskalar', 'Limited boards')}</h2>
+      <h2 className="h3">{L('Limited: doskalar va toshlar', 'Limited: boards and stones')}</h2>
       <ul className="admin-list">
         {boards.map((b) => (
           <li key={b.slug} className="admin-board-row">
@@ -922,6 +925,27 @@ function PricingTab() {
             </button>
             <button className="btn btn-ghost btn-sm" onClick={() => setOwners(b)} disabled={b.sold === 0}>
               <LuUsers /> {b.sold}
+            </button>
+          </li>
+        ))}
+      </ul>
+
+      <h2 className="h3">{L('Profil ramkalari', 'Profile frames')}</h2>
+      <ul className="admin-list">
+        {frames.map((f) => (
+          <li key={f.slug} className="admin-board-row">
+            <button className={`admin-row ${f.active ? '' : 'is-hidden'}`} onClick={() => setFrameEdit(f)}>
+              <img src={new URL(`frames/${f.slug}.webp`, document.baseURI).href} alt="" width={44} height={44} loading="lazy" />
+              <span className="admin-row-main">
+                <strong>
+                  {f.name_en} · 🪙 {coins(f.price)}
+                </strong>
+                <span className="muted small">
+                  {L('Egalari', 'Owners')}: {f.owners} · 🪙 {coins(f.revenue)}
+                  {f.active ? '' : ` · ${L('nofaol', 'inactive')}`}
+                </span>
+              </span>
+              <LuChevronRight />
             </button>
           </li>
         ))}
@@ -952,6 +976,7 @@ function PricingTab() {
       {rateEdit && <RateEditor rate={rate} som={som} packages={data.packages} onClose={() => setRateEdit(false)} onSaved={load} />}
       {boardEdit && <BoardEditor board={boardEdit} onClose={() => setBoardEdit(null)} onSaved={load} />}
       {owners && <BoardOwners board={owners} onClose={() => setOwners(null)} />}
+      {frameEdit && <FrameEditor frame={frameEdit} onClose={() => setFrameEdit(null)} onSaved={load} />}
     </div>
   );
 }
@@ -1128,6 +1153,31 @@ function BoardEditor({ board, onClose, onSaved }: { board: A.AdminBoard; onClose
           hint={supplyLocked ? L("Limit belgilangan — o'zgartirib bo'lmaydi", 'Limit is final') : L("Bir marta belgilanadi, keyin o'zgarmaydi", 'Set once, final afterwards')}
         />
       </div>
+    </EditDialog>
+  );
+}
+
+function FrameEditor({ frame, onClose, onSaved }: { frame: A.AdminFrame; onClose: () => void; onSaved: () => Promise<void> }) {
+  const L = useL();
+  const [price, setPrice] = useState<number | null>(frame.price);
+  const [active, setActive] = useState(frame.active);
+  return (
+    <EditDialog
+      title={frame.name_en}
+      valid={price !== null}
+      onClose={onClose}
+      onSave={async (r) => {
+        await A.adminFrameSave(frame.slug, price!, active, r);
+        await onSaved();
+      }}
+    >
+      <p className="muted small">
+        {L('Hozirgi narx', 'Current price')}: 🪙 {coins(frame.price)} · {L('Egalari', 'Owners')}: {frame.owners}
+      </p>
+      <NumField label={L('Narx (Coin)', 'Price (Coins)')} value={price} onChange={setPrice} />
+      <label className="check">
+        <input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} /> {L("Do'konda ko'rinsin", 'Show in the shop')}
+      </label>
     </EditDialog>
   );
 }

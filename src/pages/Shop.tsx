@@ -9,8 +9,10 @@ import { useToast } from '../components/Toast.tsx';
 import { useCosmetics } from '../cosmetics/CosmeticsProvider.tsx';
 import { useI18n, type TKey } from '../i18n/index.tsx';
 import { navigate, useRoute } from '../router.tsx';
+import { FramePicker } from '../components/FramePicker.tsx';
 import { LimitedShop } from '../components/LimitedBoards.tsx';
-import { boardStock, coins, equipItem, itemDesc, itemName, newKey, pricingSettings, shopBuy, shopCatalog, type BoardStock, type Catalog, type ShopItem } from '../services/shop.ts';
+import { StonesShop } from '../components/StonesShop.tsx';
+import { boardStock, limitedStock, coins, equipItem, itemDesc, itemName, newKey, pricingSettings, shopBuy, shopCatalog, type BoardStock, type Catalog, type ShopItem } from '../services/shop.ts';
 import { registerSkins } from '../services/skins.ts';
 import { SbError } from '../services/supabase.ts';
 import { haptic } from '../services/telegram.ts';
@@ -23,16 +25,18 @@ export function Shop() {
   const route = useRoute();
   const { signedIn, mode } = useAuth();
   const cos = useCosmetics();
-  const [cat, setCat] = useState(route.query.get('cat') ?? 'pieces');
+  const [picked, setCat] = useState<string | null>(route.query.get('cat'));
   const [data, setData] = useState<Catalog | null>(null);
   const [error, setError] = useState(false);
   const [openSlug, setOpenSlug] = useState<string | null>(null);
   const [stock, setStock] = useState<BoardStock[] | null>(null);
+  const [stoneStock, setStoneStock] = useState<BoardStock[]>([]);
   const [rate, setRate] = useState(25); // Telegram Stars per 1 000 coins
 
   const load = async () => {
     try {
-      const [c, st, pr] = await Promise.all([shopCatalog(), boardStock(), pricingSettings().catch(() => null)]);
+      const [c, st, pr, ss] = await Promise.all([shopCatalog(), boardStock(), pricingSettings().catch(() => null), limitedStock('piece').catch(() => [])]);
+      setStoneStock(Array.isArray(ss) ? ss : []);
       registerSkins(c.items.map((i) => ({ slug: i.slug, slot: i.slot, style: i.style })));
       setStock(Array.isArray(st) ? st : null);
       if (pr) setRate(Number(pr.stars_per_1000));
@@ -51,6 +55,8 @@ export function Shop() {
   }, [route.query]);
 
   // the Football tab shows the football collection (those sets also stay on the main pieces page)
+  // default tab: the server's first category (Toshlar)
+  const cat = picked ?? data?.categories[0]?.id ?? 'stones';
   const items = useMemo(() => (data?.items ?? []).filter((i) => (cat === 'football' ? i.collection === 'football' : i.category_id === cat)), [data, cat]);
   const groups = useMemo(() => {
     const m = new Map<string, ShopItem[]>();
@@ -93,6 +99,19 @@ export function Shop() {
         <ErrorState onRetry={load} />
       ) : !data ? (
         <Spinner />
+      ) : cat === 'frames' ? (
+        <FramePicker variant="shop" />
+      ) : cat === 'stones' ? (
+        <StonesShop
+          items={items}
+          stock={stoneStock}
+          starsPer1000={rate}
+          equippedSlug={equipped?.piece ?? null}
+          onChanged={async () => {
+            await load();
+            await cos?.refreshWallet();
+          }}
+        />
       ) : items.length === 0 ? (
         <EmptyState title={t('shop.empty')} />
       ) : cat === 'boards' && stock ? (

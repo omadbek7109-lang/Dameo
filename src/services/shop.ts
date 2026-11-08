@@ -157,3 +157,5 @@ export const serialLabel = (serial: number, supply: number | null) => {
 };
 /** board artwork: stored as a path relative to the app (boards/<slug>.webp) */
 export const boardArt = (url: string | null) => (url ? new URL(url, document.baseURI).href : '');
+/** Limited stock of one kind ('board' | 'piece'), with my serial */
+export const limitedStock = (slot: 'board' | 'piece') => db.rpc<BoardStock[]>('limited_stock', { p_slot: slot });

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import type { Player } from '../types/models.ts';
 import { levelOf } from '../services/levels.ts';
 import { useFrames } from '../cosmetics/FramesProvider.tsx';
-import type { FrameId } from '../services/frames.ts';
+import { isArtFrame, type FrameId } from '../services/frames.ts';
 
 function hueOf(seed: string): number {
   const h = Number(seed.split(':')[0]);
@@ -41,7 +41,7 @@ export function Avatar({ name, seed, size = 40, online, ring, className = '', us
       style={{ width: size, height: size, fontSize: Math.round(size * 0.42), ['--h' as string]: hue }}
       aria-hidden="true"
     >
-      {fr && <span className={`av-frame av-frame-${fr}`} />}
+      {fr && (isArtFrame(fr) ? <span className={`av-frame-art af-${fr} ${size >= 48 ? 'af-live' : ''}`} /> : <span className={`av-frame av-frame-${fr}`} />)}
       {fr === 'champion' && (
         <svg className="av-crown" viewBox="0 0 24 16" style={{ width: Math.max(12, Math.round(size * 0.4)) }} aria-hidden="true">
           <path d="M2 14 L1 3 L7 8 L12 1 L17 8 L23 3 L22 14 Z" />
