@@ -1,4 +1,5 @@
-import { useMemo, useRef, useState } from 'react';
+import { useMemo, useRef, useState, type CSSProperties } from 'react';
+type PtrEv = { clientX: number; pointerId: number; currentTarget: EventTarget | null };
 import { LuCheck, LuCrown, LuLoader, LuPlus, LuShoppingBag, LuSparkles } from 'react-icons/lu';
 import { useAuth } from '../auth/AuthProvider.tsx';
 import { useCosmetics } from '../cosmetics/CosmeticsProvider.tsx';
@@ -6,6 +7,7 @@ import { useI18n } from '../i18n/index.tsx';
 import { navigate } from '../router.tsx';
 import { boardArt, coins, equipItem, itemDesc, itemName, newKey, serialLabel, shopBuy, type BoardStock, type ShopItem } from '../services/shop.ts';
 import { registerSkins, skinClasses } from '../services/skins.ts';
+import { MATERIALS, stoneMat } from '../services/stoneMaterials.ts';
 import { SbError } from '../services/supabase.ts';
 import { haptic } from '../services/telegram.ts';
 import { useAuthDialog } from './AuthDialog.tsx';
@@ -34,6 +36,83 @@ export function StonePiece({ slug, side = 'w', king = false, size = 96 }: { slug
         </span>
       </span>
     </span>
+  );
+}
+
+/**
+ * 3D preview: the real stone (both faces, drawn by the piece renderer) as a coin with thickness, turning slowly.
+ * Drag to turn it by hand; it carries on from there. Still (but draggable) with reduced motion / calm.
+ */
+export function StoneSpin({ slug, style }: { slug: string; style?: unknown }) {
+  const { t } = useI18n();
+  const mat = stoneMat(slug, (style as { w?: { mat?: string } } | undefined)?.w?.mat);
+  const m = mat ? MATERIALS[mat] : null;
+  const [ry, setRy] = useState<number | null>(null); // null = auto spin
+  const [dragging, setDragging] = useState(false);
+  const drag = useRef<{ x: number; a: number } | null>(null);
+  const coin = useRef<HTMLSpanElement>(null);
+  const SPIN = 7; // seconds per turn (st3d-turn)
+  const current = () => {
+    const el = coin.current;
+    if (!el) return ry ?? -25;
+    const m2 = new DOMMatrix(getComputedStyle(el).transform);
+    return (Math.atan2(-m2.m13, m2.m11) * 180) / Math.PI; // rotateY angle
+  };
+  const down = (e: PtrEv) => {
+    drag.current = { x: e.clientX, a: current() };
+    setRy(drag.current.a);
+    setDragging(true);
+    (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+  };
+  const move = (e: PtrEv) => {
+    if (!drag.current) return;
+    setRy(drag.current.a + (e.clientX - drag.current.x) * 0.8);
+  };
+  const up = () => {
+    drag.current = null;
+    setDragging(false);
+  };
+  const resumeDelay = ry === null ? undefined : `${-((((ry % 360) + 360) % 360) / 360) * SPIN}s`;
+  return (
+    <div
+      className={`st3d ${skinClasses({ piece: slug })}`}
+      style={m ? ({ '--stc': m.c, '--stc2': m.c2 } as CSSProperties) : undefined}
+      onPointerDown={down}
+      onPointerMove={move}
+      onPointerUp={up}
+      onPointerCancel={up}
+      onDoubleClick={() => setRy(null)}
+      aria-label={t('stones.view3d')}
+      role="img"
+    >
+      <span className="st3d-tilt">
+        <span
+          ref={coin}
+          className={`st3d-coin ${dragging ? '' : 'is-spin'}`}
+          style={ry === null ? undefined : dragging ? ({ '--ry': `${ry}deg` } as CSSProperties) : { animationDelay: resumeDelay }}
+        >
+          {Array.from({ length: 9 }, (_, k) => (
+            <span key={k} className="st3d-edge" style={{ ['--z' as string]: `calc(var(--th) * ${(k / 8 - 0.5).toFixed(3)})` }} />
+          ))}
+          <span className="st3d-face st3d-front">
+            <span className="piece piece-w">
+              <span className="piece-disc">
+                <i className="pfx" />
+              </span>
+            </span>
+          </span>
+          <span className="st3d-face st3d-back">
+            <span className="piece piece-b">
+              <span className="piece-disc">
+                <i className="pfx" />
+              </span>
+            </span>
+          </span>
+        </span>
+      </span>
+      <span className="st3d-shadow" />
+      <span className="st3d-hint">{t('stones.drag')}</span>
+    </div>
   );
 }
 
@@ -176,7 +255,7 @@ function StoneModal({ item, stock, starsPer1000, equipped, onClose, onChanged }:
           </div>
           <div className="st-stage">
             {view === '3d' ? (
-              <img className="st-stage-art" src={boardArt(item.image_url)} alt={name} width={374} height={212} decoding="async" />
+              <StoneSpin slug={item.slug} style={item.style} />
             ) : view === 'board' ? (
               <FullPreview item={item} />
             ) : (

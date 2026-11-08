@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { LuCrown } from 'react-icons/lu';
 import { useCosmetics } from '../cosmetics/CosmeticsProvider.tsx';
-import { initialState } from '../engine/index.ts';
+import { initialState, type Cell } from '../engine/index.ts';
 import { useI18n, type TKey } from '../i18n/index.tsx';
 import { Link } from '../router.tsx';
 import { boardArt, coins, type Rarity, type ShopItem } from '../services/shop.ts';
@@ -115,6 +115,31 @@ export function MiniPreview({ item }: { item: Pick<ShopItem, 'slug' | 'slot' | '
   );
 }
 
+// white 44→35, black 21→28, white 35×21 (takes 28); steps 0..8: [selected, move applied]
+const SCRIPT: Array<{ sel?: number; move?: [number, number, number?] }> = [
+  {}, { sel: 44 }, { move: [44, 35] }, { sel: 21 }, { move: [21, 28] }, { sel: 35 }, { move: [35, 21, 28] }, {}, {},
+];
+function stoneScene(start: readonly Cell[], step: number) {
+  const board = start.slice();
+  const ids = start.map((c, i) => (c !== 0 ? i : -1));
+  let last: { from: number; to: number } | null = null;
+  for (let k = 0; k <= step; k++) {
+    const m = SCRIPT[k].move;
+    if (!m) continue;
+    const [from, to, cap] = m;
+    board[to] = board[from];
+    ids[to] = ids[from];
+    board[from] = 0 as Cell;
+    ids[from] = -1;
+    if (cap !== undefined) {
+      board[cap] = 0 as Cell;
+      ids[cap] = -1;
+    }
+    last = { from, to };
+  }
+  return { board, ids, last, sel: SCRIPT[step].sel ?? null };
+}
+
 /** Full 8×8 board in the starting position with the item applied (detail view, "try before you buy"). */
 export function FullPreview({ item }: { item: Pick<ShopItem, 'slug' | 'slot' | 'style'> }) {
   const cls = usePreviewClass(item);
@@ -141,18 +166,22 @@ export function FullPreview({ item }: { item: Pick<ShopItem, 'slug' | 'slot' | '
     x[from] = -1;
     return x;
   }, [ids, loop, item.slot]);
+  // stone preview: a short scripted exchange (select → move → reply → capture) so the selection ring, the move trail
+  // and the capture shatter can be seen on a real board; it starts over every ~9 s
+  const demo = useLoop(1100, item.slot === 'piece');
+  const scene = useMemo(() => (item.slot === 'piece' ? stoneScene(st.board, demo % 9) : null), [item.slot, st, demo]);
   return (
     <div className="full-preview">
       <Board
-        board={board}
-        ids={moveIds}
+        board={scene?.board ?? board}
+        ids={scene?.ids ?? moveIds}
         flipped={false}
-        selected={null}
+        selected={scene?.sel ?? null}
         targets={[]}
         pathMarks={[]}
         mustMove={[]}
         hint={null}
-        lastMove={last}
+        lastMove={scene ? scene.last : last}
         showLegal={false}
         disabled
         shake={0}

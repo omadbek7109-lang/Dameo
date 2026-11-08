@@ -6,6 +6,8 @@
  * The scope class sits on the board wrapper, so every board (game, previews, home) uses the same renderer.
  * Gradients / box-shadows / transforms, plus (Limited boards) two small texture tiles cut from the board artwork.
  */
+import { stoneMat, stoneMotionCss } from './stoneMaterials.ts';
+
 export type Slot = 'piece' | 'board' | 'effect';
 export type PiecePattern = 'none' | 'rings' | 'stripes' | 'carbon' | 'dots' | 'facets' | 'conic' | 'galaxy' | 'flames' | 'frost' | 'petals' | 'waves' | 'scales' | 'glitch' | 'marble' | 'brushed';
 export type PieceAnim = 'none' | 'shimmer' | 'sparkle' | 'pulse' | 'hue' | 'glitch' | 'gleam';
@@ -24,6 +26,8 @@ export interface PieceSide {
   edge?: string;
   /** Stones Collection: face texture `stones/<tex>.webp` */
   tex?: string;
+  /** Premium Stones motion material (defaults from the slug, see stoneMaterials.ts) */
+  mat?: string;
 }
 export interface PieceStyle {
   w: PieceSide;
@@ -134,7 +138,7 @@ function piecePattern(p: PiecePattern, a: number): string[] {
 }
 
 /** `scopes`: wrapper classes this side's look applies under (the full set class + the one-side class). */
-function pieceSideCss(scopes: string[], cls: 'piece-w' | 'piece-b', s: Partial<PieceSide>, white: boolean): string {
+function pieceSideCss(scopes: string[], cls: 'piece-w' | 'piece-b', s: Partial<PieceSide>, white: boolean, slug = ''): string {
   const c1 = col(s.c1, white ? '#ffffff' : '#4b5a84');
   const c2 = col(s.c2, white ? '#e3eafa' : '#151c34');
   const c3 = col(s.c3, white ? '#aebbd9' : '#080c1a');
@@ -157,6 +161,13 @@ function pieceSideCss(scopes: string[], cls: 'piece-w' | 'piece-b', s: Partial<P
   if (s.motif) css += `${sel('.piece-disc::before')}{content:${cssString(s.motif)};}`;
   if (tex) css += `${sel('.piece-disc::after')}{display:none;}`; // the stone face has its own rim
   if (s.crown) css += `${sel('.piece-crown')}{color:${col(s.crown, '#e8bb4d')};}`;
+  const mat = stoneMat(slug, s.mat);
+  if (mat) {
+    // Premium Stones: the material's own idle / selection / trail / capture motion (replaces `anim`)
+    const on = (tail: string) => scopes.map((sc) => `.${sc} .${cls}${tail}`).join(',');
+    const trail = scopes.map((sc) => `.${sc} .mv-trail-${cls === 'piece-w' ? 'w' : 'b'}`).join(',');
+    return css + stoneMotionCss(mat, on, trail);
+  }
   if (anim !== 'none') {
     const [fx, after] = pfxFor(anim);
     css += `${disc}{animation:var(--pa-${anim});}` + `${sel('.pfx')}{${fx}}` + (after ? `${sel('.pfx::after')}{${after}}` : '');
@@ -267,7 +278,7 @@ export function skinCss(item: SkinRef): string {
   if (item.slot === 'piece') {
     const ps = st as Partial<PieceStyle>;
     // sk-p-*: both colours (shop previews, own practice games); sk-pw-* / sk-pb-*: only the owner's side in a real game
-    return pieceSideCss([`sk-p-${slug}`, `sk-pw-${slug}`], 'piece-w', ps.w ?? {}, true) + pieceSideCss([`sk-p-${slug}`, `sk-pb-${slug}`], 'piece-b', ps.b ?? {}, false);
+    return pieceSideCss([`sk-p-${slug}`, `sk-pw-${slug}`], 'piece-w', ps.w ?? {}, true, slug) + pieceSideCss([`sk-p-${slug}`, `sk-pb-${slug}`], 'piece-b', ps.b ?? {}, false, slug);
   }
   if (item.slot === 'board') return boardCss(`sk-b-${slug}`, st as Partial<BoardStyle>);
   const fx = st as Partial<EffectStyle>;

@@ -817,6 +817,7 @@ export const uz = {
   'stones.onBoard': "Doskada",
   'stones.select': "Tanlash",
   'stones.unlimited': "Cheklanmagan nusxa",
+  'stones.drag': "Aylantirish uchun suring",
 } as const;
 
 export type TKey = keyof typeof uz;
