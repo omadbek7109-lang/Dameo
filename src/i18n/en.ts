@@ -818,4 +818,5 @@ export const en: Record<TKey, string> = {
   'stones.king': "King",
   'stones.onBoard': "On board",
   'stones.select': "Select",
+  'stones.unlimited': "Unlimited copies",
 };

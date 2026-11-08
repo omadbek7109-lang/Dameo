@@ -61,7 +61,7 @@ export function EditionBadge({ stock }: { stock: Pick<BoardStock, 'supply' | 'so
   );
 }
 
-function Remaining({ stock }: { stock: BoardStock }) {
+export function Remaining({ stock }: { stock: BoardStock }) {
   const { t, num } = useI18n();
   if (stock.supply === null) return <span className="ltd-left muted small">{t('lb.noLimit')}</span>;
   const pct = Math.round((100 * (stock.remaining ?? 0)) / stock.supply);

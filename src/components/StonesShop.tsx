@@ -9,7 +9,7 @@ import { registerSkins, skinClasses } from '../services/skins.ts';
 import { SbError } from '../services/supabase.ts';
 import { haptic } from '../services/telegram.ts';
 import { useAuthDialog } from './AuthDialog.tsx';
-import { EditionPlate } from './LimitedBoards.tsx';
+import { EditionBadge, EditionPlate, Remaining } from './LimitedBoards.tsx';
 import { Modal } from './Modal.tsx';
 import { FullPreview, RarityBadge } from './ShopParts.tsx';
 import { useToast } from './Toast.tsx';
@@ -45,7 +45,7 @@ export function StonesShop({ items, stock, starsPer1000, equippedSlug, onChanged
   equippedSlug: string | null;
   onChanged: () => Promise<void>;
 }) {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const [open, setOpen] = useState<string | null>(null);
   const list = useMemo(() => {
     registerSkins(items.map((i) => ({ slug: i.slug, slot: i.slot, style: i.style })));
@@ -54,46 +54,53 @@ export function StonesShop({ items, stock, starsPer1000, equippedSlug, onChanged
   const stockOf = (slug: string) => stock.find((s) => s.slug === slug);
   const cur = open ? list.find((i) => i.slug === open) : null;
   return (
-    <section className="st-shop" aria-label={t('stones.title')}>
-      <div className="st-head">
-        <span className="st-crown" aria-hidden="true">
-          <LuCrown />
-        </span>
-        <div>
-          <h2 className="st-title">DAMEO</h2>
-          <p className="st-kicker">STONES COLLECTION</p>
-        </div>
+    <section className="ltd-shop st-shop" aria-label={t('stones.title')}>
+      <div className="ltd-head">
+        <h2 className="h2">Stones Collection</h2>
+        <p className="muted small">{t('stones.sub')}</p>
       </div>
-      <p className="muted small st-sub">{t('stones.sub')}</p>
-      <div className="st-grid">
+      <div className="ltd-grid">
         {list.map((i) => {
           const s = stockOf(i.slug);
           const owned = i.owned || i.is_free || !!s?.mine;
           const on = equippedSlug === i.slug;
+          const price = i.final_price;
           return (
-            <button key={i.slug} className={`st-card ${s ? 'st-card-ltd' : ''} ${on ? 'is-on' : ''} ${s?.sold_out && !owned ? 'is-out' : ''}`} onClick={() => setOpen(i.slug)}>
-              <span className="st-art">
-                <img src={boardArt(i.image_url)} alt="" width={374} height={212} loading="lazy" decoding="async" />
-              </span>
-              <span className="st-name">{itemName(i, 'en')}</span>
-              <span className="st-tags">
-                <TypeBadge item={i} stock={s} />
-                {s?.sold_out && <span className="st-badge st-badge-out">SOLD OUT</span>}
-              </span>
-              <span className="st-price">
-                {owned ? (
-                  <span className="st-owned">
-                    <LuCheck /> {on ? t('shop.equipped') : t('shop.owned')}
-                    {s?.mine && <span className="st-serial">{serialLabel(s.mine.serial, s.supply)}</span>}
+            <article key={i.slug} className={`ltd-card st-c-${i.slug} ${s?.sold_out && !owned ? 'is-out' : ''} ${on ? 'is-on' : ''}`}>
+              <button className="ltd-card-art st-card-art" onClick={() => setOpen(i.slug)} aria-label={itemName(i, lang)}>
+                <img className="board-art st-art-img" src={boardArt(i.image_url)} alt="" width={374} height={212} loading="lazy" decoding="async" />
+              </button>
+              <div className="ltd-card-body">
+                <h3 className="ltd-name">{itemName(i, lang)}</h3>
+                <div className="ltd-tags">{s ? <EditionBadge stock={s} /> : <TypeBadge item={i} />}</div>
+                {s?.mine ? (
+                  <span className="ltd-mine">
+                    <LuCheck /> {t('lb.yours', { serial: serialLabel(s.mine.serial, s.supply) })}
                   </span>
+                ) : owned ? (
+                  <span className="ltd-mine">
+                    <LuCheck /> {t('shop.owned')}
+                  </span>
+                ) : s ? (
+                  <Remaining stock={s} />
                 ) : (
-                  <>
-                    <span className="st-coin">🪙 {coins(i.final_price)}</span>
-                    <span className="ltd-stars">⭐ {coins(starsFor(i.final_price, starsPer1000))}</span>
-                  </>
+                  <span className="ltd-left muted small">{t('stones.unlimited')}</span>
                 )}
-              </span>
-            </button>
+                <div className="ltd-price">
+                  {price === 0 ? (
+                    <strong className="price-free">{t('shop.free')}</strong>
+                  ) : (
+                    <>
+                      <strong>🪙 {coins(price)}</strong>
+                      <span className="ltd-stars">⭐ {coins(starsFor(price, starsPer1000))}</span>
+                    </>
+                  )}
+                </div>
+                <button className={`btn btn-block btn-sm ${owned ? 'btn-secondary' : 'btn-primary'}`} onClick={() => setOpen(i.slug)} disabled={!owned && !!s?.sold_out}>
+                  {owned ? (on ? t('shop.equipped') : t('shop.equip')) : s?.sold_out ? 'SOLD OUT' : t('lb.buy')}
+                </button>
+              </div>
+            </article>
           );
         })}
       </div>

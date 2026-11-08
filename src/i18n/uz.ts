@@ -816,6 +816,7 @@ export const uz = {
   'stones.king': "Damka",
   'stones.onBoard': "Doskada",
   'stones.select': "Tanlash",
+  'stones.unlimited': "Cheklanmagan nusxa",
 } as const;
 
 export type TKey = keyof typeof uz;
