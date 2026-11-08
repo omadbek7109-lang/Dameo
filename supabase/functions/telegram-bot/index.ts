@@ -1,5 +1,6 @@
 // Edge Function `telegram-bot` (Deno): the bot's chat side.
-//  - POST from Telegram (webhook): answers /start (and /play, /help) with a welcome text + "open the game" button.
+//  - POST from Telegram (webhook): answers /start (and /play, /help) with a welcome text + "open the game" button,
+//    and records the chat in bot_subscribers (for admin broadcasts).
 //  - GET ?setup=1: registers this function as the bot's webhook (with a secret header), sets the menu button
 //    and the command list. Safe to call repeatedly; it only points the bot at this same function.
 //  - Telegram Stars payments: answers pre_checkout_query (SQL payment_precheck decides) and, on successful_payment,
@@ -131,6 +132,9 @@ Deno.serve(async (req) => {
   }
   if (msg?.chat?.type === 'private' && /^\/(start|play|help)\b/.test(text)) {
     const from = msg.from ?? {};
+    // remember the chat for admin broadcasts (also un-marks someone who had blocked the bot and came back)
+    await db().rpc('bot_subscriber_touch', { p_tg: msg.chat.id, p_first: from.first_name ?? null, p_username: from.username ?? null, p_lang: from.language_code ?? null })
+      .then(() => {}, () => {});
     const name = escapeHtml(from.first_name || from.username || "o'yinchi");
     const lang: string | undefined = from.language_code;
     // "/start join_ABC123" (deep link) opens the game straight into that room

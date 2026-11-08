@@ -2,9 +2,10 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react
 import { appActive } from '../services/telegram.ts';
 import {
   LuBan, LuCheck, LuChevronRight, LuCoins, LuGauge, LuHistory, LuImage, LuLoader, LuPackage, LuPlus, LuRefreshCw, LuSearch,
-  LuBot, LuShieldCheck, LuShoppingBag, LuTrophy, LuTriangleAlert, LuUndo2, LuUserCog, LuUsers, LuVolumeX,
+  LuBot, LuMegaphone, LuShieldCheck, LuShoppingBag, LuTrophy, LuTriangleAlert, LuUndo2, LuUserCog, LuUsers, LuVolumeX,
 } from 'react-icons/lu';
 import { useAuth } from '../auth/AuthProvider.tsx';
+import { BroadcastTab } from './AdminBroadcast.tsx';
 import { Avatar } from '../components/Avatar.tsx';
 import { Modal } from '../components/Modal.tsx';
 import { MiniPreview, RarityBadge } from '../components/ShopParts.tsx';
@@ -24,7 +25,7 @@ function useL() {
 }
 const errText = (e: unknown) => (e instanceof SbError ? e.message : e instanceof Error ? e.message : 'error');
 
-type Tab = 'dash' | 'users' | 'payments' | 'shop' | 'packages' | 'reports' | 'weekly' | 'virtual' | 'roles' | 'audit';
+type Tab = 'dash' | 'users' | 'payments' | 'shop' | 'packages' | 'reports' | 'weekly' | 'virtual' | 'broadcast' | 'roles' | 'audit';
 const TABS: Array<{ id: Tab; perm: string; icon: typeof LuGauge; uz: string; en: string }> = [
   { id: 'dash', perm: 'dashboard', icon: LuGauge, uz: 'Dashboard', en: 'Dashboard' },
   { id: 'users', perm: 'users.view', icon: LuUsers, uz: 'Foydalanuvchilar', en: 'Users' },
@@ -34,6 +35,7 @@ const TABS: Array<{ id: Tab; perm: string; icon: typeof LuGauge; uz: string; en:
   { id: 'reports', perm: 'reports.view', icon: LuTriangleAlert, uz: 'Shikoyatlar', en: 'Reports' },
   { id: 'weekly', perm: 'tournaments.manage', icon: LuTrophy, uz: 'Turnirlar', en: 'Tournaments' },
   { id: 'virtual', perm: 'virtual.manage', icon: LuBot, uz: 'Virtual raqiblar', en: 'Virtual opponents' },
+  { id: 'broadcast', perm: 'roles.manage', icon: LuMegaphone, uz: 'Xabar yuborish', en: 'Broadcast' },
   { id: 'roles', perm: 'roles.manage', icon: LuUserCog, uz: 'Rollar', en: 'Roles' },
   { id: 'audit', perm: 'audit.view', icon: LuHistory, uz: 'Audit log', en: 'Audit log' },
 ];
@@ -93,6 +95,7 @@ export function Admin() {
       {current === 'reports' && <ReportsTab canManage={can('reports.manage')} />}
       {current === 'weekly' && <WeeklyTab />}
       {current === 'virtual' && <VirtualTab />}
+      {current === 'broadcast' && <BroadcastTab />}
       {current === 'roles' && <RolesTab />}
       {current === 'audit' && <AuditTab />}
     </div>

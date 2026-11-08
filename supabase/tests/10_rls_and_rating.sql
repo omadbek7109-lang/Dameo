@@ -1362,6 +1362,66 @@ select pg_temp.check('st: admin sees Limited stones next to boards', (select cou
 reset role;
 select pg_temp.check('st/fr: wallets still match the ledger', (select bool_and(w.balance = coalesce((select sum(amount) from public.wallet_transactions t where t.user_id = w.user_id), 0)) from public.user_wallets w));
 
+-- ===================== 0024: admin broadcast
+update public.profiles set tg_id = 7550418397 where id = 'eeeeeeee-0000-4000-8000-000000000002' and tg_id is null;
+set role service_role;
+select public.bot_subscriber_touch(1001, 'Ali', 'ali', 'uz');
+select public.bot_subscriber_touch(1002, 'Vali', null, 'ru');
+select public.bot_subscriber_touch(1003, 'Sami', 'sami', 'en');
+select public.bot_subscriber_touch(1001, 'Ali', 'ali_new', 'uz');
+reset role;
+select pg_temp.check('bc: /start users recorded once', (select count(*) = 3 from public.bot_subscribers where tg_id in (1001, 1002, 1003)) and (select username = 'ali_new' from public.bot_subscribers where tg_id = 1001));
+insert into public.bot_subscribers (tg_id, source) select p.tg_id, 'app' from public.profiles p where p.tg_id is not null on conflict do nothing;
+set role authenticated;
+set request.jwt.claim.sub = 'bbbbbbbb-0000-4000-8000-000000000002';
+do $$ begin
+  perform public.admin_broadcast_create('Salom', true, 'urinish');
+  perform pg_temp.check('bc: players can NOT broadcast', false);
+exception when others then perform pg_temp.check('bc: players can NOT broadcast', sqlerrm like '%forbidden%', sqlerrm); end $$;
+do $$ begin
+  perform 1 from public.bot_subscribers limit 1;
+  perform pg_temp.check('bc: subscriber list not readable by clients', false);
+exception when others then perform pg_temp.check('bc: subscriber list not readable by clients', true, sqlerrm); end $$;
+do $$ begin
+  perform public.broadcast_claim(1, 10);
+  perform pg_temp.check('bc: clients can NOT run the sender helpers', false);
+exception when others then perform pg_temp.check('bc: clients can NOT run the sender helpers', true, sqlerrm); end $$;
+reset role;
+set role authenticated;
+set request.jwt.claim.sub = 'eeeeeeee-0000-4000-8000-000000000002';
+select pg_temp.check('bc: audience count + my Telegram id', (select (a->>'reachable')::int >= 3 and (a->>'my_tg')::bigint = 7550418397 from (select public.admin_broadcast_audience() a) x));
+select pg_temp.check('bc: create a broadcast', (select (r->>'total')::int >= 3 from (select public.admin_broadcast_create('<b>Yangilanish!</b> Toshlar do''koni ochildi', true, 'Yangilanish haqida') r) x));
+do $$ begin
+  perform public.admin_broadcast_create('Ikkinchi', true, 'Yana');
+  perform pg_temp.check('bc: only one broadcast sends at a time', false);
+exception when others then perform pg_temp.check('bc: only one broadcast sends at a time', sqlerrm like '%still sending%', sqlerrm); end $$;
+reset role;
+set role service_role;
+select pg_temp.check('bc: claim gives each recipient once', (select count(*) = count(distinct tg_id) and count(*) >= 3 from public.broadcast_claim((select max(id) from public.broadcasts), 100)));
+select pg_temp.check('bc: nothing left to claim while sending', (select count(*) = 0 from public.broadcast_claim((select max(id) from public.broadcasts), 100)));
+select public.broadcast_mark((select max(id) from public.broadcasts), 1001, 'sent', null);
+select public.broadcast_mark((select max(id) from public.broadcasts), 1001, 'sent', null);   -- a repeat changes nothing
+select public.broadcast_mark((select max(id) from public.broadcasts), 1002, 'blocked', 'Forbidden: bot was blocked by the user');
+select public.broadcast_mark((select max(id) from public.broadcasts), d.tg_id, 'sent', null) from public.broadcast_deliveries d
+ where d.broadcast_id = (select max(id) from public.broadcasts) and d.status = 'sending';
+reset role;
+select pg_temp.check('bc: counters + done', (select sent = total - 1 and blocked = 1 and status = 'done' and finished_at is not null from public.broadcasts where id = (select max(id) from public.broadcasts)));
+select pg_temp.check('bc: blocked user is skipped next time', (select blocked from public.bot_subscribers where tg_id = 1002));
+set role service_role;
+select public.bot_subscriber_touch(1002, 'Vali', null, 'ru');
+reset role;
+select pg_temp.check('bc: pressing /start again un-blocks', (select not blocked from public.bot_subscribers where tg_id = 1002));
+set role authenticated;
+set request.jwt.claim.sub = 'eeeeeeee-0000-4000-8000-000000000002';
+select pg_temp.check('bc: history', (select json_array_length(public.admin_broadcast_list()) >= 1));
+select pg_temp.check('bc: a new broadcast may start once the last is done', ((public.admin_broadcast_create('Uchinchi', false, 'Sinov') ->> 'ok')::boolean));
+select pg_temp.check('bc: cancel stops it', (public.admin_broadcast_cancel((public.admin_broadcast_list() -> 0 ->> 'id')::bigint, 'Bekor') ->> 'ok')::boolean);
+reset role;
+select pg_temp.check('bc: audit log', exists (select 1 from public.admin_audit_logs where action = 'broadcast.create') and exists (select 1 from public.admin_audit_logs where action = 'broadcast.cancel'));
+set role service_role;
+select pg_temp.check('bc: a cancelled broadcast sends nothing more', (select count(*) = 0 from public.broadcast_claim((select max(id) from public.broadcasts), 100)));
+reset role;
+
 \set QUIET off
 select case when ok then 'PASS' else 'FAIL' end as status, name, left(detail, 70) as detail from results order by 1 desc, 2;
 select count(*) filter (where not ok) as failures, count(*) as total from results;

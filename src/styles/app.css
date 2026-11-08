@@ -5212,3 +5212,20 @@ html.calm .pfx, html.calm .pfx::after, html.calm .av-frame-art::after, html.calm
 .frame-buy-av { padding: 34px 0 26px; }
 .frame-buy-price { margin: 0; font-size: 1.4rem; font-weight: 800; color: #ffd56b; }
 @media (max-width: 380px) { .st-pair { gap: 10px; } }
+
+/* ================================================================ admin broadcast */
+.bc-aud { display: flex; gap: 12px; align-items: center; }
+.bc-aud > svg { font-size: 1.6rem; color: var(--accent); flex: none; }
+.bc-aud > div { display: grid; gap: 2px; }
+.bc-live { display: grid; gap: 8px; }
+.bc-live-head { display: flex; justify-content: space-between; }
+.bc-bar { height: 8px; border-radius: 99px; background: var(--surface-2); overflow: hidden; }
+.bc-bar i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--accent), #6ee7b7); transition: width 0.4s; }
+.bc-compose { display: grid; gap: 10px; }
+.bc-compose textarea { min-height: 140px; }
+.bc-preview { display: grid; gap: 4px; }
+.bc-bubble { max-width: 340px; padding: 10px 12px; border-radius: 14px 14px 14px 4px; background: #182533; color: #e8eef5; font-size: 0.92rem; line-height: 1.35; display: grid; gap: 8px; }
+.bc-bubble p { margin: 0; overflow-wrap: anywhere; }
+.bc-btn { display: block; text-align: center; padding: 7px; border-radius: 8px; background: rgba(255, 255, 255, 0.08); font-weight: 600; font-size: 0.85rem; }
+.bc-row { align-items: center; }
+.bc-row-text { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-weight: 600; }
