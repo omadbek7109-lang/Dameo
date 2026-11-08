@@ -3,6 +3,7 @@ import { LuCrown } from 'react-icons/lu';
 import { isDark, rc, squareName, type Cell } from '../engine/index.ts';
 import { useT } from '../i18n/index.tsx';
 import { useCosmetics } from '../cosmetics/CosmeticsProvider.tsx';
+import { everyActive } from '../services/telegram.ts';
 
 interface Props {
   board: Cell[];
@@ -69,9 +70,43 @@ function BoardImpl({ board, ids, flipped, selected, targets, pathMarks, mustMove
     if (lost.length === 0 || lost.length > 12 || now.size !== old.size - lost.length) return;
     const k = Date.now();
     setGone(lost.map((p) => ({ ...p, k })));
-    timers.current.push(window.setTimeout(() => setGone((g) => g.filter((x) => x.k !== k)), 720));
+    const id = window.setTimeout(() => {
+      setGone((g) => g.filter((x) => x.k !== k));
+      timers.current = timers.current.filter((x) => x !== id);
+    }, 720);
+    timers.current.push(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pieces]);
+
+  // Premium Stones idle shine runs in short bursts, not non-stop: ~5 s after every move and ~4 s every 20 s.
+  // In between the stones rest (no animation → the GPU draws nothing), so long sessions do not drain the battery.
+  // live → rest (shine fades out, 0.6 s) → off (animations removed: zero redraws); any move wakes them again
+  const [lively, setLively] = useState<'live' | 'rest' | 'off'>('live');
+  const livelyT = useRef<number | undefined>(undefined);
+  const livelyNow = useRef<'live' | 'rest' | 'off'>('live');
+  livelyNow.current = lively;
+  const wake = (ms: number) => {
+    clearTimeout(livelyT.current);
+    if (livelyNow.current === 'off') {
+      // shown again at opacity 0 first, so the shine fades back in instead of popping
+      setLively('rest');
+      requestAnimationFrame(() => requestAnimationFrame(() => setLively('live')));
+    } else setLively('live');
+    livelyT.current = window.setTimeout(() => {
+      setLively('rest');
+      livelyT.current = window.setTimeout(() => setLively('off'), 650);
+    }, ms);
+  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => wake(5000), [lastMove?.from, lastMove?.to, selected]);
+  useEffect(() => {
+    const stop = everyActive(() => wake(4000), 20000);
+    return () => {
+      stop();
+      clearTimeout(livelyT.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // move trail for the last move (only visible for Premium Stones, see stoneMaterials.ts)
   const trail = useMemo(() => {
@@ -91,7 +126,7 @@ function BoardImpl({ board, ids, flipped, selected, targets, pathMarks, mustMove
   };
 
   return (
-    <div className={`board-wrap ${skinClass}`}>
+    <div className={`board-wrap ${skinClass} ${lively === 'live' ? '' : lively === 'rest' ? 'st-rest' : 'st-rest st-off'}`}>
       <div key={shake} className={`board ${shake > 0 ? 'board-shake' : ''} ${disabled ? 'board-disabled' : ''}`} role="grid" aria-label={t('board.label')}>
         {squares.map((i) => {
           const [r, c] = rc(i);

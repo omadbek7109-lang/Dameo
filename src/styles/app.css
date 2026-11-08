@@ -3258,10 +3258,12 @@ html.in-telegram body {
   border-color: var(--danger, #d64545);
   color: #fff;
   animation: clock-pulse 1s ease-in-out infinite;
+  will-change: transform;   /* the pulse is composited, the text is not re-rendered every frame */
 }
 @keyframes clock-pulse {
   50% { transform: scale(1.05); }
 }
+html.calm .clock-warn { animation: none; }
 @media (prefers-reduced-motion: reduce) {
   .clock-warn { animation: none; }
 }
@@ -5406,3 +5408,9 @@ html.calm .st3d-coin.is-spin { animation: none; }
 @keyframes cr-shine { to { transform: translateX(100%); } }
 html.calm .coin-reward, html.calm .coin-reward-ico, html.calm .coin-reward::after { animation: none; }
 @media (prefers-reduced-motion: reduce) { .coin-reward, .coin-reward-ico, .coin-reward::after { animation: none; } }
+
+/* Premium Stones: the idle shine runs in bursts (Board): between them it fades out (.st-rest) and then its animations
+   are removed (.st-off) — a stopped animation needs no new frames, so a resting board costs the GPU nothing. */
+.board-wrap .pfx { transition: opacity 0.6s ease; }
+.st-rest .pfx { opacity: 0 !important; }
+.st-off .pfx { display: none !important; }   /* even an invisible, still layer kept the GPU redrawing */
