@@ -285,7 +285,7 @@ export const en: Record<TKey, string> = {
   'level.expert': 'Expert',
   'level.master': 'Master',
   'rating.how': 'How is the rating calculated?',
-  'rating.explain': "Everyone starts at 1200 (Level 1). After every rated game the server applies: win +15 to +30, loss −15 to −30 (random); in a draw the lower-rated player gains a little (at most ±5). A game that ends before 6 moves gives the winner nothing while the loser still loses. Only 3 games per day against the same opponent count. Practice-bot games are unrated. Levels: a new level every 100 points from 1300, 2100+ is Level 10.",
+  'rating.explain': "Everyone starts at 1200 (Level 1). After every rated game the server applies: win +10 to +30, loss −10 to −30 (random); in a draw the lower-rated player gains a little (at most ±5). A game that ends before 6 moves gives the winner nothing while the loser still loses. Only 3 games per day against the same opponent count. Practice-bot games are unrated. Levels: a new level every 100 points from 1300, 2100+ is Level 10.",
   'chart.summary': 'Rating over {n} points: from {from} to {to}',
 
   'ach.firstWin': 'First win',
@@ -657,7 +657,7 @@ export const en: Record<TKey, string> = {
   'help.q.rules': "What are the rules?",
   'help.a.rules': "Russian draughts: men move forward, capturing is compulsory and also backwards; a man reaching the last row becomes a flying king.",
   'help.q.rating': "How does the rating work?",
-  'help.a.rating': "Rated games: win +15…+30, loss −15…−30 (random each time), draw up to ±5. Only the server calculates it. A game ending before 6 moves gives the winner nothing; more than 3 games a day against the same opponent don't count.",
+  'help.a.rating': "Rated games: win +10…+30, loss −10…−30 (random each time), draw up to ±5. Only the server calculates it. A game ending before 6 moves gives the winner nothing; more than 3 games a day against the same opponent don't count.",
   'help.q.clock': "How does the clock work?",
   'help.a.clock': "Pick 1, 3 or 5 minutes; at most 30 seconds per move. Run out of time and your opponent wins.",
   'help.q.weekly': "What is DAMEO Weekly?",

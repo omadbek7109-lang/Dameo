@@ -283,7 +283,7 @@ export const uz = {
   'level.expert': 'Ekspert',
   'level.master': 'Usta',
   'rating.how': 'Reyting qanday hisoblanadi?',
-  'rating.explain': "Boshlang'ich reyting 1200 (Level 1). Har bir reytingli o'yindan keyin server hisoblaydi: g'alaba +15 dan +30 gacha, mag'lubiyat −15 dan −30 gacha (tasodifiy), durangda reytingi pastroq o'yinchi biroz qo'shadi (ko'pi bilan ±5). 6 ta yurishdan oldin tugagan o'yinda yutgan ball olmaydi, yutqazgan esa baribir yo'qotadi. Bir raqib bilan kuniga faqat 3 ta o'yin reytingga ta'sir qiladi. Mashq botidagi o'yinlar reytingsiz. Darajalar: 1300 dan har 100 ochkoda yangi Level, 2100+ — Level 10.",
+  'rating.explain': "Boshlang'ich reyting 1200 (Level 1). Har bir reytingli o'yindan keyin server hisoblaydi: g'alaba +10 dan +30 gacha, mag'lubiyat −10 dan −30 gacha (tasodifiy), durangda reytingi pastroq o'yinchi biroz qo'shadi (ko'pi bilan ±5). 6 ta yurishdan oldin tugagan o'yinda yutgan ball olmaydi, yutqazgan esa baribir yo'qotadi. Bir raqib bilan kuniga faqat 3 ta o'yin reytingga ta'sir qiladi. Mashq botidagi o'yinlar reytingsiz. Darajalar: 1300 dan har 100 ochkoda yangi Level, 2100+ — Level 10.",
   'chart.summary': "Reyting {n} nuqta: {from} dan {to} gacha",
 
   'ach.firstWin': "Birinchi g'alaba",
@@ -655,7 +655,7 @@ export const uz = {
   'help.q.rules': "Qoidalar qanday?",
   'help.a.rules': "Rus shashkasi: oddiy donacha oldinga yuradi, urish majburiy, orqaga ham uriladi; oxirgi qatorga yetgan donacha dama bo'ladi va uzoq yuradi.",
   'help.q.rating': "Reyting qanday hisoblanadi?",
-  'help.a.rating': "Reytingli o'yinda g'alaba +15…+30, mag'lubiyat −15…−30 (har safar tasodifiy), durang ±5 gacha. Hisobni faqat server qiladi. 6 yurishdan oldin tugagan o'yinda yutgan ball olmaydi; bir raqib bilan kuniga 3 tadan ortiq o'yin reytingga ta'sir qilmaydi.",
+  'help.a.rating': "Reytingli o'yinda g'alaba +10…+30, mag'lubiyat −10…−30 (har safar tasodifiy), durang ±5 gacha. Hisobni faqat server qiladi. 6 yurishdan oldin tugagan o'yinda yutgan ball olmaydi; bir raqib bilan kuniga 3 tadan ortiq o'yin reytingga ta'sir qilmaydi.",
   'help.q.clock': "O'yin vaqti qanday ishlaydi?",
   'help.a.clock': "1, 3 yoki 5 daqiqa tanlanadi; har yurishga ko'pi bilan 30 soniya. Vaqt tugasa raqib yutadi.",
   'help.q.weekly': "DAMEO Weekly nima?",

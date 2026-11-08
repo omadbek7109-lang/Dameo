@@ -1044,11 +1044,11 @@ select pg_temp.check('a fresh untimed game is left alone', (select status = 'act
 
 -- ===================== 0019: rating rules, anti-abuse, achievements, virtual v2
 reset role;
--- the real random rule (0019) back in place
+-- the real random rule back in place (0025: ±10…30)
 create or replace function public._rand_delta(p_score numeric, p_me int, p_opp int) returns int
 language sql volatile as $$
-  select case when p_score = 1 then 15 + floor(random() * 16)::int
-              when p_score = 0 then -(15 + floor(random() * 16)::int)
+  select case when p_score = 1 then 10 + floor(random() * 21)::int
+              when p_score = 0 then -(10 + floor(random() * 21)::int)
               else greatest(-5, least(5, round((coalesce(p_opp, 1200) - p_me) / 50.0)::int)) end;
 $$;
 insert into auth.users (id, email, raw_user_meta_data) values
@@ -1062,11 +1062,11 @@ create temp table rg as
   select pg_temp.pvp('f019f019-0000-4000-8000-000000000001', 'f019f019-0000-4000-8000-000000000002', 'white', now() - (i || ' days')::interval - interval '2 days') as id
   from generate_series(1, 40) i;
 grant all on rg to public;
-select pg_temp.check('rating: every win is +15…+30', (select bool_and(m.white_delta between 15 and 30) from public.matches m join rg on rg.id = m.id));
-select pg_temp.check('rating: every loss is −15…−30', (select bool_and(m.black_delta between -30 and -15) from public.matches m join rg on rg.id = m.id));
+select pg_temp.check('rating: every win is +10…+30', (select bool_and(m.white_delta between 10 and 30) from public.matches m join rg on rg.id = m.id));
+select pg_temp.check('rating: every loss is −10…−30', (select bool_and(m.black_delta between -30 and -10) from public.matches m join rg on rg.id = m.id));
 select pg_temp.check('rating: points are random (not one fixed value)', (select count(distinct m.white_delta) >= 6 from public.matches m join rg on rg.id = m.id));
 select pg_temp.check('rating: history keeps every change with source and delta',
-  (select count(*) = 40 and bool_and(source = 'pvp' and delta between 15 and 30) from public.rating_history where user_id = 'f019f019-0000-4000-8000-000000000001' and match_id is not null));
+  (select count(*) = 40 and bool_and(source = 'pvp' and delta between 10 and 30) from public.rating_history where user_id = 'f019f019-0000-4000-8000-000000000001' and match_id is not null));
 select pg_temp.check('rating: profile = sum of the changes', (select p.rating = 1200 + (select sum(white_delta) from public.matches m join rg on rg.id = m.id) from public.profiles p where p.id = 'f019f019-0000-4000-8000-000000000001'));
 -- draws: small and balanced (the lower-rated player gains)
 create temp table dg as select pg_temp.pvp('f019f019-0000-4000-8000-000000000002', 'f019f019-0000-4000-8000-000000000001', 'draw', now() - interval '60 days') as id;
@@ -1421,6 +1421,47 @@ select pg_temp.check('bc: audit log', exists (select 1 from public.admin_audit_l
 set role service_role;
 select pg_temp.check('bc: a cancelled broadcast sends nothing more', (select count(*) = 0 from public.broadcast_claim((select max(id) from public.broadcasts), 100)));
 reset role;
+
+-- ===================== 0025: one game per virtual opponent, no virtual rematch, ±10…30 for every rated game
+reset role;
+select pg_temp.check('0025: the migration''s rating rule is ±10…30', (select prosrc like '%10 + floor(random() * 21)%' from pg_proc where proname = '_rand_delta'));
+insert into auth.users (id, email, raw_user_meta_data) values ('f0250025-0000-4000-8000-000000000001', 'once@x.io', '{"username":"once_only"}');
+update public.virtual_settings set enabled = true, auto_off = false, pool_size = 4 where id;
+create temp table v25 (n int primary key, match_id uuid, virtual_id uuid);
+grant all on v25 to authenticated;
+do $$ declare k int; r json; n_en int := (select count(*) from public.virtual_players where enabled); begin
+  for k in 1 .. n_en + 2 loop
+    perform set_config('request.jwt.claim.sub', 'f0250025-0000-4000-8000-000000000001', false);
+    set local role authenticated;
+    perform public.quick_match(180);
+    reset role;
+    update public.matchmaking_queue set created_at = now() - interval '25 seconds' where user_id = 'f0250025-0000-4000-8000-000000000001';
+    set local role authenticated;
+    r := public.virtual_match(180);
+    reset role;
+    insert into v25 select k, (r ->> 'match_id')::uuid, (select virtual_id from public.matches where id = (r ->> 'match_id')::uuid);
+    -- the game ends (a real result, so it counts as "played")
+    update public.matches set status = 'finished', result = 'white', result_reason = 'resign', ended_at = now(), created_at = now() - ((n_en + 2 - k) || ' minutes')::interval
+     where id = (r ->> 'match_id')::uuid;
+  end loop;
+end $$;
+select pg_temp.check('0025: every search found a virtual opponent', (select count(*) = count(virtual_id) and count(*) >= 3 from v25));
+select pg_temp.check('0025: each virtual opponent met only once until all were met',
+  (select count(distinct virtual_id) = count(*) from v25 where n <= (select count(*) from public.virtual_players where enabled)));
+select pg_temp.check('0025: when all were met, never the same opponent twice in a row',
+  (select bool_and(a.virtual_id <> b.virtual_id) from v25 a join v25 b on b.n = a.n + 1));
+select pg_temp.check('0025: after all were met, the one met longest ago comes back first',
+  (select virtual_id from v25 where n = (select count(*) from public.virtual_players where enabled) + 1) = (select virtual_id from v25 where n = 1));
+set role authenticated;
+select set_config('request.jwt.claim.sub', 'f0250025-0000-4000-8000-000000000001', false);
+select pg_temp.check('0025: rematch with a virtual opponent is always declined', (public.virtual_rematch((select match_id from v25 where n = 1)) ->> 'accepted')::boolean = false);
+reset role;
+select pg_temp.check('0025: … and creates no new game', (select count(*) from public.matches where white_id = 'f0250025-0000-4000-8000-000000000001') = (select count(*) from v25));
+-- virtual games use the same ±10…30 as player-vs-player
+update public.matches set rated = true, move_count = 40, rating_applied = false where id in (select match_id from v25);
+select public.apply_match_result(match_id) from v25;
+select pg_temp.check('0025: virtual wins give +10…+30 too', (select bool_and(white_delta between 10 and 30) from public.matches where id in (select match_id from v25)));
+select pg_temp.check('0025: … and the virtual loser −10…−30', (select bool_and(black_delta between -30 and -10) from public.matches where id in (select match_id from v25)));
 
 \set QUIET off
 select case when ok then 'PASS' else 'FAIL' end as status, name, left(detail, 70) as detail from results order by 1 desc, 2;

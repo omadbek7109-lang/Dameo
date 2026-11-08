@@ -16,7 +16,7 @@ import { useI18n, type TKey } from '../i18n/index.tsx';
 import { navigate, useRoute } from '../router.tsx';
 import { DEMO_PLAYERS } from '../services/demoData.ts';
 import { clockView, formatClock, GRACE_MS } from '../services/clock.ts';
-import { claimTimeout, commitBotMove, getMatch, getMoves, resignOnline, startBotMatch, submitMove, toLocalMs, virtualRematch, watchMatch, type OnlineMatch } from '../services/online.ts';
+import { claimTimeout, commitBotMove, getMatch, getMoves, resignOnline, startBotMatch, submitMove, toLocalMs, watchMatch, type OnlineMatch } from '../services/online.ts';
 import { Link } from '../router.tsx';
 import { AchievementUnlocked } from '../components/Achievements.tsx';
 import { achievementsForMatch, type StreakCode } from '../services/achievements.ts';
@@ -382,22 +382,7 @@ function OnlineGame({ matchId }: { matchId: string }) {
   const mine = matches.find((m) => m.id === matchId);
   const finalResult: ResultInfo | null = result && mine && me ? { ...result, before: me.rating - mine.delta, after: me.rating } : result;
 
-  // rematch with a virtual opponent: it answers after a natural pause (the server decides once per game)
-  const [vr, setVr] = useState<null | 'asking' | 'declined'>(null);
-  const askVirtualRematch = async () => {
-    setVr('asking');
-    try {
-      const [r] = await Promise.all([virtualRematch(matchId), new Promise((res) => setTimeout(res, 1400 + Math.random() * 2200))]);
-      if (r.accepted && r.match_id) {
-        toast('success', t('virtual.rematchAccepted', { name: match?.blackName ?? '' }));
-        navigate(`/game?online=${r.match_id}`);
-        setVr(null);
-      } else setVr('declined');
-    } catch {
-      setVr(null);
-      toast('error', t('chat.err.generic'));
-    }
-  };
+
 
   if (error) return <div className="page"><ErrorState onRetry={load} /></div>;
   if (!match || !me) return <div className="page"><Spinner /></div>;
@@ -497,9 +482,8 @@ function OnlineGame({ matchId }: { matchId: string }) {
       }
       aside={pvp && me ? <MatchChat matchId={matchId} myId={me.id} opponentId={(iAmWhite ? match.blackId : match.whiteId) ?? ''} names={{ [match.whiteId]: match.whiteName, ...(match.blackId ? { [match.blackId]: match.blackName ?? '' } : {}) }} active={match.status === 'active'} /> : undefined}
       onRematch={
-        virtualOpp && match.status === 'finished'
-          ? () => void askVirtualRematch()
-          : pvp && match.status === 'finished'
+        // no rematch against a virtual opponent: the next search always finds someone new
+        !virtualOpp && pvp && match.status === 'finished'
           ? () =>
               offerRematch(matchId)
                 .then(() => toast('success', t('chat.rematchSent')))
@@ -518,26 +502,6 @@ function OnlineGame({ matchId }: { matchId: string }) {
       overlay={
         achPop ? (
           <AchievementUnlocked items={achPop} onClose={() => setAchPop(null)} />
-        ) : vr ? (
-          <Modal open onClose={() => vr !== 'asking' && setVr(null)} title={t('chat.rematch')}>
-            {vr === 'asking' ? (
-              <p className="muted vr-asking">
-                <LuLoader className="spin" /> {t('virtual.rematchAsking', { name: match.blackName ?? '' })}
-              </p>
-            ) : (
-              <>
-                <p className="muted">{t('virtual.rematchDeclined', { name: match.blackName ?? '' })}</p>
-                <div className="row-actions">
-                  <button className="btn btn-primary" onClick={() => navigate('/play?mode=quick')}>
-                    <LuSwords /> {t('virtual.otherOpponent')}
-                  </button>
-                  <button className="btn btn-ghost" onClick={() => setVr(null)}>
-                    {t('common.close')}
-                  </button>
-                </div>
-              </>
-            )}
-          </Modal>
         ) : undefined
       }
     />
