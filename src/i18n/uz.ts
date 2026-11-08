@@ -818,6 +818,13 @@ export const uz = {
   'stones.select': "Tanlash",
   'stones.unlimited': "Cheklanmagan nusxa",
   'stones.drag': "Aylantirish uchun suring",
+  'reward.checking': "Mukofot hisoblanmoqda…",
+  'reward.none': "Bu o'yin uchun coin berilmadi: coin kamida 12 yurishli o'yinlarda beriladi.",
+  'reward.win': "G'alaba mukofoti",
+  'reward.loss': "Ishtirok uchun mukofot",
+  'ledger.matchWin': "G'alaba mukofoti",
+  'ledger.matchLoss': "O'yin mukofoti",
+  'reward.noneLimit': "Bu o'yin uchun coin berilmadi: bir raqib bilan kuniga 3 tadan ortiq o'yinga coin va reyting berilmaydi.",
 } as const;
 
 export type TKey = keyof typeof uz;

@@ -41,6 +41,8 @@ export interface OnlineMatch {
   botDueAt: number | null;
   /** the virtual opponent's answer to a rematch offer ('declined' or the new match id) */
   virtualRematch: string | null;
+  /** moves played, as counted by the server */
+  moveCount: number;
 }
 export type VirtualLevel = 'beginner' | 'normal' | 'pro';
 export interface VirtualPlayer {
@@ -123,6 +125,7 @@ const mapMatch = (r: MatchRow, receivedAt = Date.now()): OnlineMatch => {
   virtual: r.virtual_id ? { id: r.virtual_id, avatar: r.virtual_avatar ?? null, level: r.virtual_level ?? null, style: r.virtual_style ?? null } : null,
   botDueAt: r.bot_due_at ? toLocalMs(r.bot_due_at, skewMs) : null,
   virtualRematch: r.virtual_rematch ?? null,
+  moveCount: r.move_count ?? 0,
   };
 };
 

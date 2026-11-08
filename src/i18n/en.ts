@@ -820,4 +820,11 @@ export const en: Record<TKey, string> = {
   'stones.select': "Select",
   'stones.unlimited': "Unlimited copies",
   'stones.drag': "Drag to turn",
+  'reward.checking': "Checking your reward…",
+  'reward.none': "No coins for this game: coins are given for games of 12 moves or more.",
+  'reward.win': "Victory reward",
+  'reward.loss': "Reward for playing",
+  'ledger.matchWin': "Victory reward",
+  'ledger.matchLoss': "Game reward",
+  'reward.noneLimit': "No coins for this game: more than 3 games a day against the same opponent give no coins or rating.",
 };

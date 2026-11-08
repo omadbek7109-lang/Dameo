@@ -5364,3 +5364,45 @@ html.calm .piece-gone .piece-disc { animation: stm-fade 0.2s ease-out forwards; 
 html.calm .st3d-coin.is-spin { animation: none; }
 @media (prefers-reduced-motion: reduce) { .st3d-coin.is-spin { animation: none; } }
 @media (max-width: 380px) { .st3d { --sz: 140px; --th: 14px; min-height: 206px; } }
+
+/* ================================================================ match coin reward (result window) */
+.coin-reward {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-rows: auto auto;
+  column-gap: 12px;
+  align-items: center;
+  width: min(100%, 300px);
+  margin: 4px auto 12px;
+  padding: 10px 14px;
+  border-radius: 16px;
+  text-align: left;
+  border: 1px solid color-mix(in srgb, #f3c24f 45%, transparent);
+  background: linear-gradient(135deg, color-mix(in srgb, #f3c24f 18%, var(--surface)), var(--surface));
+  overflow: hidden;
+  animation: cr-in 0.5s cubic-bezier(0.3, 1.5, 0.5, 1) both;
+}
+.coin-reward.is-loss { border-color: color-mix(in srgb, var(--accent) 40%, transparent); background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 12%, var(--surface)), var(--surface)); }
+.coin-reward.is-wait { display: flex; gap: 8px; justify-content: center; color: var(--muted); font-size: 0.9rem; animation: none; border-style: dashed; background: none; }
+.coin-reward-ico { grid-row: 1 / 3; font-size: 2rem; line-height: 1; animation: cr-coin 0.9s ease-out 0.15s both; }
+.coin-reward-main { display: flex; align-items: baseline; gap: 6px; }
+.coin-reward-n { font-size: 1.5rem; font-weight: 800; color: #e8b52e; font-variant-numeric: tabular-nums; }
+.coin-reward.is-loss .coin-reward-n { color: var(--text); }
+.coin-reward-label { font-weight: 700; font-size: 0.9rem; }
+.coin-reward-why { color: var(--muted); }
+.coin-reward.is-win::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(105deg, transparent 40%, rgba(255, 244, 200, 0.5) 50%, transparent 60%);
+  transform: translateX(-100%);
+  animation: cr-shine 1.2s ease-out 0.5s 1 forwards;
+  pointer-events: none;
+}
+.coin-reward-none { max-width: 300px; margin: 0 auto 10px; }
+@keyframes cr-in { from { opacity: 0; transform: translateY(8px) scale(0.92); } to { opacity: 1; transform: none; } }
+@keyframes cr-coin { 0% { transform: translateY(-14px) rotateY(0) scale(0.6); opacity: 0; } 60% { transform: translateY(2px) rotateY(540deg) scale(1.1); opacity: 1; } 100% { transform: none; } }
+@keyframes cr-shine { to { transform: translateX(100%); } }
+html.calm .coin-reward, html.calm .coin-reward-ico, html.calm .coin-reward::after { animation: none; }
+@media (prefers-reduced-motion: reduce) { .coin-reward, .coin-reward-ico, .coin-reward::after { animation: none; } }

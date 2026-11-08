@@ -1086,14 +1086,14 @@ select pg_temp.check('anti-abuse: … and no stats either (3 wins counted, not 5
 select pg_temp.check('achievements: rr_three unlocked first win + 3 in a row',
   (select count(*) = 2 from public.user_achievements where user_id = 'f019f019-0000-4000-8000-000000000003' and code in ('first_win', 'streak_3')));
 select pg_temp.check('achievements: coins credited once through the ledger (125)',
-  (select sum(amount) = 125 and count(*) = 2 from public.wallet_transactions where user_id = 'f019f019-0000-4000-8000-000000000003' and kind = 'reward')
-  and (select balance = 125 from public.user_wallets where user_id = 'f019f019-0000-4000-8000-000000000003'));
+  (select sum(amount) = 125 and count(*) = 2 from public.wallet_transactions where user_id = 'f019f019-0000-4000-8000-000000000003' and ref_type = 'achievement')
+  and (select balance - (select coalesce(sum(amount),0) from public.wallet_transactions where user_id = 'f019f019-0000-4000-8000-000000000003' and ref_type = 'match') = 125 from public.user_wallets where user_id = 'f019f019-0000-4000-8000-000000000003'));   -- (+ the 0026 match coins)
 select pg_temp.check('achievements: streak 3, best 3', (select current_streak = 3 and best_streak = 3 from public.profiles where id = 'f019f019-0000-4000-8000-000000000003'));
 select pg_temp.check('achievements: a notification for each', (select count(*) = 2 from public.user_notifications where user_id = 'f019f019-0000-4000-8000-000000000003' and kind = 'achievement'));
 -- reapplying never pays again
 select public.apply_match_result(id) from pl;
 select public._ach_check('f019f019-0000-4000-8000-000000000003', null);
-select pg_temp.check('achievements: never paid twice', (select balance = 125 from public.user_wallets where user_id = 'f019f019-0000-4000-8000-000000000003'));
+select pg_temp.check('achievements: never paid twice', (select balance - (select coalesce(sum(amount),0) from public.wallet_transactions where user_id = 'f019f019-0000-4000-8000-000000000003' and ref_type = 'match') = 125 from public.user_wallets where user_id = 'f019f019-0000-4000-8000-000000000003'));
 -- streak 5 / 10 and reset on a loss (rr_five beats many different opponents, a day apart)
 select pg_temp.pvp('f019f019-0000-4000-8000-000000000005', o, 'white', now() - (i || ' days')::interval - interval '100 days')
   from (select i, case i % 4 when 0 then 'f019f019-0000-4000-8000-000000000001'::uuid when 1 then 'f019f019-0000-4000-8000-000000000002'::uuid
@@ -1101,7 +1101,7 @@ select pg_temp.pvp('f019f019-0000-4000-8000-000000000005', o, 'white', now() - (
           from generate_series(10, 1, -1) i) x order by i desc;
 select pg_temp.check('achievements: 10 in a row unlocks all four (975 coins)',
   (select count(*) = 4 from public.user_achievements where user_id = 'f019f019-0000-4000-8000-000000000005')
-  and (select balance = 975 from public.user_wallets where user_id = 'f019f019-0000-4000-8000-000000000005'));
+  and (select balance - (select coalesce(sum(amount),0) from public.wallet_transactions where user_id = 'f019f019-0000-4000-8000-000000000005' and ref_type = 'match') = 975 from public.user_wallets where user_id = 'f019f019-0000-4000-8000-000000000005'));
 create temp table lg as select pg_temp.pvp('f019f019-0000-4000-8000-000000000001', 'f019f019-0000-4000-8000-000000000005', 'white', now() - interval '200 days') as id;
 grant all on lg to public;
 select pg_temp.check('achievements: a loss resets the streak, best stays', (select current_streak = 0 and best_streak = 10 from public.profiles where id = 'f019f019-0000-4000-8000-000000000005'));
@@ -1462,6 +1462,84 @@ update public.matches set rated = true, move_count = 40, rating_applied = false 
 select public.apply_match_result(match_id) from v25;
 select pg_temp.check('0025: virtual wins give +10…+30 too', (select bool_and(white_delta between 10 and 30) from public.matches where id in (select match_id from v25)));
 select pg_temp.check('0025: … and the virtual loser −10…−30', (select bool_and(black_delta between -30 and -10) from public.matches where id in (select match_id from v25)));
+
+-- ===================== 0026: DAMEO Coins for finished games (win +20, loss +10, draw 0)
+reset role;
+insert into auth.users (id, email, raw_user_meta_data) values
+  ('f0260026-0000-4000-8000-00000000000a', 'cw@x.io', '{"username":"coin_winner"}'),
+  ('f0260026-0000-4000-8000-00000000000b', 'cl@x.io', '{"username":"coin_loser"}'),
+  ('f0260026-0000-4000-8000-00000000000c', 'cd@x.io', '{"username":"coin_drawer"}');
+create function pg_temp.g26(w uuid, b uuid, res text, moves int, rated boolean default true) returns uuid language plpgsql as $$
+declare mid uuid;
+begin
+  insert into public.matches (white_id, black_id, status, rated, started_at) values (w, b, 'active', rated, now()) returning matches.id into mid;
+  update public.matches set status = 'finished', result = res, result_reason = case when res = 'draw' then 'agreement' else 'resign' end, ended_at = now(), move_count = moves where matches.id = mid;
+  perform public.apply_match_result(mid);
+  return mid;
+end $$;
+-- coins from games only (achievements such as "first win" credit the same wallet separately)
+create function pg_temp.bal(u uuid) returns bigint language sql as $$ select coalesce((select sum(amount) from public.wallet_transactions where user_id = u and ref_type = 'match'), 0)::bigint $$;
+create temp table c26 as select pg_temp.bal('f0260026-0000-4000-8000-00000000000a') a0, pg_temp.bal('f0260026-0000-4000-8000-00000000000b') b0;
+create temp table m26 as select pg_temp.g26('f0260026-0000-4000-8000-00000000000a', 'f0260026-0000-4000-8000-00000000000b', 'white', 30) id;
+grant all on c26, m26 to public;
+select pg_temp.check('0026: winner +20', pg_temp.bal('f0260026-0000-4000-8000-00000000000a') = (select a0 + 20 from c26));
+select pg_temp.check('0026: the wallet balance itself moved too (+10 for the loser, no achievement)',
+  (select balance from public.user_wallets where user_id = 'f0260026-0000-4000-8000-00000000000b') = (select coalesce(sum(amount), 0) from public.wallet_transactions where user_id = 'f0260026-0000-4000-8000-00000000000b'));
+select pg_temp.check('0026: loser +10', pg_temp.bal('f0260026-0000-4000-8000-00000000000b') = (select b0 + 10 from c26));
+select public.apply_match_result((select id from m26));
+update public.matches set rating_applied = false where id = (select id from m26);
+update public.matches set rating_applied = true where id = (select id from m26);   -- even a forced replay
+select pg_temp.check('0026: only once per game (replays add nothing)', pg_temp.bal('f0260026-0000-4000-8000-00000000000a') = (select a0 + 20 from c26)
+  and (select count(*) from public.wallet_transactions where ref_type = 'match' and ref_id = (select id::text from m26)) = 2);
+select pg_temp.check('0026: saved in the ledger as a match reward',
+  (select bool_and(kind = 'reward' and idem_key = 'match:' || ref_id) and count(*) filter (where note = 'win' and amount = 20) = 1 and count(*) filter (where note = 'loss' and amount = 10) = 1
+     from public.wallet_transactions where ref_type = 'match' and ref_id = (select id::text from m26)));
+-- black wins the same way
+create temp table m26b as select pg_temp.g26('f0260026-0000-4000-8000-00000000000a', 'f0260026-0000-4000-8000-00000000000b', 'black', 12) id;
+grant all on m26b to public;
+select pg_temp.check('0026: exactly 12 moves is enough; black winner +20, white loser +10',
+  pg_temp.bal('f0260026-0000-4000-8000-00000000000b') = (select b0 + 30 from c26) and pg_temp.bal('f0260026-0000-4000-8000-00000000000a') = (select a0 + 30 from c26));
+-- nothing for: a short game (even won on time), a draw, an unrated game
+create temp table c26b as select pg_temp.bal('f0260026-0000-4000-8000-00000000000a') a, pg_temp.bal('f0260026-0000-4000-8000-00000000000c') c;
+grant all on c26b to public;
+select pg_temp.g26('f0260026-0000-4000-8000-00000000000a', 'f0260026-0000-4000-8000-00000000000c', 'white', 11);
+select pg_temp.check('0026: under 12 moves (left after ~5 each, won on time) → no coins for either side',
+  pg_temp.bal('f0260026-0000-4000-8000-00000000000a') = (select a from c26b) and pg_temp.bal('f0260026-0000-4000-8000-00000000000c') = (select c from c26b));
+select pg_temp.g26('f0260026-0000-4000-8000-00000000000a', 'f0260026-0000-4000-8000-00000000000c', 'draw', 40);
+select pg_temp.check('0026: draw → 0 coins', pg_temp.bal('f0260026-0000-4000-8000-00000000000a') = (select a from c26b) and pg_temp.bal('f0260026-0000-4000-8000-00000000000c') = (select c from c26b));
+select pg_temp.g26('f0260026-0000-4000-8000-00000000000a', 'f0260026-0000-4000-8000-00000000000c', 'white', 40, false);
+select pg_temp.check('0026: unrated game → no coins', pg_temp.bal('f0260026-0000-4000-8000-00000000000a') = (select a from c26b));
+-- the same pair after the daily limit (3 rated games / 24 h): no rating, no coins
+select pg_temp.g26('f0260026-0000-4000-8000-00000000000a', 'f0260026-0000-4000-8000-00000000000c', 'white', 40);
+select pg_temp.g26('f0260026-0000-4000-8000-00000000000a', 'f0260026-0000-4000-8000-00000000000c', 'white', 40);
+select pg_temp.g26('f0260026-0000-4000-8000-00000000000a', 'f0260026-0000-4000-8000-00000000000c', 'white', 40);
+create temp table c26c as select pg_temp.bal('f0260026-0000-4000-8000-00000000000a') a;
+grant all on c26c to public;
+select pg_temp.check('0026: pair limit counts the short game and the draw too → only the 3rd game of the day paid (+20)', (select a from c26c) = (select a + 20 from c26b));
+select pg_temp.g26('f0260026-0000-4000-8000-00000000000a', 'f0260026-0000-4000-8000-00000000000c', 'white', 40);
+select pg_temp.check('0026: 4th game of the same pair today → no coins (pair limit)', pg_temp.bal('f0260026-0000-4000-8000-00000000000a') = (select a from c26c));
+-- vs a virtual opponent: the player gets coins, the virtual opponent nothing; practice bot: nothing
+select pg_temp.check('0026: virtual games paid the player (win +20 / loss +10)',
+  (select count(*) > 0 and bool_and(t.amount = case when m.result = 'white' then 20 else 10 end)
+     from public.wallet_transactions t join public.matches m on m.id::text = t.ref_id
+    where t.ref_type = 'match' and m.virtual_id is not null and m.white_id = 'f0250025-0000-4000-8000-000000000001'));
+-- the result window: the caller's own coins only; clients cannot credit anything
+select set_config('request.jwt.claim.sub', 'f0260026-0000-4000-8000-00000000000a', false);
+set role authenticated;
+select pg_temp.check('0026: match_coins shows my +20', (public.match_coins((select id from m26)) ->> 'coins')::int = 20);
+select pg_temp.check('0026: match_coins says the result is settled', (public.match_coins((select id from m26)) ->> 'settled')::boolean);
+select set_config('request.jwt.claim.sub', 'f0260026-0000-4000-8000-00000000000c', false);
+select pg_temp.check('0026: … and 0 for someone who did not play it', (public.match_coins((select id from m26)) ->> 'coins')::int = 0);
+select pg_temp.check('0026: … and not "settled" for an outsider', (public.match_coins((select id from m26)) ->> 'settled')::boolean = false);
+do $$ begin
+  perform public._match_coin_reward();
+  perform pg_temp.check('0026: client can NOT call the reward function', false);
+exception when others then perform pg_temp.check('0026: client can NOT call the reward function', sqlstate in ('42501', '0A000', '39P01'), sqlstate || ' ' || sqlerrm); end $$;
+do $$ begin
+  perform public._wallet_apply('f0260026-0000-4000-8000-00000000000c', 20, 'reward', 'match', 'x', 'match:x', 'win', null);
+  perform pg_temp.check('0026: client can NOT credit coins directly', false);
+exception when others then perform pg_temp.check('0026: client can NOT credit coins directly', sqlstate = '42501', sqlerrm); end $$;
+reset role;
 
 \set QUIET off
 select case when ok then 'PASS' else 'FAIL' end as status, name, left(detail, 70) as detail from results order by 1 desc, 2;

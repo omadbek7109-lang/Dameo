@@ -26,7 +26,8 @@ import { moveSound, playSound } from '../services/sound.ts';
 import { MatchChat } from '../components/MatchChat.tsx';
 import { SbError } from '../services/supabase.ts';
 import type { ConnectionState } from '../services/supabase.ts';
-import { useMatchSkin } from '../cosmetics/CosmeticsProvider.tsx';
+import { useCosmetics, useMatchSkin } from '../cosmetics/CosmeticsProvider.tsx';
+import { db } from '../services/supabase.ts';
 import { useSettings } from '../settings/SettingsProvider.tsx';
 import { botLevelFor } from './Play.tsx';
 
@@ -54,6 +55,10 @@ interface ResultInfo {
   demo: boolean;
   before?: number;
   after?: number;
+  /** DAMEO Coins the server paid for this game (null = still checking, undefined = not applicable) */
+  coins?: number | null;
+  /** total moves in the game (coins need at least 12) */
+  moves?: number;
 }
 
 const reasonKey = (r: GameResult): TKey => {
@@ -163,6 +168,7 @@ function LocalGame() {
 /* ------------------------------ Online games ------------------------------ */
 
 function OnlineGame({ matchId }: { matchId: string }) {
+  const cos = useCosmetics();
   const { t } = useI18n();
   const { me, matches, refresh } = useAuth();
   const { toast } = useToast();
@@ -362,14 +368,31 @@ function OnlineGame({ matchId }: { matchId: string }) {
     const reason = match.timeoutKind
       ? t(match.timeoutKind === 'move' ? 'reason.timeoutMove' : 'reason.timeoutClock')
       : t(match.reason === 'resign' ? 'reason.resign' : winnerColor ? 'reason.no-moves' : 'reason.agreement');
+    const moves = Math.max(match.moveCount, gRef.current.game.history.length);   // the server's count (moves may still be loading)
+    const paid = match.rated && outcome !== 'draw' && moves >= 12;   // the server's rule (0026): win +20, loss +10
     void refresh().then(() => {
-      setResult({ outcome, winnerColor, reason, rated: match.rated, demo: false });
+      setResult({ outcome, winnerColor, reason, rated: match.rated, demo: false, coins: match.rated && outcome !== 'draw' ? (paid ? null : 0) : undefined, moves });
     });
+    // DAMEO Coins for this game: read what the server credited (never computed here)
+    if (paid) {
+      const look = (tries: number) =>
+        db.rpc<{ coins: number; settled?: boolean; balance: number }>('match_coins', { p_match: match.id }).then(
+          (r) => {
+            if (r && r.coins > 0) {
+              setResult((x) => (x ? { ...x, coins: r.coins } : x));
+              void cos?.refreshWallet();
+            } else if (tries > 0 && !r?.settled) setTimeout(() => look(tries - 1), 1500);
+            else setResult((x) => (x ? { ...x, coins: 0 } : x));
+          },
+          () => (tries > 0 ? setTimeout(() => look(tries - 1), 1500) : setResult((x) => (x ? { ...x, coins: 0 } : x))),
+        );
+      setTimeout(() => look(4), 700);
+    }
     // achievements this game unlocked (coins are paid by the server) → congratulations
     if (match.rated && outcome === 'win') {
       const look = (tries: number) =>
         achievementsForMatch(match.id).then(
-          (a) => (a.length > 0 ? setAchPop(a) : tries > 0 && setTimeout(() => look(tries - 1), 2500)),
+          (a) => (Array.isArray(a) && a.length > 0 ? setAchPop(a) : tries > 0 && setTimeout(() => look(tries - 1), 2500)),
           () => {},
         );
       setTimeout(() => look(2), 1200);
@@ -758,6 +781,7 @@ function ResultDialog({ open, onClose, result, onPlayAgain, onExit, kind, onRema
         ) : (
           <p className="muted small">{kind === 'online' && result.rated ? t('result.updating') : t('result.unrated')}</p>
         )}
+        {result.coins !== undefined && <CoinReward coins={result.coins} win={win} moves={result.moves ?? 0} />}
         <div className="row-actions center">
           {onRematch && (
             <button className="btn btn-secondary" onClick={onRematch}>
@@ -773,5 +797,28 @@ function ResultDialog({ open, onClose, result, onPlayAgain, onExit, kind, onRema
         </div>
       </div>
     </Modal>
+  );
+}
+
+/** "+20 DAMEO Coins" / "+10 DAMEO Coins" — only what the server credited; a short game shows why there is none. */
+function CoinReward({ coins, win, moves }: { coins: number | null; win: boolean; moves: number }) {
+  const { t, num } = useI18n();
+  const shown = useCountUp(0, coins ?? 0, 900, (coins ?? 0) > 0);
+  if (coins === null)
+    return (
+      <div className="coin-reward is-wait" aria-live="polite">
+        <LuLoader className="spin" /> {t('reward.checking')}
+      </div>
+    );
+  if (coins === 0) return <p className="coin-reward-none muted small">{t(moves < 12 ? 'reward.none' : 'reward.noneLimit')}</p>;
+  return (
+    <div className={`coin-reward ${win ? 'is-win' : 'is-loss'}`} aria-live="polite">
+      <span className="coin-reward-ico" aria-hidden="true">🪙</span>
+      <span className="coin-reward-main">
+        <strong className="coin-reward-n">+{num(shown)}</strong>
+        <span className="coin-reward-label">DAMEO Coins</span>
+      </span>
+      <span className="coin-reward-why small">{t(win ? 'reward.win' : 'reward.loss')}</span>
+    </div>
   );
 }

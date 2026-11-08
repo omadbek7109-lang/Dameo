@@ -460,7 +460,7 @@ export function ChallengeInbox() {
 
   const load = useCallback(async () => {
     try {
-      setList(await incomingChallenges());
+      setList((await incomingChallenges()) ?? []);
     } catch {
       /* ignore */
     }
