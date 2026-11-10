@@ -847,7 +847,7 @@ export const en: Record<TKey, string> = {
   'ref.step1': "Send your link to a friend in Telegram.",
   'ref.step2': "Your friend opens DAMEO for the first time with it — you get +{a} 🪙 right away.",
   'ref.step3': "Your friend finishes {n} real games — you get +{b} 🪙 more. Automatically, once.",
-  'ref.rules': "Only new players count. A real game: rated, at least 12 moves, not resigned or abandoned (practice bots and games against you do not count).",
+  'ref.rules': "Only new players count. The instant +20 is paid for up to 10 friends a day. A real game: rated, at least 12 moves, not resigned or abandoned (practice bots and games against you do not count).",
   'ref.history': "Referral history",
   'ref.empty': "No one invited yet. Send your link to friends!",
   'ref.progress': "{g}/{n} games",

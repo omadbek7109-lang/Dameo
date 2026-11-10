@@ -134,9 +134,11 @@ export function Referral() {
                   {f.status === 'pending' && <Progress games={f.games} need={data.games_needed} />}
                 </span>
                 <span className="ref-friend-side">
-                  <span className={`ref-chip ${f.status === 'rewarded' ? 'ref-chip-ok' : 'ref-chip-gold'}`}>
-                    {f.status === 'rewarded' && <LuCheck />} +{coins(f.earned)} 🪙
-                  </span>
+                  {f.earned > 0 && (
+                    <span className={`ref-chip ${f.status === 'rewarded' ? 'ref-chip-ok' : 'ref-chip-gold'}`}>
+                      {f.status === 'rewarded' && <LuCheck />} +{coins(f.earned)} 🪙
+                    </span>
+                  )}
                   {f.status === 'pending' && (
                     <span className="ref-chip ref-chip-wait">
                       <LuSwords /> {f.games}/{data.games_needed}

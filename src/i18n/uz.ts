@@ -845,7 +845,7 @@ export const uz = {
   'ref.step1': "Havolani Telegram'da do'stingizga yuboring.",
   'ref.step2': "Do'stingiz DAMEO'ga birinchi marta shu havola orqali kiradi — sizga darhol +{a} 🪙.",
   'ref.step3': "Do'stingiz {n} ta haqiqiy o'yinni yakunlasa — sizga yana +{b} 🪙. Avtomatik, bir marta.",
-  'ref.rules': "Faqat yangi o'yinchilar hisoblanadi. Haqiqiy o'yin: reytingli, kamida 12 yurish, taslim bo'lmasdan va o'yindan chiqib ketmasdan yakunlangan (mashq boti va sizga qarshi o'yinlar hisoblanmaydi).",
+  'ref.rules': "Faqat yangi o'yinchilar hisoblanadi. Darhol beriladigan +20 kuniga 10 ta do'stgacha. Haqiqiy o'yin: reytingli, kamida 12 yurish, taslim bo'lmasdan va o'yindan chiqib ketmasdan yakunlangan (mashq boti va sizga qarshi o'yinlar hisoblanmaydi).",
   'ref.history': "Taklif tarixi",
   'ref.empty': "Hali hech kim taklif qilinmagan. Havolani do'stlaringizga yuboring!",
   'ref.progress': "{g}/{n} o'yin",

@@ -1674,6 +1674,28 @@ select pg_temp.check('0028: inviter page with a friend who has not played: earne
   (select (o ->> 'earned')::int = 20 and (o ->> 'pending_coins')::int = 30 and (o -> 'friends' -> 0 ->> 'games')::int = 0 and (o -> 'friends' -> 0 ->> 'earned')::int = 20 from (select public.referral_overview() o) x));
 reset role;
 
+-- ===================== 0029: the instant +20 is paid for at most 10 new friends a day; the rest still link
+reset role;
+insert into auth.users (id, email, raw_user_meta_data)
+select ('f0290029-0000-4000-8000-' || lpad(n::text, 12, '0'))::uuid, 'cap' || n || '@x.io', json_build_object('username', 'cap_' || n)::jsonb from generate_series(1, 13) n;
+create temp table c29 as select public._referral_code_for('f0290029-0000-4000-8000-000000000001') code;
+grant all on c29 to public;
+create temp table r29 as select n, public.referral_attach(('f0290029-0000-4000-8000-' || lpad(n::text, 12, '0'))::uuid, (select code from c29)) res from generate_series(2, 13) n;
+grant all on r29 to public;
+select pg_temp.check('0029: 12 new friends in one day are all linked', (select count(*) filter (where res = 'ok') = 12 from r29));
+select pg_temp.check('0029: … but only 10 x 20 coins are paid that day', pg_temp.coins('f0290029-0000-4000-8000-000000000001') = 200
+  and (select count(*) from public.referrals where inviter_id = 'f0290029-0000-4000-8000-000000000001' and join_reward = 20) = 10);
+-- the 11th friend still pays +30 after 2 real games
+select pg_temp.g27('f0290029-0000-4000-8000-000000000012', 'f0270027-0000-4000-8000-0000000000f1', 'white', 30, 'no-moves');
+select pg_temp.g27('f0270027-0000-4000-8000-0000000000f2', 'f0290029-0000-4000-8000-000000000012', 'white', 30, 'kings-only');
+select pg_temp.check('0029: a friend over the daily limit still earns the +30 after 2 games', pg_temp.coins('f0290029-0000-4000-8000-000000000001') = 230
+  and pg_temp.coins('f0290029-0000-4000-8000-000000000012') = 20);
+-- a new day: the limit starts again
+update public.referrals set created_at = created_at - interval '1 day' where inviter_id = 'f0290029-0000-4000-8000-000000000001';
+insert into auth.users (id, email, raw_user_meta_data) values ('f0290029-0000-4000-8000-000000000099', 'cap99@x.io', '{"username":"cap_99"}');
+select pg_temp.check('0029: next day the +20 is paid again', public.referral_attach('f0290029-0000-4000-8000-000000000099', (select code from c29)) = 'ok'
+  and pg_temp.coins('f0290029-0000-4000-8000-000000000001') = 250);
+
 \set QUIET off
 select case when ok then 'PASS' else 'FAIL' end as status, name, left(detail, 70) as detail from results order by 1 desc, 2;
 select count(*) filter (where not ok) as failures, count(*) as total from results;
