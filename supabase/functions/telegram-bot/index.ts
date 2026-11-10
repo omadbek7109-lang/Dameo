@@ -141,18 +141,17 @@ Deno.serve(async (req) => {
     // "/start join_ABC123" (deep link) opens the game straight into that room
     const param = text.split(' ')[1] ?? '';
     const appUrl = /^join_[A-Z0-9]{4,8}$/i.test(param) ? `${WEBAPP_URL}#/play?mode=friends&join=${param.slice(5).toUpperCase()}` : WEBAPP_URL;
-    await tg(token, 'sendMessage', {
-      chat_id: msg.chat.id,
-      text: welcome(lang, name),
-      parse_mode: 'HTML',
-      link_preview_options: { is_disabled: true },
-      reply_markup: {
-        inline_keyboard: [
-          [{ text: lang?.startsWith('en') ? '♟ Play now' : "♟ O'yinni boshlash", web_app: { url: appUrl } }],
-          [{ text: lang?.startsWith('en') ? '📢 Our channel' : '📢 Bizning kanal', url: CHANNEL_URL }],
-        ],
-      },
-    });
+    // coloured buttons (Bot API `style`): green = play, blue = channel; older apps show them in the default colour
+    const buttons = [
+      [{ text: lang?.startsWith('en') ? '♟ Play now' : "♟ O'yinni boshlash", web_app: { url: appUrl }, style: 'success' }],
+      [{ text: lang?.startsWith('en') ? '📢 Our channel' : '📢 Bizning kanal', url: CHANNEL_URL, style: 'primary' }],
+    ];
+    const welcomeMsg = { chat_id: msg.chat.id, text: welcome(lang, name), parse_mode: 'HTML', link_preview_options: { is_disabled: true } };
+    const sent = await tg(token, 'sendMessage', { ...welcomeMsg, reply_markup: { inline_keyboard: buttons } });
+    if (!sent?.ok) {
+      // if Telegram ever refuses the colours, send the same message with plain buttons
+      await tg(token, 'sendMessage', { ...welcomeMsg, reply_markup: { inline_keyboard: buttons.map((row) => row.map(({ style: _s, ...b }) => b)) } });
+    }
   }
   return new Response('ok'); // always 200 so Telegram does not retry
 });
