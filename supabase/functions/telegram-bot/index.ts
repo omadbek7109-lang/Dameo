@@ -10,6 +10,7 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
 const WEBAPP_URL = Deno.env.get('DAMEO_WEBAPP_URL') ?? 'https://omadbek7109-lang.github.io/Dameo/';
+const CHANNEL_URL = 'https://t.me/Dameo_channel';
 
 const enc = new TextEncoder();
 async function webhookSecret(token: string) {
@@ -145,7 +146,12 @@ Deno.serve(async (req) => {
       text: welcome(lang, name),
       parse_mode: 'HTML',
       link_preview_options: { is_disabled: true },
-      reply_markup: { inline_keyboard: [[{ text: lang?.startsWith('en') ? '♟ Play now' : "♟ O'yinni boshlash", web_app: { url: appUrl } }]] },
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: lang?.startsWith('en') ? '♟ Play now' : "♟ O'yinni boshlash", web_app: { url: appUrl } }],
+          [{ text: lang?.startsWith('en') ? '📢 Our channel' : '📢 Bizning kanal', url: CHANNEL_URL }],
+        ],
+      },
     });
   }
   return new Response('ok'); // always 200 so Telegram does not retry
