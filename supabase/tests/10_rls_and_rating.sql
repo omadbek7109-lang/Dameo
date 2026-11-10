@@ -1581,7 +1581,12 @@ select pg_temp.check('0027: old account is not a new player', public.referral_at
 select pg_temp.g27('f0270027-0000-4000-8000-0000000000d1', 'f0270027-0000-4000-8000-0000000000f4', 'white', 20, 'no-moves');
 select pg_temp.check('0027: a player who already played is not new', public.referral_attach('f0270027-0000-4000-8000-0000000000d1', (select code from rc27)) = 'not-new');
 select pg_temp.check('0027: new player linked (code is case-insensitive)', public.referral_attach('f0270027-0000-4000-8000-0000000000b1', lower((select code from rc27))) = 'ok');
+select pg_temp.check('0028: inviter gets +20 at once when the new player joins (before any game)', pg_temp.coins('f0270027-0000-4000-8000-0000000000a1') = 20
+  and (select count(*) from public.wallet_transactions where user_id = 'f0270027-0000-4000-8000-0000000000a1' and idem_key like 'referral:join:%') = 1
+  and (select join_reward from public.referrals where invitee_id = 'f0270027-0000-4000-8000-0000000000b1') = 20);
+select pg_temp.check('0028: … the new player gets nothing yet', pg_temp.coins('f0270027-0000-4000-8000-0000000000b1') = 0);
 select pg_temp.check('0027: linked only once', public.referral_attach('f0270027-0000-4000-8000-0000000000b1', (select code from rc27)) = 'already');
+select pg_temp.check('0028: … and the join reward is not paid twice', pg_temp.coins('f0270027-0000-4000-8000-0000000000a1') = 20);
 select set_config('request.jwt.claim.sub', 'f0270027-0000-4000-8000-0000000000c1', false);
 set role authenticated;
 create temp table rc27c as select public.referral_overview() ->> 'code' as code;
@@ -1603,33 +1608,33 @@ select pg_temp.check('0027: resign / abandon / short / unrated / vs inviter / pr
 create temp table g27a as select pg_temp.g27('f0270027-0000-4000-8000-0000000000f2', 'f0270027-0000-4000-8000-0000000000b1', 'white', 24, 'no-moves') id;
 grant all on g27a to public;
 select pg_temp.check('0027: a real game counts (a loss counts too)', (select games = 1 and status = 'pending' from public.referrals where invitee_id = 'f0270027-0000-4000-8000-0000000000b1'));
-select pg_temp.check('0027: … no reward after 1 game', pg_temp.coins('f0270027-0000-4000-8000-0000000000b1') = 0 and pg_temp.coins('f0270027-0000-4000-8000-0000000000a1') = 0);
+select pg_temp.check('0027: … no game reward after 1 game', pg_temp.coins('f0270027-0000-4000-8000-0000000000b1') = 0 and pg_temp.coins('f0270027-0000-4000-8000-0000000000a1') = 20);
 update public.matches set rating_applied = false where id = (select id from g27a);
 update public.matches set rating_applied = true where id = (select id from g27a);   -- the same game again
 select pg_temp.check('0027: the same game never counts twice', (select games = 1 from public.referrals where invitee_id = 'f0270027-0000-4000-8000-0000000000b1'));
 select set_config('request.jwt.claim.sub', 'f0270027-0000-4000-8000-0000000000b1', false);
 set role authenticated;
-select pg_temp.check('0027: invited player sees inviter + progress 1/2 + 30 pending',
-  (public.referral_overview() -> 'invited_by' ->> 'username') = 'ref_inviter' and (public.referral_overview() -> 'invited_by' ->> 'games')::int = 1
-  and (public.referral_overview() ->> 'pending_coins')::int = 30);
+select pg_temp.check('0028: the invited player''s bonus is not shown on their page',
+  public.referral_overview() -> 'invited_by' is null and (public.referral_overview() ->> 'pending_coins')::int = 0 and public.referral_overview()::text not like '%invitee%');
 reset role;
 -- 2nd real game (won on the chess clock) → both rewards, once
 select pg_temp.g27('f0270027-0000-4000-8000-0000000000b1', 'f0270027-0000-4000-8000-0000000000f3', 'white', 40, 'resign', 'clock');
-select pg_temp.check('0027: after 2 real games the invited player gets +30', pg_temp.coins('f0270027-0000-4000-8000-0000000000b1') = 30);
-select pg_temp.check('0027: … and the inviter +20', pg_temp.coins('f0270027-0000-4000-8000-0000000000a1') = 20);
+select pg_temp.check('0028: after 2 real games the invited player gets +20', pg_temp.coins('f0270027-0000-4000-8000-0000000000b1') = 20);
+select pg_temp.check('0028: … and the inviter +30 more (50 in total for this friend)', pg_temp.coins('f0270027-0000-4000-8000-0000000000a1') = 50);
 select pg_temp.check('0027: referral marked rewarded, 2 reward rows', (select status = 'rewarded' and rewarded_at is not null and games = 2 from public.referrals where invitee_id = 'f0270027-0000-4000-8000-0000000000b1')
   and (select count(*) from public.referral_rewards r join public.referrals x on x.id = r.referral_id where x.invitee_id = 'f0270027-0000-4000-8000-0000000000b1') = 2);
 select pg_temp.check('0027: rewards are in the coin ledger (kind reward, ref_type referral) and in the balance',
-  (select count(*) from public.wallet_transactions where ref_type = 'referral' and kind = 'reward' and idem_key like 'referral:%' and user_id in ('f0270027-0000-4000-8000-0000000000a1', 'f0270027-0000-4000-8000-0000000000b1')) = 2
+  (select count(*) from public.wallet_transactions where ref_type = 'referral' and kind = 'reward' and idem_key like 'referral:%' and user_id in ('f0270027-0000-4000-8000-0000000000a1', 'f0270027-0000-4000-8000-0000000000b1')) = 3
   and (select balance from public.user_wallets where user_id = 'f0270027-0000-4000-8000-0000000000a1') = (select sum(amount) from public.wallet_transactions where user_id = 'f0270027-0000-4000-8000-0000000000a1'));
 select pg_temp.g27('f0270027-0000-4000-8000-0000000000b1', 'f0270027-0000-4000-8000-0000000000f4', 'white', 40, 'no-moves');
-select pg_temp.check('0027: more games pay nothing more', pg_temp.coins('f0270027-0000-4000-8000-0000000000b1') = 30 and pg_temp.coins('f0270027-0000-4000-8000-0000000000a1') = 20);
+select pg_temp.check('0027: more games pay nothing more', pg_temp.coins('f0270027-0000-4000-8000-0000000000b1') = 20 and pg_temp.coins('f0270027-0000-4000-8000-0000000000a1') = 50);
 -- the referral page
 select set_config('request.jwt.claim.sub', 'f0270027-0000-4000-8000-0000000000a1', false);
 set role authenticated;
-select pg_temp.check('0027: inviter page: 1 invited, 1 successful, 0 pending, 20 earned, friend listed as rewarded',
-  (select (o ->> 'invited')::int = 1 and (o ->> 'successful')::int = 1 and (o ->> 'pending')::int = 0 and (o ->> 'earned')::int = 20
-          and (o -> 'friends' -> 0 ->> 'username') = 'ref_newbie' and (o -> 'friends' -> 0 ->> 'status') = 'rewarded' from (select public.referral_overview() o) x));
+select pg_temp.check('0028: inviter page: 1 invited, 1 successful, 0 pending, 50 earned, friend listed as rewarded (+50)',
+  (select (o ->> 'invited')::int = 1 and (o ->> 'successful')::int = 1 and (o ->> 'pending')::int = 0 and (o ->> 'earned')::int = 50
+          and (o -> 'friends' -> 0 ->> 'username') = 'ref_newbie' and (o -> 'friends' -> 0 ->> 'status') = 'rewarded' and (o -> 'friends' -> 0 ->> 'earned')::int = 50
+     from (select public.referral_overview() o) x));
 -- security: the client can do nothing directly
 do $$ begin
   perform public.referral_attach('f0270027-0000-4000-8000-0000000000e1', 'AAAAAAAA');
@@ -1663,6 +1668,11 @@ update public.profiles set banned_until = now() + interval '1 day' where id = 'f
 select pg_temp.check('0027: banned inviter cannot collect new referrals', public.referral_attach('f0270027-0000-4000-8000-0000000000e1', (select code from rc27c)) = 'restricted');
 update public.profiles set banned_until = null where id = 'f0270027-0000-4000-8000-0000000000c1';
 select pg_temp.check('0027: … after the ban a new player can join with that code', public.referral_attach('f0270027-0000-4000-8000-0000000000e1', (select code from rc27c)) = 'ok');
+select set_config('request.jwt.claim.sub', 'f0270027-0000-4000-8000-0000000000c1', false);
+set role authenticated;
+select pg_temp.check('0028: inviter page with a friend who has not played: earned 20, pending 30, progress 0/2',
+  (select (o ->> 'earned')::int = 20 and (o ->> 'pending_coins')::int = 30 and (o -> 'friends' -> 0 ->> 'games')::int = 0 and (o -> 'friends' -> 0 ->> 'earned')::int = 20 from (select public.referral_overview() o) x));
+reset role;
 
 \set QUIET off
 select case when ok then 'PASS' else 'FAIL' end as status, name, left(detail, 70) as detail from results order by 1 desc, 2;

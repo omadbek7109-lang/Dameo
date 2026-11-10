@@ -40,7 +40,7 @@ export function Referral() {
   if (!data) return <div className="page"><Spinner /></div>;
 
   const link = referralLink(data.code);
-  const shareText = t('ref.shareText', { n: data.reward_invitee });
+  const shareText = t('ref.shareText');
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(link);
@@ -71,7 +71,7 @@ export function Referral() {
           <i>🪙</i>
         </span>
         <h1 className="h1 ref-title">{t('ref.title')}</h1>
-        <p className="ref-sub">{t('ref.sub', { a: data.reward_inviter, b: data.reward_invitee, n: data.games_needed })}</p>
+        <p className="ref-sub">{t('ref.sub', { a: data.reward_join, b: data.reward_games, n: data.games_needed, t: data.reward_join + data.reward_games })}</p>
       </section>
 
       <section className="card ref-link" aria-label={t('ref.myLink')}>
@@ -87,8 +87,6 @@ export function Referral() {
         </button>
         {!inTelegram && <p className="muted small ref-note">{t('ref.onlyTelegram')}</p>}
       </section>
-
-      {data.invited_by && <InvitedBy info={data.invited_by} reward={data.reward_invitee} need={data.games_needed} />}
 
       <section className="ref-stats" aria-label={t('ref.stats')}>
         <Stat icon={<LuUserPlus />} label={t('ref.invited')} value={data.invited} />
@@ -106,11 +104,11 @@ export function Referral() {
           </li>
           <li>
             <span className="ref-step-n">2</span>
-            <span>{t('ref.step2', { n: data.games_needed })}</span>
+            <span>{t('ref.step2', { a: data.reward_join })}</span>
           </li>
           <li>
             <span className="ref-step-n">3</span>
-            <span>{t('ref.step3', { a: data.reward_inviter, b: data.reward_invitee })}</span>
+            <span>{t('ref.step3', { n: data.games_needed, b: data.reward_games })}</span>
           </li>
         </ol>
         <p className="muted small">{t('ref.rules')}</p>
@@ -135,15 +133,16 @@ export function Referral() {
                   <span className="muted small">{date(new Date(f.created_at).getTime())}</span>
                   {f.status === 'pending' && <Progress games={f.games} need={data.games_needed} />}
                 </span>
-                {f.status === 'rewarded' ? (
-                  <span className="ref-chip ref-chip-ok">
-                    <LuCheck /> +{coins(data.reward_inviter)} 🪙
+                <span className="ref-friend-side">
+                  <span className={`ref-chip ${f.status === 'rewarded' ? 'ref-chip-ok' : 'ref-chip-gold'}`}>
+                    {f.status === 'rewarded' && <LuCheck />} +{coins(f.earned)} 🪙
                   </span>
-                ) : (
-                  <span className="ref-chip ref-chip-wait">
-                    <LuSwords /> {f.games}/{data.games_needed}
-                  </span>
-                )}
+                  {f.status === 'pending' && (
+                    <span className="ref-chip ref-chip-wait">
+                      <LuSwords /> {f.games}/{data.games_needed}
+                    </span>
+                  )}
+                </span>
               </li>
             ))}
           </ul>
@@ -174,28 +173,5 @@ function Progress({ games, need }: { games: number; need: number }) {
     <span className="ref-prog" role="progressbar" aria-valuemin={0} aria-valuemax={need} aria-valuenow={games} aria-label={t('ref.progress', { g: games, n: need })}>
       <i style={{ width: `${pct}%` }} />
     </span>
-  );
-}
-
-function InvitedBy({ info, reward, need }: { info: NonNullable<ReferralOverview['invited_by']>; reward: number; need: number }) {
-  const { t } = useI18n();
-  return (
-    <section className="card ref-by">
-      <Avatar name={info.username} seed={info.avatar} size={44} />
-      <span className="ref-friend-main">
-        <span className="muted small">{t('ref.invitedBy')}</span>
-        <strong>{info.username}</strong>
-        {info.status === 'pending' ? (
-          <>
-            <Progress games={info.games} need={need} />
-            <span className="small">{t('ref.yourProgress', { g: info.games, n: need, c: reward })}</span>
-          </>
-        ) : (
-          <span className="small ref-ok-text">
-            <LuCheck /> {t('ref.yourReward', { c: reward })}
-          </span>
-        )}
-      </span>
-    </section>
   );
 }

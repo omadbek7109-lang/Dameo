@@ -11,6 +11,8 @@ export interface ReferralFriend {
   games: number;
   created_at: string;
   rewarded_at: string | null;
+  /** coins this friend has earned me so far (20 on joining, +30 after their games) */
+  earned: number;
 }
 export interface ReferralOverview {
   code: string;
@@ -19,11 +21,12 @@ export interface ReferralOverview {
   pending: number;
   earned: number;
   pending_coins: number;
-  reward_inviter: number;
-  reward_invitee: number;
+  /** paid to me when a friend joins */
+  reward_join: number;
+  /** paid to me when that friend has finished `games_needed` real games */
+  reward_games: number;
   games_needed: number;
   friends: ReferralFriend[];
-  invited_by: { username: string; avatar: string; status: 'pending' | 'rewarded'; games: number; rewarded_at: string | null } | null;
 }
 
 /** Everything the Referral page shows; the code is created on the server on first use. */

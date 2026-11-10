@@ -5492,3 +5492,5 @@ html.calm .coin-reward, html.calm .coin-reward-ico, html.calm .coin-reward::afte
 
 html.calm .ref-coins i { animation: none; }
 @media (prefers-reduced-motion: reduce) { .ref-coins i { animation: none; } }
+.ref-friend-side { flex: none; display: grid; justify-items: end; gap: 4px; }
+.ref-chip-gold { background: color-mix(in srgb, #f3c24f 18%, transparent); color: #e8b52e; }
