@@ -2,6 +2,10 @@
 // 1. Verifies Telegram's initData signature with TELEGRAM_BOT_TOKEN (Supabase secret, never sent to browsers).
 // 2. Creates the Supabase user on first visit (no e-mail is sent; the address is internal).
 // 3. Signs in with a per-user password derived from the service key, and returns the session.
+// 4. Referral: when the Mini App was opened with https://t.me/<bot>?startapp=ref_<CODE>, Telegram puts start_param into
+//    the SIGNED initData — so the code is taken only from there, after the signature check, and linked by SQL
+//    (referral_attach decides: new player only, no self-referral, one inviter). `{ referral: true }` links without
+//    signing in (for a player who already has a session).
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
 const cors = {
@@ -80,6 +84,17 @@ Deno.serve(async (req) => {
   const url = Deno.env.get('SUPABASE_URL')!;
   const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
   const admin = createClient(url, serviceKey, { auth: { persistSession: false } });
+  const refCode = /^ref_([A-Za-z2-9]{8})$/.exec(params.get('start_param') ?? '')?.[1] ?? null;
+  const attach = async (userId: string): Promise<string | null> => {
+    if (!refCode) return null;
+    const { data, error } = await admin.rpc('referral_attach', { p_invitee: userId, p_code: refCode });
+    return error ? 'error' : (data as string);
+  };
+  if (body?.referral === true) {
+    const { data: p } = await admin.from('profiles').select('id').eq('tg_id', tgUser.id).maybeSingle();
+    if (!p) return json({ ok: false, error: 'no-account' }, 404);
+    return json({ ok: true, referral: (await attach(p.id)) ?? 'no-code' });
+  }
   const email = `tg${tgUser.id}@tg.dameo-app.com`;
   const password = hex(await hmac(enc.encode(serviceKey), `dameo-tg:${tgUser.id}`));
 
@@ -107,8 +122,10 @@ Deno.serve(async (req) => {
   if (existing == null) await admin.from('profiles').update({ tg_id: tgUser.id }).eq('id', signed.user!.id);
 
   const s = signed.session;
+  const referral = await attach(signed.user!.id);
   return json({
     ok: true,
+    referral,
     bot_username: await getBotUsername(token),
     session: { access_token: s.access_token, refresh_token: s.refresh_token, expires_at: s.expires_at, expires_in: s.expires_in, user: s.user },
   });

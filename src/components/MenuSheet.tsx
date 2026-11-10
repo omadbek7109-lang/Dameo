@@ -4,6 +4,7 @@ import type { IconType } from 'react-icons';
 import {
   LuArchive, LuBackpack, LuBan, LuChevronRight, LuCircleHelp, LuCircleUser, LuFrame, LuGraduationCap, LuInfo, LuLayoutGrid, LuLogIn, LuLogOut,
   LuMessageSquareWarning, LuMoon, LuPlus, LuRadio, LuSettings, LuShieldCheck, LuSparkles, LuStar, LuSun, LuUsers, LuX,
+  LuGift,
 } from 'react-icons/lu';
 import { useAuth } from '../auth/AuthProvider.tsx';
 import { useCosmetics } from '../cosmetics/CosmeticsProvider.tsx';
@@ -68,6 +69,7 @@ export function MenuSheet() {
   const mine: Item[] = account
     ? [
         { to: '/friends', key: 'nav.friends', icon: LuUsers },
+        { to: '/referral', key: 'menu.referral', icon: LuGift },
         { to: '/profile?section=frames', key: 'menu.frames', icon: LuFrame },
         { to: '/inventory', key: 'inv.title', icon: LuBackpack },
         { to: '/settings', key: 'nav.settings', icon: LuSettings },

@@ -5414,3 +5414,81 @@ html.calm .coin-reward, html.calm .coin-reward-ico, html.calm .coin-reward::afte
 .board-wrap .pfx { transition: opacity 0.6s ease; }
 .st-rest .pfx { opacity: 0 !important; }
 .st-off .pfx { display: none !important; }   /* even an invisible, still layer kept the GPU redrawing */
+
+/* ================================================================ Referral page */
+.ref-page { display: grid; gap: 14px; max-width: 640px; margin-inline: auto; }
+.ref-hero {
+  position: relative;
+  text-align: center;
+  padding: 26px 16px 18px;
+  border-radius: 22px;
+  overflow: hidden;
+  background:
+    radial-gradient(120% 90% at 50% 0%, color-mix(in srgb, #f3c24f 26%, transparent), transparent 62%),
+    linear-gradient(160deg, color-mix(in srgb, var(--accent) 22%, var(--surface)), var(--surface));
+  border: 1px solid color-mix(in srgb, #f3c24f 30%, var(--border));
+}
+.ref-coins { display: flex; justify-content: center; gap: 6px; height: 56px; margin-bottom: 6px; }
+.ref-coins i { font-style: normal; font-size: 2.3rem; line-height: 1; display: inline-block; filter: drop-shadow(0 6px 10px rgba(243, 194, 79, 0.35)); animation: ref-float 3.2s ease-in-out infinite; }
+.ref-coins i:nth-child(1) { font-size: 1.7rem; margin-top: 16px; animation-delay: -1.1s; }
+.ref-coins i:nth-child(3) { font-size: 1.7rem; margin-top: 16px; animation-delay: -2.2s; }
+@keyframes ref-float { 0%, 100% { transform: translateY(0) rotateY(0deg); } 50% { transform: translateY(-7px) rotateY(180deg); } }
+.ref-title { margin: 0 0 6px; }
+.ref-sub { margin: 0 auto; max-width: 420px; color: var(--muted); line-height: 1.45; }
+
+.ref-link { display: grid; gap: 10px; }
+.ref-label { font-size: 0.78rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); }
+.ref-link-row { display: flex; gap: 8px; align-items: center; min-width: 0; }
+.ref-url {
+  flex: 1;
+  min-width: 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--surface-2);
+  border: 1px dashed color-mix(in srgb, var(--accent) 45%, var(--border));
+  font-size: 0.86rem;
+  line-height: 1.35;
+  overflow-wrap: anywhere;   /* the whole link incl. the code stays visible on small phones */
+  user-select: all;
+}
+.ref-copy { flex: none; }
+.ref-copy.is-done { color: var(--success, #22c55e); }
+.ref-note { margin: 0; }
+
+.ref-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+@media (min-width: 620px) { .ref-stats { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.ref-stat { display: grid; gap: 4px; padding: 14px; position: relative; overflow: hidden; }
+.ref-stat-ico { width: 32px; height: 32px; border-radius: 10px; display: grid; place-items: center; background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); }
+.ref-stat-ok .ref-stat-ico { background: color-mix(in srgb, #22c55e 16%, transparent); color: #22c55e; }
+.ref-stat-wait .ref-stat-ico { background: color-mix(in srgb, #f59e0b 16%, transparent); color: #f59e0b; }
+.ref-stat-gold { border-color: color-mix(in srgb, #f3c24f 40%, var(--border)); background: linear-gradient(150deg, color-mix(in srgb, #f3c24f 14%, var(--surface)), var(--surface)); }
+.ref-stat-gold .ref-stat-ico { background: color-mix(in srgb, #f3c24f 22%, transparent); color: #e8b52e; }
+.ref-stat-n { font-size: 1.45rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+.ref-stat-label { font-size: 0.8rem; color: var(--muted); }
+
+.ref-how { display: grid; gap: 10px; }
+.ref-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.ref-steps li { display: flex; gap: 10px; align-items: flex-start; line-height: 1.4; }
+.ref-step-n { flex: none; width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; font-weight: 800; font-size: 0.85rem; background: linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 50%, #f3c24f)); color: var(--on-accent, #fff); }
+
+.ref-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.ref-friend, .ref-by { display: flex; gap: 12px; align-items: center; padding: 12px; }
+.ref-friend-main { flex: 1; min-width: 0; display: grid; gap: 3px; }
+.ref-friend-main strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ref-prog { display: block; height: 6px; border-radius: 99px; background: var(--surface-2); overflow: hidden; margin-top: 3px; max-width: 220px; }
+.ref-prog i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--accent), #f3c24f); transition: width 0.5s ease; }
+.ref-chip { flex: none; display: inline-flex; align-items: center; gap: 4px; padding: 5px 10px; border-radius: 99px; font-size: 0.8rem; font-weight: 700; white-space: nowrap; }
+.ref-chip-ok { background: color-mix(in srgb, #22c55e 16%, transparent); color: #22c55e; }
+.ref-chip-wait { background: color-mix(in srgb, #f59e0b 14%, transparent); color: #f59e0b; }
+.ref-by { border-color: color-mix(in srgb, var(--accent) 40%, var(--border)); }
+.ref-ok-text { color: #22c55e; display: inline-flex; gap: 4px; align-items: center; }
+.ref-empty { display: grid; justify-items: center; gap: 6px; padding: 22px 16px; text-align: center; }
+.ref-empty svg { font-size: 1.8rem; opacity: 0.5; }
+.ref-empty p { margin: 0; }
+
+.ref-promo { display: flex; align-items: center; gap: 12px; padding: 12px 14px; text-decoration: none; color: inherit; border-color: color-mix(in srgb, #f3c24f 35%, var(--border)); background: linear-gradient(135deg, color-mix(in srgb, #f3c24f 12%, var(--surface)), var(--surface)); }
+.ref-promo-ico { font-size: 1.6rem; }
+.ref-promo-text { flex: 1; display: grid; gap: 2px; }
+
+html.calm .ref-coins i { animation: none; }
+@media (prefers-reduced-motion: reduce) { .ref-coins i { animation: none; } }

@@ -1,3 +1,4 @@
+import { startRefCode } from '../services/referral.ts';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { translate } from '../i18n/index.tsx';
 import { readString } from '../services/localStore.ts';
@@ -73,6 +74,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return !cur || (tgId != null && Number(cur.user?.user_metadata?.tg_id) !== tgId);
   };
   const [tgPending, setTgPending] = useState<boolean>(needsTg);
+  // Opened with t.me/<bot>?startapp=ref_<CODE> while already signed in: ask the server to link it (it reads the code
+  // only from the signed initData and decides whether this player is still new). Once per launch.
+  const signedInAtLaunch = useRef(!needsTg());
+  useEffect(() => {
+    if (!signedInAtLaunch.current || mode !== 'live' || !tg || !startRefCode() || !getSession()) return;
+    signedInAtLaunch.current = false;
+    db.invokeFunction('telegram-auth', { initData: tg.initData, referral: true }).catch(() => {});
+  }, [mode]);
   const [tgError, setTgError] = useState<string | null>(null);
   useEffect(() => {
     if (!tgPending || !tg) return;

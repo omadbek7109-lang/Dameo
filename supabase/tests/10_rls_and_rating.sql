@@ -1541,6 +1541,129 @@ do $$ begin
 exception when others then perform pg_temp.check('0026: client can NOT credit coins directly', sqlstate = '42501', sqlerrm); end $$;
 reset role;
 
+-- ===================== 0027: referrals (Telegram start_param ref_<CODE>; +20 inviter / +30 invited after 2 real games)
+reset role;
+insert into auth.users (id, email, raw_user_meta_data) values
+  ('f0270027-0000-4000-8000-0000000000a1', 'ra@x.io', '{"username":"ref_inviter"}'),
+  ('f0270027-0000-4000-8000-0000000000b1', 'rb@x.io', '{"username":"ref_newbie"}'),
+  ('f0270027-0000-4000-8000-0000000000c1', 'rc@x.io', '{"username":"ref_oldtimer"}'),
+  ('f0270027-0000-4000-8000-0000000000d1', 'rd@x.io', '{"username":"ref_played"}'),
+  ('f0270027-0000-4000-8000-0000000000e1', 're@x.io', '{"username":"ref_twin"}'),
+  ('f0270027-0000-4000-8000-0000000000f1', 'rf@x.io', '{"username":"ref_opp1"}'),
+  ('f0270027-0000-4000-8000-0000000000f2', 'rg@x.io', '{"username":"ref_opp2"}'),
+  ('f0270027-0000-4000-8000-0000000000f3', 'rh@x.io', '{"username":"ref_opp3"}'),
+  ('f0270027-0000-4000-8000-0000000000f4', 'ri@x.io', '{"username":"ref_opp4"}');
+update public.profiles set created_at = now() - interval '3 days' where id = 'f0270027-0000-4000-8000-0000000000c1';
+-- a game that ended on the board / by clock, etc.
+create function pg_temp.g27(w uuid, b uuid, res text, moves int, reason text, tk text default null, rated boolean default true) returns uuid language plpgsql as $$
+declare mid uuid;
+begin
+  insert into public.matches (white_id, black_id, status, rated, started_at) values (w, b, 'active', rated, now()) returning matches.id into mid;
+  update public.matches set status = 'finished', result = res, result_reason = reason, timeout_kind = tk, ended_at = now(), move_count = moves where matches.id = mid;
+  perform public.apply_match_result(mid);
+  return mid;
+end $$;
+create function pg_temp.coins(u uuid) returns bigint language sql as $$ select coalesce((select sum(amount) from public.wallet_transactions where user_id = u and ref_type = 'referral'), 0)::bigint $$;
+-- the inviter's code
+select set_config('request.jwt.claim.sub', 'f0270027-0000-4000-8000-0000000000a1', false);
+set role authenticated;
+create temp table rc27 as select public.referral_overview() ->> 'code' as code;
+select pg_temp.check('0027: every player gets an 8-character code', (select code ~ '^[A-Z2-9]{8}$' from rc27));
+select pg_temp.check('0027: the code stays the same', (public.referral_overview() ->> 'code') = (select code from rc27));
+reset role;
+grant all on rc27 to public;
+select pg_temp.check('0027: codes are unique per player', (select count(distinct code) = count(*) from public.referral_codes));
+-- linking (only the service role, from telegram-auth after the Telegram signature check)
+select pg_temp.check('0027: bad code refused', public.referral_attach('f0270027-0000-4000-8000-0000000000b1', 'ZZZZZZZZ') = 'bad-code'
+  and public.referral_attach('f0270027-0000-4000-8000-0000000000b1', 'x'' or 1=1') = 'bad-code');
+select pg_temp.check('0027: self-referral refused', public.referral_attach('f0270027-0000-4000-8000-0000000000a1', (select code from rc27)) = 'self');
+select pg_temp.check('0027: old account is not a new player', public.referral_attach('f0270027-0000-4000-8000-0000000000c1', (select code from rc27)) = 'not-new');
+select pg_temp.g27('f0270027-0000-4000-8000-0000000000d1', 'f0270027-0000-4000-8000-0000000000f4', 'white', 20, 'no-moves');
+select pg_temp.check('0027: a player who already played is not new', public.referral_attach('f0270027-0000-4000-8000-0000000000d1', (select code from rc27)) = 'not-new');
+select pg_temp.check('0027: new player linked (code is case-insensitive)', public.referral_attach('f0270027-0000-4000-8000-0000000000b1', lower((select code from rc27))) = 'ok');
+select pg_temp.check('0027: linked only once', public.referral_attach('f0270027-0000-4000-8000-0000000000b1', (select code from rc27)) = 'already');
+select set_config('request.jwt.claim.sub', 'f0270027-0000-4000-8000-0000000000c1', false);
+set role authenticated;
+create temp table rc27c as select public.referral_overview() ->> 'code' as code;
+reset role;
+grant all on rc27c to public;
+select pg_temp.check('0027: … also not to a second inviter', public.referral_attach('f0270027-0000-4000-8000-0000000000b1', (select code from rc27c)) = 'already'
+  and (select inviter_id from public.referrals where invitee_id = 'f0270027-0000-4000-8000-0000000000b1') = 'f0270027-0000-4000-8000-0000000000a1');
+-- games that do NOT count
+select pg_temp.g27('f0270027-0000-4000-8000-0000000000b1', 'f0270027-0000-4000-8000-0000000000f1', 'white', 30, 'resign');                 -- resigned
+select pg_temp.g27('f0270027-0000-4000-8000-0000000000b1', 'f0270027-0000-4000-8000-0000000000f2', 'black', 30, 'resign', 'move');         -- stopped moving
+select pg_temp.g27('f0270027-0000-4000-8000-0000000000b1', 'f0270027-0000-4000-8000-0000000000f3', 'white', 11, 'no-moves');              -- 11 moves
+select pg_temp.g27('f0270027-0000-4000-8000-0000000000b1', 'f0270027-0000-4000-8000-0000000000f1', 'white', 30, 'no-moves', null, false); -- unrated
+select pg_temp.g27('f0270027-0000-4000-8000-0000000000b1', 'f0270027-0000-4000-8000-0000000000a1', 'white', 30, 'no-moves');              -- vs the inviter
+select pg_temp.g27('f0270027-0000-4000-8000-0000000000b1', null, 'white', 30, 'no-moves');                                                -- practice bot
+select pg_temp.check('0027: resign / abandon / short / unrated / vs inviter / practice bot do not count',
+  (select games = 0 and status = 'pending' from public.referrals where invitee_id = 'f0270027-0000-4000-8000-0000000000b1')
+  and (select count(*) from public.referral_games g join public.referrals r on r.id = g.referral_id where r.invitee_id = 'f0270027-0000-4000-8000-0000000000b1') = 0);
+-- 1st real game
+create temp table g27a as select pg_temp.g27('f0270027-0000-4000-8000-0000000000f2', 'f0270027-0000-4000-8000-0000000000b1', 'white', 24, 'no-moves') id;
+grant all on g27a to public;
+select pg_temp.check('0027: a real game counts (a loss counts too)', (select games = 1 and status = 'pending' from public.referrals where invitee_id = 'f0270027-0000-4000-8000-0000000000b1'));
+select pg_temp.check('0027: … no reward after 1 game', pg_temp.coins('f0270027-0000-4000-8000-0000000000b1') = 0 and pg_temp.coins('f0270027-0000-4000-8000-0000000000a1') = 0);
+update public.matches set rating_applied = false where id = (select id from g27a);
+update public.matches set rating_applied = true where id = (select id from g27a);   -- the same game again
+select pg_temp.check('0027: the same game never counts twice', (select games = 1 from public.referrals where invitee_id = 'f0270027-0000-4000-8000-0000000000b1'));
+select set_config('request.jwt.claim.sub', 'f0270027-0000-4000-8000-0000000000b1', false);
+set role authenticated;
+select pg_temp.check('0027: invited player sees inviter + progress 1/2 + 30 pending',
+  (public.referral_overview() -> 'invited_by' ->> 'username') = 'ref_inviter' and (public.referral_overview() -> 'invited_by' ->> 'games')::int = 1
+  and (public.referral_overview() ->> 'pending_coins')::int = 30);
+reset role;
+-- 2nd real game (won on the chess clock) → both rewards, once
+select pg_temp.g27('f0270027-0000-4000-8000-0000000000b1', 'f0270027-0000-4000-8000-0000000000f3', 'white', 40, 'resign', 'clock');
+select pg_temp.check('0027: after 2 real games the invited player gets +30', pg_temp.coins('f0270027-0000-4000-8000-0000000000b1') = 30);
+select pg_temp.check('0027: … and the inviter +20', pg_temp.coins('f0270027-0000-4000-8000-0000000000a1') = 20);
+select pg_temp.check('0027: referral marked rewarded, 2 reward rows', (select status = 'rewarded' and rewarded_at is not null and games = 2 from public.referrals where invitee_id = 'f0270027-0000-4000-8000-0000000000b1')
+  and (select count(*) from public.referral_rewards r join public.referrals x on x.id = r.referral_id where x.invitee_id = 'f0270027-0000-4000-8000-0000000000b1') = 2);
+select pg_temp.check('0027: rewards are in the coin ledger (kind reward, ref_type referral) and in the balance',
+  (select count(*) from public.wallet_transactions where ref_type = 'referral' and kind = 'reward' and idem_key like 'referral:%' and user_id in ('f0270027-0000-4000-8000-0000000000a1', 'f0270027-0000-4000-8000-0000000000b1')) = 2
+  and (select balance from public.user_wallets where user_id = 'f0270027-0000-4000-8000-0000000000a1') = (select sum(amount) from public.wallet_transactions where user_id = 'f0270027-0000-4000-8000-0000000000a1'));
+select pg_temp.g27('f0270027-0000-4000-8000-0000000000b1', 'f0270027-0000-4000-8000-0000000000f4', 'white', 40, 'no-moves');
+select pg_temp.check('0027: more games pay nothing more', pg_temp.coins('f0270027-0000-4000-8000-0000000000b1') = 30 and pg_temp.coins('f0270027-0000-4000-8000-0000000000a1') = 20);
+-- the referral page
+select set_config('request.jwt.claim.sub', 'f0270027-0000-4000-8000-0000000000a1', false);
+set role authenticated;
+select pg_temp.check('0027: inviter page: 1 invited, 1 successful, 0 pending, 20 earned, friend listed as rewarded',
+  (select (o ->> 'invited')::int = 1 and (o ->> 'successful')::int = 1 and (o ->> 'pending')::int = 0 and (o ->> 'earned')::int = 20
+          and (o -> 'friends' -> 0 ->> 'username') = 'ref_newbie' and (o -> 'friends' -> 0 ->> 'status') = 'rewarded' from (select public.referral_overview() o) x));
+-- security: the client can do nothing directly
+do $$ begin
+  perform public.referral_attach('f0270027-0000-4000-8000-0000000000e1', 'AAAAAAAA');
+  perform pg_temp.check('0027: client can NOT link a referral', false);
+exception when others then perform pg_temp.check('0027: client can NOT link a referral', sqlstate = '42501', sqlerrm); end $$;
+do $$ begin
+  insert into public.referrals (inviter_id, invitee_id, code) values ('f0270027-0000-4000-8000-0000000000a1', 'f0270027-0000-4000-8000-0000000000e1', 'X');
+  perform pg_temp.check('0027: client can NOT insert referrals', false);
+exception when others then perform pg_temp.check('0027: client can NOT insert referrals', sqlstate = '42501', sqlerrm); end $$;
+do $$ begin
+  perform 1 from public.referral_rewards limit 1;
+  perform pg_temp.check('0027: client can NOT read reward rows', false);
+exception when others then perform pg_temp.check('0027: client can NOT read reward rows', sqlstate = '42501', sqlerrm); end $$;
+do $$ begin
+  update public.referral_codes set code = 'AAAAAAAA';
+  perform pg_temp.check('0027: client can NOT change codes', false);
+exception when others then perform pg_temp.check('0027: client can NOT change codes', sqlstate = '42501', sqlerrm); end $$;
+do $$ begin
+  perform public._referral_code_for('f0270027-0000-4000-8000-0000000000e1');
+  perform pg_temp.check('0027: client can NOT call internal helpers', false);
+exception when others then perform pg_temp.check('0027: client can NOT call internal helpers', sqlstate = '42501', sqlerrm); end $$;
+reset role;
+set role anon;
+do $$ begin
+  perform public.referral_overview();
+  perform pg_temp.check('0027: anonymous visitor gets nothing', false);
+exception when others then perform pg_temp.check('0027: anonymous visitor gets nothing', sqlstate in ('42501', '28000'), sqlerrm); end $$;
+reset role;
+-- a restricted (banned) inviter collects nothing; once the ban ends a new player can still join with the code
+update public.profiles set banned_until = now() + interval '1 day' where id = 'f0270027-0000-4000-8000-0000000000c1';
+select pg_temp.check('0027: banned inviter cannot collect new referrals', public.referral_attach('f0270027-0000-4000-8000-0000000000e1', (select code from rc27c)) = 'restricted');
+update public.profiles set banned_until = null where id = 'f0270027-0000-4000-8000-0000000000c1';
+select pg_temp.check('0027: … after the ban a new player can join with that code', public.referral_attach('f0270027-0000-4000-8000-0000000000e1', (select code from rc27c)) = 'ok');
+
 \set QUIET off
 select case when ok then 'PASS' else 'FAIL' end as status, name, left(detail, 70) as detail from results order by 1 desc, 2;
 select count(*) filter (where not ok) as failures, count(*) as total from results;

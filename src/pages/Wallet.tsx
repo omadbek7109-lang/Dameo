@@ -109,6 +109,14 @@ export function Wallet() {
         <CoinBadge value={cos?.balance ?? null} className="coin-badge-xl" />
         <span className="muted small">DAMEO Coins</span>
       </div>
+      <Link to="/referral" className="card ref-promo">
+        <span className="ref-promo-ico" aria-hidden="true">🎁</span>
+        <span className="ref-promo-text">
+          <strong>{t('ref.promoTitle')}</strong>
+          <span className="muted small">{t('ref.promoSub')}</span>
+        </span>
+        <LuArrowUpRight />
+      </Link>
 
       <section aria-labelledby="pk-title">
         <h2 id="pk-title" className="h2">
@@ -155,9 +163,9 @@ export function Wallet() {
               <li key={r.id}>
                 <span className={`ledger-ico ${r.amount > 0 ? 'in' : 'out'}`}>{r.amount > 0 ? <LuArrowDownLeft /> : <LuArrowUpRight />}</span>
                 <span className="ledger-main">
-                  <strong>{r.ref_type === 'match' ? t(r.note === 'win' ? 'ledger.matchWin' : 'ledger.matchLoss') : kindLabel(r.kind)}</strong>
+                  <strong>{r.ref_type === 'match' ? t(r.note === 'win' ? 'ledger.matchWin' : 'ledger.matchLoss') : r.ref_type === 'referral' ? t(r.note === 'inviter' ? 'ledger.refInviter' : 'ledger.refInvitee') : kindLabel(r.kind)}</strong>
                   <span className="muted small">
-                    {r.note && r.ref_type !== 'match' ? `${r.note} · ` : ''}
+                    {r.note && r.ref_type !== 'match' && r.ref_type !== 'referral' ? `${r.note} · ` : ''}
                     {dateTime(Date.parse(r.created_at))}
                   </span>
                 </span>
