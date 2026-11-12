@@ -5641,3 +5641,59 @@ html.calm .ref-coins i { animation: none; }
 .adm-danger { color: #e5484d; }
 @media (prefers-color-scheme: dark) { :root:not([data-theme='light']) .adm-ch-warn { color: #ff9b95; } }
 :root[data-theme='dark'] .adm-ch-warn { color: #ff9b95; }
+
+/* ---------------------------------------------------------------- telegram gifts (shop) */
+.chip-tab-gift { border-color: color-mix(in srgb, #f3c24f 45%, var(--border)); }
+.gift-shop { display: grid; gap: 14px; }
+.gift-head h2 { display: flex; align-items: center; gap: 8px; margin: 0 0 4px; }
+.gift-head h2 svg { color: #e0a91d; }
+.gift-head p { margin: 0; }
+.gift-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+@media (min-width: 760px) { .gift-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.gift-card { display: grid; justify-items: center; gap: 8px; padding: 14px 12px; text-align: center; position: relative; overflow: hidden; }
+.gift-card::before { content: ''; position: absolute; inset: -40% -20% auto; height: 70%; background: radial-gradient(closest-side, var(--gift-glow, rgba(243, 194, 79, 0.28)), transparent); pointer-events: none; }
+.gift-card-heart, .gift-art-heart { --gift-glow: rgba(255, 92, 138, 0.3); }
+.gift-card-rose, .gift-art-rose { --gift-glow: rgba(230, 57, 70, 0.28); }
+.gift-card-gift_box, .gift-art-gift_box { --gift-glow: rgba(77, 141, 255, 0.3); }
+.gift-card-bear, .gift-art-bear { --gift-glow: rgba(224, 150, 72, 0.32); }
+.gift-art { position: relative; display: grid; place-items: center; width: 92px; height: 92px; border-radius: 24px; background: radial-gradient(circle at 50% 40%, var(--gift-glow, rgba(243, 194, 79, 0.3)), transparent 70%); }
+.gift-art img { width: 100%; height: 100%; object-fit: contain; filter: drop-shadow(0 8px 14px rgba(0, 0, 0, 0.25)); }
+.gift-emoji { font-size: 3.4rem; line-height: 1; filter: drop-shadow(0 6px 10px rgba(0, 0, 0, 0.22)); }
+.gift-card:hover .gift-emoji, .gift-card:hover .gift-art img { transform: translateY(-3px) scale(1.04); transition: transform 0.25s; }
+.gift-art-sm { width: 44px; height: 44px; border-radius: 12px; flex: none; }
+.gift-art-sm .gift-emoji { font-size: 1.6rem; }
+.gift-art-lg { width: 120px; height: 120px; }
+.gift-art-lg .gift-emoji { font-size: 4.4rem; }
+.gift-name { font-size: 1.02rem; }
+.gift-price { font-weight: 800; font-variant-numeric: tabular-nums; }
+.gift-note { margin: 0; }
+.gift-orders h3 { margin: 0 0 8px; }
+.gift-orders ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.gift-orders li { display: flex; align-items: center; gap: 10px; }
+.gift-o-main { display: grid; flex: 1; min-width: 0; }
+.gift-o-code { font-variant-numeric: tabular-nums; letter-spacing: 0.08em; color: var(--text); }
+.gift-chip { flex: none; display: inline-flex; align-items: center; gap: 4px; font-size: 0.76rem; font-weight: 700; padding: 3px 9px; border-radius: 999px; color: #b07400; background: color-mix(in srgb, #f3c24f 20%, transparent); }
+.gift-chip-ok { color: var(--ok, #12855a); background: color-mix(in srgb, var(--ok, #12855a) 14%, transparent); }
+.gift-confirm, .gift-done { display: grid; justify-items: center; gap: 10px; text-align: center; }
+.gift-confirm p, .gift-done p { margin: 0; }
+.gift-confirm .row-actions { width: 100%; justify-content: center; }
+.gift-code-label { font-size: 0.75rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+.gift-code { font-size: 2.6rem; font-weight: 900; letter-spacing: 0.25em; padding: 6px 18px 6px 26px; border-radius: 16px; font-variant-numeric: tabular-nums; background: color-mix(in srgb, #f3c24f 16%, var(--surface-2)); border: 1px dashed color-mix(in srgb, #f3c24f 60%, var(--border)); }
+.gift-done-text { line-height: 1.45; }
+.gift-done-actions { display: grid; gap: 8px; width: 100%; }
+
+/* admin: gift orders */
+.adm-gift { display: grid; gap: 10px; }
+.adm-gift.is-done { opacity: 0.85; }
+.adm-gift-top { display: flex; align-items: center; gap: 10px; }
+.adm-gift-title { display: grid; flex: 1; min-width: 0; }
+.adm-gift-code { display: inline-flex; align-items: center; gap: 6px; font: inherit; font-size: 1.3rem; font-weight: 900; letter-spacing: 0.15em; padding: 6px 10px; border-radius: 12px; cursor: pointer; color: inherit; background: color-mix(in srgb, #f3c24f 16%, var(--surface-2)); border: 1px dashed color-mix(in srgb, #f3c24f 55%, var(--border)); }
+.adm-gift-code svg { font-size: 0.9rem; opacity: 0.7; }
+.adm-gift-buyer { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; padding: 10px; border-radius: 12px; background: var(--surface-2); }
+.adm-gift-player { display: flex; align-items: center; gap: 8px; color: inherit; text-decoration: none; min-width: 0; }
+.adm-gift-player > span { display: grid; }
+.adm-gift-tg { display: grid; justify-items: end; gap: 4px; }
+.adm-gift-nouser { display: inline-flex; align-items: center; gap: 5px; color: #b07400; text-align: right; }
+.adm-gift-id { display: inline-flex; align-items: center; gap: 4px; font: inherit; font-size: 0.8rem; background: none; border: 0; padding: 0; cursor: pointer; color: var(--muted); }
+.adm-gift-done { display: flex; align-items: center; gap: 6px; margin: 0; color: var(--ok, #12855a); flex-wrap: wrap; }
+@media (max-width: 420px) { .adm-gift-tg { justify-items: start; } .adm-gift-nouser { text-align: left; } }

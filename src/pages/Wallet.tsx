@@ -163,9 +163,9 @@ export function Wallet() {
               <li key={r.id}>
                 <span className={`ledger-ico ${r.amount > 0 ? 'in' : 'out'}`}>{r.amount > 0 ? <LuArrowDownLeft /> : <LuArrowUpRight />}</span>
                 <span className="ledger-main">
-                  <strong>{r.ref_type === 'mission' ? t('ledger.mission') : r.ref_type === 'match' ? t(r.note === 'win' ? 'ledger.matchWin' : 'ledger.matchLoss') : r.ref_type === 'referral' ? t(r.note === 'join' ? 'ledger.refJoin' : r.note === 'inviter' ? 'ledger.refInviter' : 'ledger.refInvitee') : kindLabel(r.kind)}</strong>
+                  <strong>{r.ref_type === 'gift' ? `${t('ledger.gift')}${r.note ? ` · ${t(`gift.${r.note}` as TKey)}` : ''}` : r.ref_type === 'mission' ? t('ledger.mission') : r.ref_type === 'match' ? t(r.note === 'win' ? 'ledger.matchWin' : 'ledger.matchLoss') : r.ref_type === 'referral' ? t(r.note === 'join' ? 'ledger.refJoin' : r.note === 'inviter' ? 'ledger.refInviter' : 'ledger.refInvitee') : kindLabel(r.kind)}</strong>
                   <span className="muted small">
-                    {r.note && r.ref_type !== 'match' && r.ref_type !== 'referral' && r.ref_type !== 'mission' ? `${r.note} · ` : ''}
+                    {r.note && r.ref_type !== 'match' && r.ref_type !== 'referral' && r.ref_type !== 'mission' && r.ref_type !== 'gift' ? `${r.note} · ` : ''}
                     {dateTime(Date.parse(r.created_at))}
                   </span>
                 </span>

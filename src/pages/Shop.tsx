@@ -12,6 +12,7 @@ import { navigate, useRoute } from '../router.tsx';
 import { FramePicker } from '../components/FramePicker.tsx';
 import { LimitedShop } from '../components/LimitedBoards.tsx';
 import { StonesShop } from '../components/StonesShop.tsx';
+import { GiftShop } from '../components/GiftShop.tsx';
 import { boardStock, limitedStock, coins, equipItem, itemDesc, itemName, newKey, pricingSettings, shopBuy, shopCatalog, type BoardStock, type Catalog, type ShopItem } from '../services/shop.ts';
 import { registerSkins } from '../services/skins.ts';
 import { SbError } from '../services/supabase.ts';
@@ -93,12 +94,17 @@ export function Shop() {
             {lang === 'uz' ? c.name_uz : c.name_en}
           </button>
         ))}
+        <button role="tab" aria-selected={cat === 'gifts'} className={`chip-tab chip-tab-gift ${cat === 'gifts' ? 'chip-tab-on' : ''}`} onClick={() => setCat('gifts')}>
+          {t('gift.tab')}
+        </button>
       </div>
 
       {error && !data ? (
         <ErrorState onRetry={load} />
       ) : !data ? (
         <Spinner />
+      ) : cat === 'gifts' ? (
+        <GiftShop balance={cos?.balance ?? null} onBalance={() => void cos?.refreshWallet()} />
       ) : cat === 'frames' ? (
         <FramePicker variant="shop" />
       ) : cat === 'stones' ? (

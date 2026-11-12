@@ -2,11 +2,12 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react
 import { appActive } from '../services/telegram.ts';
 import {
   LuBan, LuCheck, LuChevronRight, LuCoins, LuGauge, LuHistory, LuImage, LuLoader, LuPackage, LuPlus, LuRefreshCw, LuSearch,
-  LuBot, LuMegaphone, LuSend, LuShieldCheck, LuShoppingBag, LuTrophy, LuTriangleAlert, LuUndo2, LuUserCog, LuUsers, LuVolumeX,
+  LuBot, LuGift, LuMegaphone, LuSend, LuShieldCheck, LuShoppingBag, LuTrophy, LuTriangleAlert, LuUndo2, LuUserCog, LuUsers, LuVolumeX,
 } from 'react-icons/lu';
 import { useAuth } from '../auth/AuthProvider.tsx';
 import { BroadcastTab } from './AdminBroadcast.tsx';
 import { ChannelsTab } from './AdminChannels.tsx';
+import { GiftOrdersTab } from './AdminGifts.tsx';
 import { Avatar } from '../components/Avatar.tsx';
 import { Modal } from '../components/Modal.tsx';
 import { MiniPreview, RarityBadge } from '../components/ShopParts.tsx';
@@ -26,12 +27,13 @@ function useL() {
 }
 const errText = (e: unknown) => (e instanceof SbError ? e.message : e instanceof Error ? e.message : 'error');
 
-type Tab = 'dash' | 'users' | 'payments' | 'shop' | 'packages' | 'reports' | 'weekly' | 'virtual' | 'channels' | 'broadcast' | 'roles' | 'audit';
+type Tab = 'dash' | 'users' | 'payments' | 'shop' | 'gifts' | 'packages' | 'reports' | 'weekly' | 'virtual' | 'channels' | 'broadcast' | 'roles' | 'audit';
 const TABS: Array<{ id: Tab; perm: string; icon: typeof LuGauge; uz: string; en: string }> = [
   { id: 'dash', perm: 'dashboard', icon: LuGauge, uz: 'Dashboard', en: 'Dashboard' },
   { id: 'users', perm: 'users.view', icon: LuUsers, uz: 'Foydalanuvchilar', en: 'Users' },
   { id: 'payments', perm: 'payments.view', icon: LuCoins, uz: "To'lovlar", en: 'Payments' },
   { id: 'shop', perm: 'shop.manage', icon: LuShoppingBag, uz: "Do'kon", en: 'Shop' },
+  { id: 'gifts', perm: 'shop.manage', icon: LuGift, uz: "Sovg'a buyurtmalari", en: 'Gift orders' },
   { id: 'packages', perm: 'shop.manage', icon: LuPackage, uz: 'Narxlar', en: 'Pricing' },
   { id: 'reports', perm: 'reports.view', icon: LuTriangleAlert, uz: 'Shikoyatlar', en: 'Reports' },
   { id: 'weekly', perm: 'tournaments.manage', icon: LuTrophy, uz: 'Turnirlar', en: 'Tournaments' },
@@ -97,6 +99,7 @@ export function Admin() {
       {current === 'reports' && <ReportsTab canManage={can('reports.manage')} />}
       {current === 'weekly' && <WeeklyTab />}
       {current === 'channels' && <ChannelsTab />}
+      {current === 'gifts' && <GiftOrdersTab />}
       {current === 'virtual' && <VirtualTab />}
       {current === 'broadcast' && <BroadcastTab />}
       {current === 'roles' && <RolesTab />}
