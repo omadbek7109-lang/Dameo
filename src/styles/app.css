@@ -5697,3 +5697,11 @@ html.calm .ref-coins i { animation: none; }
 .adm-gift-id { display: inline-flex; align-items: center; gap: 4px; font: inherit; font-size: 0.8rem; background: none; border: 0; padding: 0; cursor: pointer; color: var(--muted); }
 .adm-gift-done { display: flex; align-items: center; gap: 6px; margin: 0; color: var(--ok, #12855a); flex-wrap: wrap; }
 @media (max-width: 420px) { .adm-gift-tg { justify-items: start; } .adm-gift-nouser { text-align: left; } }
+.adm-gch { display: grid; gap: 8px; margin: 4px 0 12px; padding: 12px; border-radius: 12px; background: var(--surface-2); border: 1px solid var(--border); }
+.adm-gch-row { display: grid; gap: 4px; }
+.adm-gch-label { font-size: 0.75rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.adm-gch-cur { display: grid; gap: 4px; }
+.adm-gch-pick { display: grid; gap: 8px; }
+.adm-gch-pick ol { margin: 0; padding-left: 18px; display: grid; gap: 2px; }
+.adm-gch-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.adm-gch-list li { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 10px; border-radius: 10px; background: var(--surface); border: 1px solid var(--border); }

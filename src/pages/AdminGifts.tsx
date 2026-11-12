@@ -7,7 +7,7 @@ import { ErrorState, Spinner } from '../components/States.tsx';
 import { useToast } from '../components/Toast.tsx';
 import { useI18n } from '../i18n/index.tsx';
 import { Link } from '../router.tsx';
-import { adminGiftConfirm, adminGiftCounts, adminGiftOrders, GIFT_SUPPORT, type AdminGiftOrder } from '../services/gifts.ts';
+import { adminGiftChannel, adminGiftChannelSet, adminGiftChannelTest, adminGiftConfirm, adminGiftCounts, adminGiftOrders, GIFT_SUPPORT, type AdminGiftOrder, type BotChat } from '../services/gifts.ts';
 import { coins } from '../services/shop.ts';
 import { appActive, tg } from '../services/telegram.ts';
 
@@ -94,6 +94,7 @@ export function GiftOrdersTab() {
             'Send the gift by hand to the buyer’s personal Telegram account, then press “Confirm” — the order becomes Delivered and the bot notifies the buyer. Buyers without a username message @' + GIFT_SUPPORT + ' with their code.',
           )}
         </p>
+        <OrdersChannel />
         <div className="tabs" role="tablist">
           {(['pending', 'delivered'] as const).map((v) => (
             <button key={v} role="tab" aria-selected={view === v} className={`tab ${view === v ? 'tab-active' : ''}`} onClick={() => setView(v)}>
@@ -181,6 +182,129 @@ export function GiftOrdersTab() {
             </div>
           </div>
         </Modal>
+      )}
+    </div>
+  );
+}
+
+/** Where every new gift order is posted: a channel/group the bot was made admin of (picked here, no ids to type). */
+function OrdersChannel() {
+  const L = useL();
+  const { toast } = useToast();
+  const [data, setData] = useState<{ current: BotChat | null; candidates: BotChat[] } | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [pick, setPick] = useState(false);
+  const load = useCallback(async () => {
+    try {
+      const d = await adminGiftChannel();
+      // never let a bad reply break the orders list
+      setData({ current: d && typeof d === 'object' && !Array.isArray(d) && d.current ? d.current : null, candidates: Array.isArray(d?.candidates) ? d.candidates : [] });
+    } catch {
+      setData({ current: null, candidates: [] });
+    }
+  }, []);
+  useEffect(() => {
+    void load();
+  }, [load]);
+  const choose = async (c: BotChat | null) => {
+    setBusy(c?.chat_id ?? 'off');
+    try {
+      await adminGiftChannelSet(c?.chat_id ?? null, c ? `Sovg'a buyurtmalari kanali: ${c.title}` : "Sovg'a buyurtmalari kanali o'chirildi");
+      if (c) {
+        const t = await adminGiftChannelTest(c.chat_id);
+        toast(t.ok ? 'success' : 'error', t.ok ? L(`Ulandi! «${c.title}» ga sinov xabari yuborildi.`, `Connected! A test message was sent to “${c.title}”.`) : L(`Ulandi, lekin bot yoza olmadi: ${t.error}`, `Connected, but the bot could not post: ${t.error}`));
+      } else toast('success', L("Kanal o'chirildi", 'Channel disconnected'));
+      setPick(false);
+      await load();
+    } catch (e) {
+      const m = e instanceof Error ? e.message : '';
+      toast('error', /bot cannot post/.test(m) ? L("Bot bu kanalga yoza olmaydi — «Xabar joylash» huquqini bering.", 'The bot cannot post there — give it the “Post messages” right.') : L('Xatolik', 'Error'));
+    } finally {
+      setBusy(null);
+    }
+  };
+  const test = async () => {
+    if (!data?.current) return;
+    setBusy('test');
+    try {
+      const t = await adminGiftChannelTest(data.current.chat_id);
+      toast(t.ok ? 'success' : 'error', t.ok ? L('Sinov xabari yuborildi', 'Test message sent') : `${L('Yuborilmadi', 'Not sent')}: ${t.error}`);
+      await load();
+    } finally {
+      setBusy(null);
+    }
+  };
+  if (!data) return null;
+  const cur = data.current;
+  const others = data.candidates.filter((c) => c.chat_id !== cur?.chat_id);
+  return (
+    <div className="adm-gch">
+      <div className="adm-gch-row">
+        <span className="adm-gch-label">{L('Buyurtmalar kanali', 'Orders channel')}</span>
+        {cur ? (
+          <span className="adm-gch-cur">
+            <strong>{cur.title}</strong>
+            {cur.can_post ? (
+              <span className="adm-ch-ok small">
+                <LuCheck /> {L('har bir xarid shu yerga tushadi', 'every purchase is posted here')}
+              </span>
+            ) : (
+              <span className="adm-ch-warn small">
+                <LuTriangleAlert /> {L("Bot bu kanalga yoza olmayapti — botni admin qiling («Xabar joylash» huquqi bilan)", 'The bot cannot post here — make it an admin with “Post messages”')}
+              </span>
+            )}
+          </span>
+        ) : (
+          <span className="muted small">{L('Ulanmagan — buyurtmalar faqat shu panelda ko‘rinadi', 'Not connected — orders are only shown in this panel')}</span>
+        )}
+      </div>
+      <div className="row-actions">
+        {cur && (
+          <button className="btn btn-ghost btn-sm" onClick={test} disabled={busy !== null}>
+            {busy === 'test' ? <LuLoader className="spin" /> : null} {L('Sinov xabari', 'Test message')}
+          </button>
+        )}
+        <button className="btn btn-secondary btn-sm" onClick={() => (setPick((v) => !v), void load())}>
+          {cur ? L("Kanalni o'zgartirish", 'Change channel') : L('Kanal ulash', 'Connect a channel')}
+        </button>
+        {cur && (
+          <button className="btn btn-ghost btn-sm adm-danger" onClick={() => choose(null)} disabled={busy !== null}>
+            {L("O'chirish", 'Disconnect')}
+          </button>
+        )}
+      </div>
+      {pick && (
+        <div className="adm-gch-pick">
+          <ol className="small muted">
+            <li>{L('Telegramda kanal yoki guruh oching (yopiq bo‘lishi mumkin).', 'Create a channel or group in Telegram (it can be private).')}</li>
+            <li>{L('@Dameo_game botini u yerga administrator qilib qo‘shing va «Xabar joylash» huquqini bering.', 'Add @Dameo_game as an administrator with the “Post messages” right.')}</li>
+            <li>{L('Shu yerda «Yangilash»ni bosing va kanalni tanlang.', 'Press “Refresh” here and pick the channel.')}</li>
+          </ol>
+          {others.length === 0 ? (
+            <p className="muted small">{L('Bot admin bo‘lgan yangi kanal topilmadi.', 'No channel with the bot as admin found yet.')}</p>
+          ) : (
+            <ul className="adm-gch-list">
+              {others.map((c) => (
+                <li key={c.chat_id}>
+                  <span>
+                    <strong>{c.title}</strong>
+                    <span className="muted small"> · {c.type === 'channel' ? L('kanal', 'channel') : L('guruh', 'group')}{c.username ? ` · @${c.username}` : ''}</span>
+                  </span>
+                  {c.can_post ? (
+                    <button className="btn btn-primary btn-sm" onClick={() => choose(c)} disabled={busy !== null}>
+                      {busy === c.chat_id ? <LuLoader className="spin" /> : <LuCheck />} {L('Ulash', 'Connect')}
+                    </button>
+                  ) : (
+                    <span className="adm-ch-warn small">{L('«Xabar joylash» huquqi yo‘q', 'No “Post messages” right')}</span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+          <button className="btn btn-ghost btn-sm" onClick={() => void load()}>
+            <LuRefreshCw /> {L('Yangilash', 'Refresh')}
+          </button>
+        </div>
       )}
     </div>
   );

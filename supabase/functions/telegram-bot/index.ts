@@ -3,6 +3,7 @@
 //    and records the chat in bot_subscribers (for admin broadcasts).
 //  - "/start room_<CODE>" (room invitation link t.me/<bot>?start=room_<CODE>): checks that the room exists and is still
 //    waiting, then sends one button that opens the Mini App straight into the room (the app joins it automatically).
+//  - my_chat_member: remembers channels/groups the bot was made admin of (bot_chats) for the gift-orders channel.
 //  - GET ?setup=1: registers this function as the bot's webhook (with a secret header), sets the menu button
 //    and the command list. Safe to call repeatedly; it only points the bot at this same function.
 //  - Telegram Stars payments: answers pre_checkout_query (SQL payment_precheck decides) and, on successful_payment,
@@ -68,7 +69,7 @@ Deno.serve(async (req) => {
     const results = {
       bot: me?.result?.username,
       previous_webhook: current || null,
-      webhook: await tg(token, 'setWebhook', { url: self, secret_token: secret, allowed_updates: ['message', 'pre_checkout_query'], drop_pending_updates: false }),
+      webhook: await tg(token, 'setWebhook', { url: self, secret_token: secret, allowed_updates: ['message', 'pre_checkout_query', 'my_chat_member'], drop_pending_updates: false }),
       menu: await tg(token, 'setChatMenuButton', { menu_button: { type: 'web_app', text: "O'ynash", web_app: { url: WEBAPP_URL } } }),
       commands: await tg(token, 'setMyCommands', { commands: [{ command: 'start', description: "DAMEO — o'yinni ochish" }] }),
       commands_en: await tg(token, 'setMyCommands', { commands: [{ command: 'start', description: 'DAMEO — open the game' }], language_code: 'en' }),
@@ -99,6 +100,21 @@ Deno.serve(async (req) => {
       error = e ? 'Server error, please try again' : (data as string | null);
     }
     await tg(token, 'answerPreCheckoutQuery', error ? { pre_checkout_query_id: pcq.id, ok: false, error_message: error } : { pre_checkout_query_id: pcq.id, ok: true });
+    return new Response('ok');
+  }
+
+  // ---- the bot was added to / removed from a channel or group: remember it (admin panel picks the orders channel)
+  const mcm = update?.my_chat_member;
+  if (mcm?.chat?.id && mcm.chat.type !== 'private') {
+    const st = mcm.new_chat_member ?? {};
+    await db().rpc('bot_chat_upsert', {
+      p_chat_id: mcm.chat.id,
+      p_title: String(mcm.chat.title ?? mcm.chat.username ?? mcm.chat.id).slice(0, 128),
+      p_username: mcm.chat.username ?? null,
+      p_type: String(mcm.chat.type),
+      p_status: String(st.status ?? ''),
+      p_can_post: st.status === 'administrator' ? (mcm.chat.type === 'channel' ? st.can_post_messages === true : true) : false,
+    });
     return new Response('ok');
   }
 

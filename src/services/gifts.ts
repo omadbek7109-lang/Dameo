@@ -64,3 +64,16 @@ export const adminGiftOrders = (status: 'pending' | 'delivered' | 'all') => db.r
 export const adminGiftCounts = () => db.rpc<{ pending: number; delivered: number } | null>('admin_gift_counts');
 export const adminGiftConfirm = (orderId: number) =>
   db.invokeFunction<{ ok: boolean; reason?: string; notified?: boolean; notify_error?: string | null }>('gifts', { action: 'confirm', order_id: orderId });
+
+/* orders channel (migration 0034) */
+export interface BotChat {
+  chat_id: string;
+  title: string;
+  username: string | null;
+  type: string;
+  can_post: boolean;
+  status?: string;
+}
+export const adminGiftChannel = () => db.rpc<{ current: BotChat | null; candidates: BotChat[] }>('admin_gift_channel');
+export const adminGiftChannelSet = (chatId: string | null, reason: string) => db.rpc<{ ok: boolean }>('admin_gift_channel_set', { p_chat_id: chatId ?? '', p_reason: reason });
+export const adminGiftChannelTest = (chatId: string) => db.invokeFunction<{ ok: boolean; error: string | null }>('gifts', { action: 'channel_test', chat_id: chatId });

@@ -3,7 +3,9 @@
 //              Telegram-signed initData (HMAC with the bot token) and only if it belongs to this account's Telegram id.
 //              Price, coins, the 4-digit code and the order are all handled in SQL (gift_order_create), atomically.
 //  - "confirm" {order_id}: admin ("shop.manage", checked in SQL with the caller's own session) marks the order as
-//              delivered exactly once; then the DAMEO bot tells the buyer.
+//              delivered exactly once; then the DAMEO bot tells the buyer and the orders-channel post becomes "✅ Yuborildi".
+//  - "channel_test" {chat_id}: admin — sends a test line to the chosen orders channel.
+//  Every new order is also posted to the orders channel set in the admin panel (gift_settings, migration 0034).
 // The bot token (TELEGRAM_BOT_TOKEN) never leaves the server.
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
@@ -25,6 +27,33 @@ function safeEqual(a: string, b: string) {
   let r = 0;
   for (let i = 0; i < a.length; i++) r |= a.charCodeAt(i) ^ b.charCodeAt(i);
   return r === 0;
+}
+
+const esc = (v: unknown) => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+const when = (iso: string | null) => (iso ? new Date(iso).toLocaleString('en-GB', { timeZone: 'Asia/Tashkent', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }).replace(/\//g, '.').replace(',', '') : '');
+const coinsFmt = (n: number) => String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+async function tg(token: string, method: string, body: unknown): Promise<{ ok: boolean; error_code?: number; description?: string; result?: any }> {
+  try {
+    const r = await fetch(`https://api.telegram.org/bot${token}/${method}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    return await r.json();
+  } catch (e) {
+    return { ok: false, description: `network: ${(e as Error).message}` };
+  }
+}
+/** The orders-channel post for one order (HTML). */
+function orderPost(n: any): string {
+  const tgLine = n.tg_username ? `@${esc(n.tg_username)}` : `<i>username yo'q — @Flect_stars ga kod bilan yozadi</i>`;
+  const state = n.status === 'delivered' ? `✅ <b>Yuborildi</b> — ${esc(n.delivered_by ?? 'admin')}, ${when(n.delivered_at)}` : '⏳ Kutilmoqda';
+  return (
+    `🎁 <b>Yangi sovg'a buyurtmasi #${n.id}</b>\n\n` +
+    `Sovg'a: ${esc(n.emoji)} <b>${esc(n.gift_title)}</b> — ${coinsFmt(n.price)} coin\n` +
+    `Kod: <code>${esc(n.code)}</code>\n` +
+    `O'yinchi: <b>${esc(n.player)}</b>\n` +
+    `Telegram: ${tgLine}\n` +
+    `TG ID: <code>${esc(n.tg_id)}</code> · <a href="tg://user?id=${esc(n.tg_id)}">profil</a>\n` +
+    `Vaqt: ${when(n.created_at)}\n\n` +
+    `Holat: ${state}`
+  );
 }
 
 /** The Telegram user from Mini App initData, only if Telegram's signature is valid (≤ 7 days old). */
@@ -77,6 +106,7 @@ Deno.serve(async (req) => {
     }
     const { data, error } = await service.rpc('gift_order_create', { p_user: uid, p_gift: gift, p_idem: key, p_username: username });
     if (error) return json({ ok: false, reason: /insufficient/.test(error.message) ? 'insufficient' : /exhausted/.test(error.message) ? 'sold-out' : 'server' });
+    if (data?.ok) await postToChannel(token, service, Number(data.order_id)); // never blocks or undoes the purchase
     return json(data);
   }
 
@@ -107,8 +137,37 @@ Deno.serve(async (req) => {
       notifyError = `network: ${(e as Error).message}`;
     }
     await service.rpc('gift_order_notified', { p_order: id, p_ok: notified, p_error: notifyError });
+    // the orders channel: turn the post into "✅ Yuborildi" (or post it now if it was never posted)
+    const { data: n } = await service.rpc('gift_order_notice', { p_order: id });
+    if (n?.channel_msg_id && n?.channel_chat_id) {
+      await tg(token, 'editMessageText', { chat_id: Number(n.channel_chat_id), message_id: Number(n.channel_msg_id), text: orderPost(n), parse_mode: 'HTML', link_preview_options: { is_disabled: true } });
+    } else await postToChannel(token, service, id);
     return json({ ...data, notified, notify_error: notifyError || null });
+  }
+
+  if (body?.action === 'channel_test') {
+    const { error } = await user.rpc('admin_gift_channel');
+    if (error) return json({ ok: false, reason: 'forbidden' }, 403);
+    const chat = String(body.chat_id ?? '');
+    if (!/^-?\d{5,20}$/.test(chat)) return json({ ok: false, reason: 'bad-request' }, 400);
+    const r = await tg(token, 'sendMessage', { chat_id: Number(chat), text: "✅ <b>DAMEO</b>: sovg'a buyurtmalari shu yerga keladi.", parse_mode: 'HTML' });
+    if (!r.ok && (r.error_code === 400 || r.error_code === 403)) await service.rpc('bot_chat_lost', { p_chat: Number(chat) });
+    return json({ ok: r.ok, error: r.ok ? null : r.description ?? 'error' });
   }
 
   return json({ ok: false, reason: 'unknown-action' }, 400);
 });
+
+/** Posts a new order to the orders channel once (if a channel is set); a failure never affects the order. */
+async function postToChannel(token: string, service: any, orderId: number) {
+  try {
+    const { data: n } = await service.rpc('gift_order_notice', { p_order: orderId });
+    if (!n || !n.target_chat_id || n.channel_msg_id) return;
+    const chat = Number(n.target_chat_id);
+    const r = await tg(token, 'sendMessage', { chat_id: chat, text: orderPost(n), parse_mode: 'HTML', link_preview_options: { is_disabled: true } });
+    if (r.ok) await service.rpc('gift_order_channel_msg', { p_order: orderId, p_chat: chat, p_msg: r.result.message_id });
+    else if (r.error_code === 400 || r.error_code === 403) await service.rpc('bot_chat_lost', { p_chat: chat });
+  } catch {
+    /* the channel post is best-effort */
+  }
+}
