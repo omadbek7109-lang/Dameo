@@ -115,6 +115,8 @@ export function startJoinCode(): string | null {
 }
 
 const BOT_KEY = 'dameo.tg.bot';
+/** the DAMEO bot (@Dameo_game); the name Telegram reports at sign-in wins, this is the fallback */
+export const DAMEO_BOT = 'Dameo_game';
 export const botUsername = () => readString(BOT_KEY);
 export const rememberBotUsername = (u: string | null) => u && writeString(BOT_KEY, u);
 
@@ -129,13 +131,20 @@ export function openTelegramUrl(url: string): boolean {
   }
 }
 
-/** Share a room invitation inside Telegram. Returns false when not possible. */
+/** Room invitation link: the bot's /start deep link — the bot checks the room and opens the Mini App into it. */
+export function roomInviteLink(code: string): string {
+  return `https://t.me/${botUsername() || DAMEO_BOT}?start=room_${code.toUpperCase()}`;
+}
+
+/** Share a room invitation inside Telegram (pick a chat). Returns false outside Telegram. */
 export function shareRoomInTelegram(code: string, text: string): boolean {
-  const bot = botUsername();
-  if (!tg?.openTelegramLink || !bot) return false;
-  const link = `https://t.me/${bot}?startapp=join_${code}`;
-  tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(text)}`);
-  return true;
+  if (!tg?.openTelegramLink) return false;
+  try {
+    tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(roomInviteLink(code))}&text=${encodeURIComponent(text)}`);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export function telegramLanguage(): 'uz' | 'en' | null {

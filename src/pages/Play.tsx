@@ -11,7 +11,7 @@ import { navigate, useRoute } from '../router.tsx';
 import { backendConfigured } from '../services/config.ts';
 import { DEMO_PLAYERS } from '../services/demoData.ts';
 import { cancelQuickMatch, createRoom, joinRoom, quickMatch, startBotMatch, watchPairing } from '../services/online.ts';
-import { inTelegram, shareRoomInTelegram } from '../services/telegram.ts';
+import { inTelegram, roomInviteLink, shareRoomInTelegram } from '../services/telegram.ts';
 import { LiveQuickPanel } from '../components/Lobby.tsx';
 import type { Player } from '../types/models.ts';
 
@@ -286,7 +286,7 @@ function FriendsPanel() {
       setBusy(null);
     }
   };
-  const inviteText = code ? `${t('room.inviteText', { code })} ${window.location.origin}${window.location.pathname}#/play?mode=friends&join=${code}` : '';
+  const inviteText = code ? `${t('room.inviteText', { code })} ${roomInviteLink(code)}` : '';
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(inviteText);

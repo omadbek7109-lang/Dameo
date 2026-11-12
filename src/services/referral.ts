@@ -1,8 +1,7 @@
 import { db } from './supabase.ts';
-import { botUsername, tg } from './telegram.ts';
+import { botUsername, DAMEO_BOT, tg } from './telegram.ts';
 
-/** The bot that hosts the Mini App (read from Telegram at sign-in; @Dameo_game). */
-export const DAMEO_BOT = 'Dameo_game';
+export { DAMEO_BOT };
 
 export interface ReferralFriend {
   username: string;

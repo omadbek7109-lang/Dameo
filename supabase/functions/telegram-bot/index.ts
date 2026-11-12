@@ -1,6 +1,8 @@
 // Edge Function `telegram-bot` (Deno): the bot's chat side.
 //  - POST from Telegram (webhook): answers /start (and /play, /help) with a welcome text + "open the game" button,
 //    and records the chat in bot_subscribers (for admin broadcasts).
+//  - "/start room_<CODE>" (room invitation link t.me/<bot>?start=room_<CODE>): checks that the room exists and is still
+//    waiting, then sends one button that opens the Mini App straight into the room (the app joins it automatically).
 //  - GET ?setup=1: registers this function as the bot's webhook (with a secret header), sets the menu button
 //    and the command list. Safe to call repeatedly; it only points the bot at this same function.
 //  - Telegram Stars payments: answers pre_checkout_query (SQL payment_precheck decides) and, on successful_payment,
@@ -138,6 +140,45 @@ Deno.serve(async (req) => {
       .then(() => {}, () => {});
     const name = escapeHtml(from.first_name || from.username || "o'yinchi");
     const lang: string | undefined = from.language_code;
+    const en = lang?.startsWith('en');
+
+    // "/start room_ABC123" (room invitation): check the room, then one button opens the Mini App straight into it
+    const roomCode = /^room_([A-Z0-9]{4,8})$/i.exec(text.split(' ')[1] ?? '')?.[1]?.toUpperCase();
+    if (roomCode) {
+      const { data: room } = await db().from('matches').select('id, status, white_id, black_id').eq('code', roomCode)
+        .order('created_at', { ascending: false }).limit(1).maybeSingle();
+      const { data: owner } = room ? await db().from('profiles').select('username, tg_id').eq('id', room.white_id).maybeSingle() : { data: null };
+      const open = (hash: string, label: string) => ({ text: label, web_app: { url: `${WEBAPP_URL}${hash}` }, style: 'success' });
+      let reply: { text: string; button: Record<string, unknown> };
+      if (room?.status === 'waiting' && owner?.tg_id != null && String(owner.tg_id) === String(msg.chat.id)) {
+        reply = {
+          text: en ? `♟ This is your own room <b>${roomCode}</b>. Waiting for your friend to join…` : `♟ Bu sizning xonangiz: <b>${roomCode}</b>. Do'stingiz qo'shilishini kuting…`,
+          button: open('#/play?mode=friends', en ? '♟ Open the game' : "♟ O'yinni ochish"),
+        };
+      } else if (room?.status === 'waiting') {
+        const who = escapeHtml(owner?.username ?? (en ? 'A friend' : "Do'stingiz"));
+        reply = {
+          text: en
+            ? `♟ <b>${who}</b> invites you to a game of checkers on DAMEO!\n\nRoom: <b>${roomCode}</b>\nTap the button below to join 👇`
+            : `♟ <b>${who}</b> sizni DAMEO'da shashka o'ynashga taklif qildi!\n\nXona: <b>${roomCode}</b>\nQo'shilish uchun pastdagi tugmani bosing 👇`,
+          button: open(`#/play?mode=friends&join=${roomCode}`, en ? '♟ Join the room' : "♟ Xonaga qo'shilish"),
+        };
+      } else {
+        reply = {
+          text: en
+            ? `⚠️ Room <b>${roomCode}</b> is not available: it was not found, or the game has already started or ended.\n\nAsk your friend for a new invitation, or start a game yourself 👇`
+            : `⚠️ <b>${roomCode}</b> xonasi mavjud emas: topilmadi yoki o'yin allaqachon boshlangan/tugagan.\n\nDo'stingizdan yangi taklif so'rang yoki o'zingiz o'yin boshlang 👇`,
+          button: open('#/play?mode=friends', en ? '♟ Open the game' : "♟ O'yinni ochish"),
+        };
+      }
+      const roomMsg = { chat_id: msg.chat.id, text: reply.text, parse_mode: 'HTML', link_preview_options: { is_disabled: true } };
+      const sentRoom = await tg(token, 'sendMessage', { ...roomMsg, reply_markup: { inline_keyboard: [[reply.button]] } });
+      if (!sentRoom?.ok) {
+        const { style: _s, ...plain } = reply.button;
+        await tg(token, 'sendMessage', { ...roomMsg, reply_markup: { inline_keyboard: [[plain]] } });
+      }
+      return new Response('ok');
+    }
     // "/start join_ABC123" (deep link) opens the game straight into that room
     const param = text.split(' ')[1] ?? '';
     const appUrl = /^join_[A-Z0-9]{4,8}$/i.test(param) ? `${WEBAPP_URL}#/play?mode=friends&join=${param.slice(5).toUpperCase()}` : WEBAPP_URL;
