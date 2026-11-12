@@ -63,6 +63,17 @@ export function Home() {
         <p className="muted small home-guest">{t('hero.guestHint')}</p>
       )}
 
+      {signedIn && mode === 'live' && (
+        <Link to="/missions" className="card ms-promo">
+          <span className="ms-promo-ico" aria-hidden="true">🎯</span>
+          <span className="ms-promo-text">
+            <strong>{t('ms.homeCard')}</strong>
+            <span className="muted small">{t('ms.homeCardSub', { c: 240 })}</span>
+          </span>
+          <span className="ms-promo-go" aria-hidden="true">›</span>
+        </Link>
+      )}
+
       <DemoNotice text={t('demo.homeNotice')} />
 
       <section aria-label={t('home.modes')}>

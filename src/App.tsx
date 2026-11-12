@@ -15,6 +15,7 @@ import { Shop } from './pages/Shop.tsx';
 import { Inventory } from './pages/Inventory.tsx';
 import { Wallet } from './pages/Wallet.tsx';
 import { Referral } from './pages/Referral.tsx';
+import { Missions } from './pages/Missions.tsx';
 import { Admin } from './pages/Admin.tsx';
 import { Live } from './pages/Live.tsx';
 import { Watch } from './pages/Watch.tsx';
@@ -90,6 +91,9 @@ export function App() {
       break;
     case 'wallet':
       page = <Wallet />;
+      break;
+    case 'missions':
+      page = <Missions />;
       break;
     case 'referral':
       page = <Referral />;
