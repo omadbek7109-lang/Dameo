@@ -5494,3 +5494,61 @@ html.calm .ref-coins i { animation: none; }
 @media (prefers-reduced-motion: reduce) { .ref-coins i { animation: none; } }
 .ref-friend-side { flex: none; display: grid; justify-items: end; gap: 4px; }
 .ref-chip-gold { background: color-mix(in srgb, #f3c24f 18%, transparent); color: #e8b52e; }
+
+/* ---------------------------------------------------------------- daily rating (reuses the .wk look) */
+.dr-cd-tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.dr-prize {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  border-radius: 18px;
+  background:
+    radial-gradient(120% 140% at 0% 50%, rgba(255, 224, 138, 0.22), transparent 60%),
+    rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(232, 187, 77, 0.45);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+.dr-prize-icon {
+  display: grid;
+  place-items: center;
+  width: 58px;
+  height: 58px;
+  flex: none;
+  font-size: 2.2rem;
+  border-radius: 16px;
+  background: radial-gradient(circle at 50% 35%, rgba(255, 224, 138, 0.35), rgba(232, 187, 77, 0.08) 70%);
+  animation: dr-bob 3.2s ease-in-out 3;
+}
+@keyframes dr-bob { 0%, 100% { transform: translateY(0) rotate(-3deg); } 50% { transform: translateY(-4px) rotate(3deg); } }
+.dr-prize-text { display: grid; gap: 1px; min-width: 0; flex: 1; }
+.dr-prize-label { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: rgba(230, 236, 255, 0.7); }
+.dr-prize-text strong { font-size: 1.08rem; color: #ffe08a; white-space: nowrap; }
+.dr-prize-hint { font-size: 0.8rem; color: rgba(230, 236, 255, 0.75); }
+.dr-prize-place { flex: none; }
+.dr-nojoin { margin: -4px 0 0; font-size: 0.84rem; color: rgba(230, 236, 255, 0.8); }
+.dr-me-label { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: rgba(230, 236, 255, 0.7); }
+.dr-me strong { font-size: 1.05rem; }
+.dr-me-rank { flex: none; min-width: 34px; height: 34px; font-size: 0.95rem; }
+.dr-me-rank:not(.wk-rank-1):not(.wk-rank-2):not(.wk-rank-3) { background: rgba(255, 255, 255, 0.12); color: #f4f6ff; border-color: rgba(255, 255, 255, 0.25); }
+.dr-table td.wk-points { font-weight: 800; }
+.dr-row-podium td { background: color-mix(in srgb, var(--gold) 7%, var(--surface-2)); }
+.dr-gap td { background: none !important; text-align: center; padding: 2px 0 !important; color: var(--muted); letter-spacing: 0.3em; font-size: 0.7rem; }
+.dr-yesterday {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  background:
+    radial-gradient(120% 140% at 100% 0%, color-mix(in srgb, var(--gold) 16%, transparent), transparent 60%),
+    var(--surface);
+  border-color: color-mix(in srgb, var(--gold) 40%, var(--border));
+}
+.dr-y-crown { color: var(--gold); font-size: 1.3rem; display: grid; flex: none; }
+.dr-y-main { display: flex; align-items: center; gap: 12px; min-width: 0; flex: 1; color: inherit; text-decoration: none; }
+.dr-y-text { display: grid; min-width: 0; }
+.dr-y-text strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 1.02rem; }
+.dr-y-label { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--gold); }
+.dr-y-prize { font-size: 1.6rem; flex: none; }
+@media (prefers-reduced-motion: reduce) { .dr-prize-icon { animation: none; } }

@@ -5,7 +5,7 @@ import { useAuthDialog } from '../components/AuthDialog.tsx';
 import { EmptyState, ErrorState, Spinner } from '../components/States.tsx';
 import { useToast } from '../components/Toast.tsx';
 import { DemoNotice } from '../components/ui.tsx';
-import { WeeklyTournament } from '../components/WeeklyTournament.tsx';
+import { DailyRating } from '../components/DailyRating.tsx';
 import { useAsync } from '../hooks/useAsync.ts';
 import { useI18n, type TKey } from '../i18n/index.tsx';
 import { registerLive, listTournaments, unregisterLive } from '../services/tournaments.ts';
@@ -64,7 +64,7 @@ export function Tournaments({ embedded = false }: { embedded?: boolean } = {}) {
       )}
       <DemoNotice text={t('demo.tourNotice')} />
 
-      {mode === 'live' && <WeeklyTournament />}
+      {mode === 'live' && <DailyRating />}
 
       {/* other (bracket) tournaments: only shown when there are any, or in demo mode */}
       {(mode !== 'live' || (list.data ?? []).length > 0) && (

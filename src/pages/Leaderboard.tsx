@@ -118,7 +118,7 @@ export function Leaderboard({ initialTab }: { initialTab?: View } = {}) {
   const tabs: Array<{ id: View; label: string }> = [
     { id: 'all', label: t('lb.all') },
     { id: 'top100', label: t('lb.top100') },
-    { id: 'tournaments', label: t('nav.tournaments') },
+    { id: 'tournaments', label: t('daily.tab') },
   ];
 
   const order = podium.length === 3 ? [podium[1], podium[0], podium[2]] : podium;
