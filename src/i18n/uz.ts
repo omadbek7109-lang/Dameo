@@ -657,7 +657,7 @@ export const uz = {
   'help.q.rating': "Reyting qanday hisoblanadi?",
   'help.a.rating': "Reytingli o'yinda g'alaba +10…+30, mag'lubiyat −10…−30 (har safar tasodifiy), durang ±5 gacha. Hisobni faqat server qiladi. 6 yurishdan oldin tugagan o'yinda yutgan ball olmaydi; bir raqib bilan kuniga 3 tadan ortiq o'yin reytingga ta'sir qilmaydi.",
   'help.q.clock': "O'yin vaqti qanday ishlaydi?",
-  'help.a.clock': "1, 3 yoki 5 daqiqa tanlanadi; har yurishga ko'pi bilan 30 soniya. Vaqt tugasa raqib yutadi.",
+  'help.a.clock': "3, 5 yoki 8 daqiqa tanlanadi; har bir o'yinchining o'z soati bor, har yurishga ko'pi bilan 30 soniya. Vaqt tugasa raqib yutadi.",
   'help.q.weekly': "DAMEO Weekly nima?",
   'help.a.weekly': "Har hafta dushanbadan yakshanbagacha turnir. Ochko — shu hafta haqiqiy o'yinchilarga qarshi o'yinlarda olgan reytingingiz (virtual o'yinchilar bilan o'yinlar turnirga kirmaydi). TOP-5 sovrin oladi.",
   'help.q.coins': "DAMEO Coins nima?",

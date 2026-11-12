@@ -1,14 +1,14 @@
 /**
  * Game clock maths for player-vs-player games — mirrors the SQL rules in
  * supabase/migrations/0008_game_clocks.sql (the server is the judge; this only draws the clocks):
- *   - each player has 1 / 3 / 5 minutes;
+ *   - each player has 3 / 5 / 8 minutes (rated games; the 1-minute mode was removed — old 1-minute games stay in history);
  *   - White's first move does not use White's clock (it is only limited by the 30 s rule);
  *   - after that the side to move uses its own clock (chess clock);
  *   - every move must be made within 30 s, and within the player's remaining time.
  */
 import type { Color } from '../engine/index.ts';
 
-export const TIME_CONTROLS = [60, 180, 300] as const;
+export const TIME_CONTROLS = [180, 300, 480] as const;
 export type TimeControl = (typeof TIME_CONTROLS)[number];
 export const DEFAULT_TIME_CONTROL: TimeControl = 180;
 export const MOVE_LIMIT_MS = 30_000;

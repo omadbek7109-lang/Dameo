@@ -284,7 +284,11 @@ select pg_temp.check('accepted challenge has a 3-minute clock', (select time_con
 select pg_temp.check('room game has a 3-minute clock', (select time_control = 180 from public.matches where id = (select (r ->> 'match_id')::uuid from room)));
 set role authenticated;
 set request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
-select pg_temp.check('quick_match(60) queues', (public.quick_match(60) ->> 'match_id') is null);
+do $$ begin
+  perform public.quick_match(60);
+  perform pg_temp.check('0030: the 1-minute mode is gone (quick_match(60) refused)', false);
+exception when others then perform pg_temp.check('0030: the 1-minute mode is gone (quick_match(60) refused)', sqlerrm like '%time control%', sqlerrm); end $$;
+select pg_temp.check('quick_match(480) queues', (public.quick_match(480) ->> 'match_id') is null);
 do $$ begin
   perform public.quick_match(45);
   perform pg_temp.check('bad time control rejected', false);
@@ -293,13 +297,13 @@ reset role;
 set role authenticated;
 set request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
 select pg_temp.check('different time control is NOT paired', (public.quick_match(300) ->> 'match_id') is null);
-create temp table tm as select public.quick_match(60) as r;
+create temp table tm as select public.quick_match(480) as r;
 grant all on tm to public;
-select pg_temp.check('same time control is paired', (select (r ->> 'match_id') is not null and (r ->> 'time_control')::int = 60 from tm));
+select pg_temp.check('same time control is paired', (select (r ->> 'match_id') is not null and (r ->> 'time_control')::int = 480 from tm));
 reset role;
 create temp table tmid as select (r ->> 'match_id')::uuid as id from tm;
 grant all on tmid to public;
-select pg_temp.check('1-minute game: 60 s each, clock running', (select time_control = 60 and white_ms = 60000 and black_ms = 60000 from public.matches where id = (select id from tmid)));
+select pg_temp.check('8-minute game: 480 s each (independent clocks), clock running', (select time_control = 480 and white_ms = 480000 and black_ms = 480000 from public.matches where id = (select id from tmid)));
 
 set role authenticated;
 set request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
@@ -311,15 +315,16 @@ select pg_temp.check('claim_timeout before the deadline does nothing', (public.c
 reset role;
 
 set role service_role;
-select pg_temp.check('first move: White''s clock not charged', (select (public.clock_take_turn((select id from tmid), 0) ->> 'white_ms')::int = 60000));
+select pg_temp.check('first move: White''s clock not charged', (select (public.clock_take_turn((select id from tmid), 0) ->> 'white_ms')::int = 480000));
 select pg_temp.check('same ply twice → conflict', (public.clock_take_turn((select id from tmid), 0) ->> 'error') = 'conflict');
 update public.matches set turn_started_at = clock_timestamp() - interval '5 seconds' where id = (select id from tmid);
 create temp table ct1 as select public.clock_take_turn((select id from tmid), 1) as r;
-select pg_temp.check('Black''s move charges Black ~5 s', (select (r ->> 'black_ms')::int between 54800 and 55100 from ct1), (select r::text from ct1));
-select pg_temp.check('White''s clock untouched by Black''s move', (select white_ms = 60000 and move_count = 2 from public.matches where id = (select id from tmid)));
+select pg_temp.check('Black''s move charges Black ~5 s', (select (r ->> 'black_ms')::int between 474800 and 475100 from ct1), (select r::text from ct1));
+select pg_temp.check('White''s clock untouched by Black''s move', (select white_ms = 480000 and move_count = 2 from public.matches where id = (select id from tmid)));
 update public.matches set turn_started_at = clock_timestamp() - interval '10 seconds' where id = (select id from tmid);
 create temp table ct2 as select public.clock_take_turn((select id from tmid), 2) as r;
-select pg_temp.check('White''s 2nd move charges White ~10 s', (select (r ->> 'white_ms')::int between 49800 and 50100 from ct2), (select r::text from ct2));
+select pg_temp.check('White''s 2nd move charges White ~10 s', (select (r ->> 'white_ms')::int between 469800 and 470100 from ct2), (select r::text from ct2));
+select pg_temp.check('… and Black''s clock keeps its own time', (select black_ms between 474800 and 475100 from public.matches where id = (select id from tmid)));
 -- Black (to move, ply 3) takes 31 s → over the 30 s limit
 update public.matches set turn_started_at = clock_timestamp() - interval '31.5 seconds' where id = (select id from tmid);
 select pg_temp.check('move after 30 s (+1 s grace) is refused', (public.clock_take_turn((select id from tmid), 3) ->> 'error') = 'timeout');
@@ -1695,6 +1700,70 @@ update public.referrals set created_at = created_at - interval '1 day' where inv
 insert into auth.users (id, email, raw_user_meta_data) values ('f0290029-0000-4000-8000-000000000099', 'cap99@x.io', '{"username":"cap_99"}');
 select pg_temp.check('0029: next day the +20 is paid again', public.referral_attach('f0290029-0000-4000-8000-000000000099', (select code from c29)) = 'ok'
   and pg_temp.coins('f0290029-0000-4000-8000-000000000001') = 250);
+
+-- ===================== 0030: rated time controls are exactly 3 / 5 / 8 minutes
+reset role;
+insert into auth.users (id, email, raw_user_meta_data) values
+  ('f0300030-0000-4000-8000-0000000000a1', 'tca@x.io', '{"username":"tc_alpha"}'),
+  ('f0300030-0000-4000-8000-0000000000b1', 'tcb@x.io', '{"username":"tc_bravo"}');
+create temp table t30 (tc int primary key, match_id uuid, cross_paired boolean);
+grant all on t30 to public;
+do $$ declare tc int; r json; cross_r json; begin
+  foreach tc in array array[180, 300, 480] loop
+    -- A searches tc; B searching a DIFFERENT control is not paired with A; B then searches tc and is paired
+    perform set_config('request.jwt.claim.sub', 'f0300030-0000-4000-8000-0000000000a1', false);
+    set local role authenticated;
+    perform public.quick_match(tc);
+    perform set_config('request.jwt.claim.sub', 'f0300030-0000-4000-8000-0000000000b1', false);
+    cross_r := public.quick_match(case when tc = 480 then 180 else 480 end);
+    r := public.quick_match(tc);
+    reset role;
+    insert into t30 values (tc, (r ->> 'match_id')::uuid, cross_r ->> 'match_id' is not null);
+    -- the next round starts clean
+    update public.matchmaking_queue set last_seen = '-infinity' where user_id in ('f0300030-0000-4000-8000-0000000000a1', 'f0300030-0000-4000-8000-0000000000b1');
+  end loop;
+end $$;
+select pg_temp.check('0030: 3, 5 and 8 minutes each pair two players', (select count(match_id) = 3 from t30));
+select pg_temp.check('0030: never paired across different time controls', (select not bool_or(cross_paired) from t30));
+select pg_temp.check('0030: each game gets its own control and both players the full time',
+  (select bool_and(m.time_control = t.tc and m.white_ms = t.tc * 1000 and m.black_ms = t.tc * 1000 and m.rated) from t30 t join public.matches m on m.id = t.match_id));
+-- run each game out of time: the player whose clock runs out loses, rating is applied
+update public.matches m set move_count = 15, black_ms = 2000, turn_started_at = clock_timestamp() - interval '4 seconds'
+ where id in (select match_id from t30);
+select set_config('request.jwt.claim.sub', 'f0300030-0000-4000-8000-0000000000a1', false);
+set role authenticated;
+select public.claim_timeout(match_id) from t30;
+reset role;
+select pg_temp.check('0030: on every control, running out of time is a loss (Black flagged → White wins, by clock)',
+  (select bool_and(m.status = 'finished' and m.result = 'white' and m.timeout_kind = 'clock' and m.rating_applied) from t30 t join public.matches m on m.id = t.match_id),
+  (select string_agg(m.time_control || ':' || m.status || '/' || coalesce(m.result, '-') || '/' || coalesce(m.timeout_kind, '-'), ' ') from t30 t join public.matches m on m.id = t.match_id));
+select pg_temp.check('0030: Elo applied on every control (winner +10…+30, loser −10…−30)',
+  (select bool_and(m.white_delta + 0 <> 0 and m.black_delta < 0) from t30 t join public.matches m on m.id = t.match_id));
+-- virtual opponents: 3 / 5 / 8 minutes accepted, 1 minute refused
+select set_config('request.jwt.claim.sub', 'f0300030-0000-4000-8000-0000000000a1', false);
+set role authenticated;
+do $$ begin
+  perform public.virtual_match(60);
+  perform pg_temp.check('0030: virtual_match(60) refused', false);
+exception when others then perform pg_temp.check('0030: virtual_match(60) refused', sqlerrm like '%time control%', sqlerrm); end $$;
+select pg_temp.check('0030: virtual_match(480) is a valid request', (public.virtual_match(480) ->> 'reason') is distinct from 'bad time control');
+reset role;
+-- history: an old 1-minute game is still valid data, and its rematch becomes a 3-minute game
+insert into public.matches (white_id, black_id, status, rated, started_at, time_control, white_ms, black_ms, turn_started_at, result, result_reason, ended_at, move_count)
+values ('f0300030-0000-4000-8000-0000000000a1', 'f0300030-0000-4000-8000-0000000000b1', 'finished', true, now(), 60, 60000, 60000, now(), 'white', 'no-moves', now(), 30);
+create temp table old60 as select id from public.matches where time_control = 60 and white_id = 'f0300030-0000-4000-8000-0000000000a1';
+grant all on old60 to public;
+select pg_temp.check('0030: existing 1-minute games stay in history', (select count(*) = 1 from old60));
+insert into public.match_chat_messages (match_id, user_id, kind) values ((select id from old60), 'f0300030-0000-4000-8000-0000000000a1', 'rematch_offer');
+select set_config('request.jwt.claim.sub', 'f0300030-0000-4000-8000-0000000000b1', false);
+set role authenticated;
+create temp table re60 as select (public.match_respond_rematch((select id from old60), true) ->> 'match_id')::uuid id;
+reset role;
+select pg_temp.check('0030: rematch of an old 1-minute game starts as 3 minutes', (select time_control = 180 and white_ms = 180000 and black_ms = 180000 from public.matches where id = (select id from re60)));
+do $$ begin
+  insert into public.matches (white_id, status, rated, time_control) values ('f0300030-0000-4000-8000-0000000000a1', 'waiting', false, 120);
+  perform pg_temp.check('0030: other durations are refused by the table itself', false);
+exception when others then perform pg_temp.check('0030: other durations are refused by the table itself', sqlstate = '23514', sqlerrm); end $$;
 
 \set QUIET off
 select case when ok then 'PASS' else 'FAIL' end as status, name, left(detail, 70) as detail from results order by 1 desc, 2;

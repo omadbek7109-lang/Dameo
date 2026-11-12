@@ -23,12 +23,13 @@ describe('virtual opponents', () => {
     const rnd = seeded(3);
     const t = (tc: number) => Array.from({ length: 200 }, () => thinkTime({ timeControl: tc, style: 'solid', legal: 7, captures: false, botMs: tc * 1000, moveNo: 10 }, rnd));
     const avg = (a: number[]) => a.reduce((x, y) => x + y, 0) / a.length;
-    const [a1, a3, a5] = [t(60), t(180), t(300)];
-    expect(avg(a1)).toBeLessThan(avg(a3));
+    const [a3, a5, a8] = [t(180), t(300), t(480)];
     expect(avg(a3)).toBeLessThan(avg(a5));
+    expect(avg(a5)).toBeLessThan(avg(a8)); // 8-minute games: a calmer opponent
     expect(new Set(a3).size).toBeGreaterThan(150); // varied, not the same second every time
-    for (const x of [...a1, ...a3, ...a5]) expect(x).toBeGreaterThanOrEqual(300);
-    for (const x of [...a1, ...a3, ...a5]) expect(x).toBeLessThan(30_000);
+    expect(new Set(a8).size).toBeGreaterThan(150);
+    for (const x of [...a3, ...a5, ...a8]) expect(x).toBeGreaterThanOrEqual(300);
+    for (const x of [...a3, ...a5, ...a8]) expect(x).toBeLessThan(30_000); // always inside the 30 s move limit
   });
   test('forced moves come quickly; tempo follows the style', () => {
     const rnd = seeded(11);

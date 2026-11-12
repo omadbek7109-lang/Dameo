@@ -17,16 +17,17 @@ export type VirtualStyle = 'aggressive' | 'solid' | 'tricky' | 'calm' | 'fast';
 const LEVELS: Difficulty[] = ['easy', 'medium', 'hard'];
 const BASE: Record<VirtualLevel, number> = { beginner: 0, normal: 1, pro: 2 };
 /** search budget (ms) per engine level and time control */
-const SEARCH: Record<number, [number, number, number]> = { 60: [60, 160, 300], 180: [90, 300, 550], 300: [110, 380, 750] };
+// (60 = the removed 1-minute mode, kept only so a game already running at deploy time finishes normally)
+const SEARCH: Record<number, [number, number, number]> = { 60: [60, 160, 300], 180: [90, 300, 550], 300: [110, 380, 750], 480: [130, 450, 900] };
 /** base thinking range (ms) per time control for an ordinary position */
-const THINK: Record<number, [number, number]> = { 60: [700, 2300], 180: [1100, 3600], 300: [1500, 5200] };
+const THINK: Record<number, [number, number]> = { 60: [700, 2300], 180: [1100, 3600], 300: [1500, 5200], 480: [1900, 6800] };
 const STYLE_TEMPO: Record<VirtualStyle, number> = { fast: 0.62, aggressive: 0.88, tricky: 1, solid: 1.12, calm: 1.32 };
 
 export interface PlanInput {
   state: GameState;
   level: VirtualLevel;
   style: VirtualStyle;
-  /** 60 | 180 | 300 */
+  /** 180 | 300 | 480 */
   timeControl: number;
   /** the bot's remaining clock (ms) */
   botMs: number;

@@ -659,7 +659,7 @@ export const en: Record<TKey, string> = {
   'help.q.rating': "How does the rating work?",
   'help.a.rating': "Rated games: win +10…+30, loss −10…−30 (random each time), draw up to ±5. Only the server calculates it. A game ending before 6 moves gives the winner nothing; more than 3 games a day against the same opponent don't count.",
   'help.q.clock': "How does the clock work?",
-  'help.a.clock': "Pick 1, 3 or 5 minutes; at most 30 seconds per move. Run out of time and your opponent wins.",
+  'help.a.clock': "Pick 3, 5 or 8 minutes; each player has their own clock, at most 30 seconds per move. Run out of time and your opponent wins.",
   'help.q.weekly': "What is DAMEO Weekly?",
   'help.a.weekly': "A Monday-to-Sunday tournament. Your score is the rating you gain that week in games against real players (games against virtual players don't count for the tournament). The TOP 5 win prizes.",
   'help.q.coins': "What are DAMEO Coins?",
