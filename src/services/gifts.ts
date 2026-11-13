@@ -77,3 +77,4 @@ export interface BotChat {
 export const adminGiftChannel = () => db.rpc<{ current: BotChat | null; candidates: BotChat[] }>('admin_gift_channel');
 export const adminGiftChannelSet = (chatId: string | null, reason: string) => db.rpc<{ ok: boolean }>('admin_gift_channel_set', { p_chat_id: chatId ?? '', p_reason: reason });
 export const adminGiftChannelTest = (chatId: string) => db.invokeFunction<{ ok: boolean; error: string | null }>('gifts', { action: 'channel_test', chat_id: chatId });
+export const adminGiftRenotify = (orderId: number) => db.invokeFunction<{ ok: boolean; notified?: boolean; notify_error?: string | null; reason?: string }>('gifts', { action: 'renotify', order_id: orderId });

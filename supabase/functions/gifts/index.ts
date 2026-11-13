@@ -5,6 +5,8 @@
 //  - "confirm" {order_id}: admin ("shop.manage", checked in SQL with the caller's own session) marks the order as
 //              delivered exactly once; then the DAMEO bot tells the buyer and the orders-channel post becomes "✅ Yuborildi".
 //  - "channel_test" {chat_id}: admin — sends a test line to the chosen orders channel.
+//  - "renotify" {order_id}: admin — re-sends the buyer's "gift sent" message if it failed (Telegram down …).
+//  Every Telegram call times out after 8 s and a temporary failure is retried once, so the admin never waits long.
 //  Every new order is also posted to the orders channel set in the admin panel (gift_settings, migration 0034).
 // The bot token (TELEGRAM_BOT_TOKEN) never leaves the server.
 import { createClient } from 'jsr:@supabase/supabase-js@2';
@@ -32,14 +34,31 @@ function safeEqual(a: string, b: string) {
 const esc = (v: unknown) => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 const when = (iso: string | null) => (iso ? new Date(iso).toLocaleString('en-GB', { timeZone: 'Asia/Tashkent', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }).replace(/\//g, '.').replace(',', '') : '');
 const coinsFmt = (n: number) => String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
-async function tg(token: string, method: string, body: unknown): Promise<{ ok: boolean; error_code?: number; description?: string; result?: any }> {
-  try {
-    const r = await fetch(`https://api.telegram.org/bot${token}/${method}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-    return await r.json();
-  } catch (e) {
-    return { ok: false, description: `network: ${(e as Error).message}` };
-  }
+type TgRes = { ok: boolean; error_code?: number; description?: string; result?: any };
+/** One Telegram call that never hangs: at most 8 s; a temporary failure (5xx, 429, network, timeout) is retried once. */
+async function tg(token: string, method: string, body: unknown): Promise<TgRes> {
+  const once = async (): Promise<TgRes> => {
+    try {
+      const r = await fetch(`https://api.telegram.org/bot${token}/${method}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(8000) });
+      const j = await r.json().catch(() => ({ ok: false, error_code: r.status, description: r.statusText || `HTTP ${r.status}` }));
+      return j as TgRes;
+    } catch (e) {
+      return { ok: false, description: (e as Error).name === 'TimeoutError' ? 'timeout' : `network: ${(e as Error).message}` };
+    }
+  };
+  const first = await once();
+  const temporary = !first.ok && (first.error_code == null || first.error_code >= 500 || first.error_code === 429);
+  if (!temporary) return first;
+  await new Promise((r) => setTimeout(r, 1500));
+  return once();
 }
+/** The "your gift was sent" message for the buyer. */
+const buyerText = (gift: string, code: string) =>
+  `🎁 <b>Sovg'angiz yuborildi!</b>\n\n` +
+  `${GIFT_NAME[gift] ?? 'Sovg‘a'} Telegram akkauntingizga yuborildi.\n` +
+  `Buyurtma kodi: <b>${code}</b>\n\n` +
+  `DAMEO'da o'ynaganingiz uchun rahmat! ♟`;
+
 /** The orders-channel post for one order (HTML). */
 function orderPost(n: any): string {
   const tgLine = n.tg_username ? `@${esc(n.tg_username)}` : `<i>username yo'q — @Flect_stars ga kod bilan yozadi</i>`;
@@ -117,25 +136,9 @@ Deno.serve(async (req) => {
     if (error) return json({ ok: false, reason: /forbidden|not authenticated/.test(error.message) ? 'forbidden' : /not found/.test(error.message) ? 'not-found' : 'server' }, /forbidden/.test(error.message) ? 403 : 200);
     if (!data?.ok) return json(data);
     // tell the buyer through the bot
-    const text =
-      `🎁 <b>Sovg'angiz yuborildi!</b>\n\n` +
-      `${GIFT_NAME[data.gift] ?? 'Sovg‘a'} Telegram akkauntingizga yuborildi.\n` +
-      `Buyurtma kodi: <b>${data.code}</b>\n\n` +
-      `DAMEO'da o'ynaganingiz uchun rahmat! ♟`;
-    let notified = false;
-    let notifyError = '';
-    try {
-      const r = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chat_id: Number(data.tg_id), text, parse_mode: 'HTML', reply_markup: { inline_keyboard: [[{ text: "♟ O'yinni ochish", web_app: { url: WEBAPP_URL } }]] } }),
-      });
-      const t = await r.json();
-      notified = !!t.ok;
-      notifyError = t.ok ? '' : String(t.description ?? `error ${t.error_code}`);
-    } catch (e) {
-      notifyError = `network: ${(e as Error).message}`;
-    }
+    const t = await tg(token, 'sendMessage', { chat_id: Number(data.tg_id), text: buyerText(data.gift, data.code), parse_mode: 'HTML', reply_markup: { inline_keyboard: [[{ text: "♟ O'yinni ochish", web_app: { url: WEBAPP_URL } }]] } });
+    const notified = t.ok;
+    const notifyError = t.ok ? '' : String(t.description ?? `error ${t.error_code}`);
     await service.rpc('gift_order_notified', { p_order: id, p_ok: notified, p_error: notifyError });
     // the orders channel: turn the post into "✅ Yuborildi" (or post it now if it was never posted)
     const { data: n } = await service.rpc('gift_order_notice', { p_order: id });
@@ -143,6 +146,21 @@ Deno.serve(async (req) => {
       await tg(token, 'editMessageText', { chat_id: Number(n.channel_chat_id), message_id: Number(n.channel_msg_id), text: orderPost(n), parse_mode: 'HTML', link_preview_options: { is_disabled: true } });
     } else await postToChannel(token, service, id);
     return json({ ...data, notified, notify_error: notifyError || null });
+  }
+
+  // admin: the buyer's "sent" message failed (e.g. Telegram was down) → send it again (only for delivered, not yet notified)
+  if (body?.action === 'renotify') {
+    const { error } = await user.rpc('admin_gift_channel'); // shop.manage check
+    if (error) return json({ ok: false, reason: 'forbidden' }, 403);
+    const id = Number(body.order_id);
+    if (!Number.isSafeInteger(id) || id <= 0) return json({ ok: false, reason: 'bad-request' }, 400);
+    const { data: n } = await service.rpc('gift_order_notice', { p_order: id });
+    if (!n) return json({ ok: false, reason: 'not-found' });
+    if (n.status !== 'delivered') return json({ ok: false, reason: 'not-delivered' });
+    if (n.notified_at) return json({ ok: true, notified: true, already: true });
+    const t = await tg(token, 'sendMessage', { chat_id: Number(n.tg_id), text: buyerText(n.gift, n.code), parse_mode: 'HTML', reply_markup: { inline_keyboard: [[{ text: "♟ O'yinni ochish", web_app: { url: WEBAPP_URL } }]] } });
+    await service.rpc('gift_order_notified', { p_order: id, p_ok: t.ok, p_error: t.ok ? '' : String(t.description ?? `error ${t.error_code}`) });
+    return json({ ok: true, notified: t.ok, notify_error: t.ok ? null : t.description ?? 'error' });
   }
 
   if (body?.action === 'channel_test') {

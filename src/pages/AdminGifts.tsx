@@ -7,7 +7,7 @@ import { ErrorState, Spinner } from '../components/States.tsx';
 import { useToast } from '../components/Toast.tsx';
 import { useI18n } from '../i18n/index.tsx';
 import { Link } from '../router.tsx';
-import { adminGiftChannel, adminGiftChannelSet, adminGiftChannelTest, adminGiftConfirm, adminGiftCounts, adminGiftOrders, GIFT_SUPPORT, type AdminGiftOrder, type BotChat } from '../services/gifts.ts';
+import { adminGiftChannel, adminGiftChannelSet, adminGiftChannelTest, adminGiftConfirm, adminGiftRenotify, adminGiftCounts, adminGiftOrders, GIFT_SUPPORT, type AdminGiftOrder, type BotChat } from '../services/gifts.ts';
 import { coins } from '../services/shop.ts';
 import { appActive, tg } from '../services/telegram.ts';
 
@@ -67,6 +67,19 @@ export function GiftOrdersTab() {
       toast('error', L('Xatolik. Qayta urinib ko‘ring.', 'Error. Please try again.'));
     } finally {
       setBusy(false);
+    }
+  };
+  const [resending, setResending] = useState<number | null>(null);
+  const renotify = async (id: number) => {
+    setResending(id);
+    try {
+      const r = await adminGiftRenotify(id);
+      toast(r.notified ? 'success' : 'error', r.notified ? L('Xaridorga bot orqali xabar yuborildi.', 'The buyer was notified by the bot.') : `${L('Yana yuborilmadi', 'Still not sent')}: ${r.notify_error ?? r.reason ?? ''}`);
+      void load();
+    } catch {
+      toast('error', L('Xatolik', 'Error'));
+    } finally {
+      setResending(null);
     }
   };
   const copy = async (s: string) => {
@@ -148,10 +161,19 @@ export function GiftOrdersTab() {
               </span>
             </div>
             {o.status === 'delivered' ? (
-              <p className="adm-gift-done small">
-                <LuCheck /> {L('Yuborildi', 'Delivered')}: {when(o.delivered_at)} · {o.delivered_by ?? '—'} ·{' '}
-                {o.notified_at ? L('bot xabar berdi', 'bot notified') : o.notify_error ? `${L('bot xabari yetmadi', 'bot message failed')}: ${o.notify_error}` : '—'}
-              </p>
+              <>
+                <p className="adm-gift-done small">
+                  <LuCheck /> {L('Yuborildi', 'Delivered')}: {when(o.delivered_at)} · {o.delivered_by ?? '—'} ·{' '}
+                  {o.notified_at ? L('bot xabar berdi', 'bot notified') : o.notify_error ? `${L('bot xabari yetmadi', 'bot message failed')}: ${o.notify_error}` : '—'}
+                </p>
+                {!o.notified_at && (
+                  <div className="row-actions">
+                    <button className="btn btn-secondary btn-sm" onClick={() => renotify(o.id)} disabled={resending === o.id}>
+                      {resending === o.id ? <LuLoader className="spin" /> : <LuRefreshCw />} {L('Botga qayta yuborish', 'Send the bot message again')}
+                    </button>
+                  </div>
+                )}
+              </>
             ) : (
               <div className="row-actions">
                 <button className="btn btn-primary btn-sm" onClick={() => setAsk(o)}>
