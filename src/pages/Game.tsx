@@ -20,11 +20,11 @@ import { claimTimeout, commitBotMove, getMatch, getMoves, resignOnline, startBot
 import { Link } from '../router.tsx';
 import { AchievementUnlocked } from '../components/Achievements.tsx';
 import { achievementsForMatch, type StreakCode } from '../services/achievements.ts';
-import { haptic, tg, everyActive } from '../services/telegram.ts';
+import { appActive, haptic, tg, everyActive } from '../services/telegram.ts';
 import { offerDraw, offerRematch, setMatchVisibility, chatErrorKey } from '../services/live.ts';
 import { moveSound, playSound } from '../services/sound.ts';
 import { MatchChat } from '../components/MatchChat.tsx';
-import { SbError } from '../services/supabase.ts';
+import { SbError, currentRtMode } from '../services/supabase.ts';
 import type { ConnectionState } from '../services/supabase.ts';
 import { useCosmetics, useMatchSkin } from '../cosmetics/CosmeticsProvider.tsx';
 import { db } from '../services/supabase.ts';
@@ -338,10 +338,27 @@ function OnlineGame({ matchId }: { matchId: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [now]);
 
+  // Broadcast mode safety net: a live notification can be lost (e.g. a network blip) — if an active game has been
+  // quiet for 20 s, re-read it from the server (2 small reads; the old postgres_changes path is unaffected)
+  const lastLive = useRef(Date.now());
+  const activeGame = match?.status === 'active';
+  useEffect(() => {
+    if (!activeGame) return;
+    const id = setInterval(() => {
+      if (currentRtMode() !== 'broadcast' || !appActive()) return;
+      if (Date.now() - lastLive.current > 20_000) {
+        lastLive.current = Date.now();
+        void load();
+      }
+    }, 5_000);
+    return () => clearInterval(id);
+  }, [activeGame, load]);
+
   useEffect(() => {
     void load();
     return watchMatch(matchId, {
       onMove: (mv) => {
+        lastLive.current = Date.now();
         const have = gRef.current.game.history.length;
         if (mv.ply === have) {
           gRef.current.applyRemote(mv.from, mv.path);
@@ -349,7 +366,10 @@ function OnlineGame({ matchId }: { matchId: string }) {
         }
         else if (mv.ply > have) void resync(gRef.current.loadMoves).catch(() => {}); // missed a move while offline
       },
-      onMatch: (m) => setMatch(m),
+      onMatch: (m) => {
+        lastLive.current = Date.now();
+        setMatch(m);
+      },
       onStatus: (s) => {
         setConn(s);
         if (s === 'open') void load(); // refetch after every (re)connect

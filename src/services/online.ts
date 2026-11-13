@@ -7,7 +7,7 @@
  * The browser never inserts moves directly and never submits a rating or a result.
  */
 import type { ClockState, TimeControl } from './clock.ts';
-import { db, subscribeChanges, type ConnectionState } from './supabase.ts';
+import { db, subscribeChanges, subscribeBroadcast, subscribeLive, onMyTopic, type ConnectionState } from './supabase.ts';
 
 export type OnlineStatus = 'waiting' | 'active' | 'finished' | 'aborted';
 export interface OnlineMatch {
@@ -177,38 +177,56 @@ export function watchMatch(
   matchId: string,
   h: { onMove: (m: OnlineMove) => void; onMatch: (m: OnlineMatch) => void; onStatus: (s: ConnectionState) => void },
 ): () => void {
-  const sub = subscribeChanges(
-    `public:match:${matchId}`,
-    [
-      { table: 'match_moves', event: 'INSERT', filter: `match_id=eq.${matchId}` },
-      { table: 'matches', event: 'UPDATE', filter: `id=eq.${matchId}` },
-    ],
-    async (e) => {
-      if (e.table === 'match_moves') h.onMove({ ply: e.record.ply, from: e.record.from_sq, path: e.record.path });
-      else {
-        const fresh = await getMatch(matchId).catch(() => null); // view includes names/ratings
-        if (fresh) h.onMatch(fresh);
-      }
-    },
-    h.onStatus,
-  );
+  const refetch = async () => {
+    const fresh = await getMatch(matchId).catch(() => null); // view includes names/ratings
+    if (fresh) h.onMatch(fresh);
+  };
+  const sub = subscribeLive({
+    changes: () =>
+      subscribeChanges(
+        `public:match:${matchId}`,
+        [
+          { table: 'match_moves', event: 'INSERT', filter: `match_id=eq.${matchId}` },
+          { table: 'matches', event: 'UPDATE', filter: `id=eq.${matchId}` },
+        ],
+        (e) => {
+          if (e.table === 'match_moves') h.onMove({ ply: e.record.ply, from: e.record.from_sq, path: e.record.path });
+          else void refetch();
+        },
+        h.onStatus,
+      ),
+    broadcast: () =>
+      subscribeBroadcast(
+        `m:${matchId}`,
+        (ev, d) => {
+          if (ev === 'move' && Number.isInteger(d?.ply)) h.onMove({ ply: d.ply, from: d.from, path: d.path });
+          else if (ev === 'match') void refetch();
+        },
+        h.onStatus,
+      ),
+  });
   return () => sub.close();
 }
 
 /** Fires when the matchmaker pairs the current user (a `matches` row appears for them). */
 export function watchPairing(userId: string, onPaired: (matchId: string) => void): () => void {
-  const sub = subscribeChanges(
-    `public:pairing:${userId}`,
-    [
-      { table: 'matches', event: 'INSERT', filter: `white_id=eq.${userId}` },
-      { table: 'matches', event: 'INSERT', filter: `black_id=eq.${userId}` },
-      { table: 'matches', event: 'UPDATE', filter: `black_id=eq.${userId}` },
-    ],
-    (e) => {
-      // real pairings only (a virtual / bot game is started by this client itself and handled there)
-      if (e.record?.status === 'active' && !e.record?.vs_bot) onPaired(e.record.id);
-    },
-  );
+  const sub = subscribeLive({
+    changes: () =>
+      subscribeChanges(
+        `public:pairing:${userId}`,
+        [
+          { table: 'matches', event: 'INSERT', filter: `white_id=eq.${userId}` },
+          { table: 'matches', event: 'INSERT', filter: `black_id=eq.${userId}` },
+          { table: 'matches', event: 'UPDATE', filter: `black_id=eq.${userId}` },
+        ],
+        (e) => {
+          // real pairings only (a virtual / bot game is started by this client itself and handled there)
+          if (e.record?.status === 'active' && !e.record?.vs_bot) onPaired(e.record.id);
+        },
+      ),
+    // the server only announces real (non-bot) games that became active
+    broadcast: async () => onMyTopic((ev, d) => ev === 'pair' && d?.status === 'active' && d?.id && onPaired(d.id)),
+  });
   return () => sub.close();
 }
 
@@ -241,11 +259,17 @@ export const CHALLENGE_TTL_MS = 60_000;
 
 /** Challenges I sent: fires on status changes (accepted / declined / cancelled). */
 export function watchSentChallenges(userId: string, cb: (row: { id: string; status: string; match_id: string | null }) => void): () => void {
-  const sub = subscribeChanges(`public:challenges-from:${userId}`, [{ table: 'challenges', event: 'UPDATE', filter: `from_id=eq.${userId}` }], (e) => cb(e.record));
+  const sub = subscribeLive({
+    changes: () => subscribeChanges(`public:challenges-from:${userId}`, [{ table: 'challenges', event: 'UPDATE', filter: `from_id=eq.${userId}` }], (e) => cb(e.record)),
+    broadcast: async () => onMyTopic((ev, d) => ev === 'challenge_sent' && d?.id && cb({ id: d.id, status: d.status, match_id: d.match_id ?? null })),
+  });
   return () => sub.close();
 }
 /** Challenges addressed to me: fires when someone challenges me (or a challenge to me changes). */
 export function watchIncomingChallenges(userId: string, cb: () => void): () => void {
-  const sub = subscribeChanges(`public:challenges-to:${userId}`, [{ table: 'challenges', filter: `to_id=eq.${userId}` }], () => cb());
+  const sub = subscribeLive({
+    changes: () => subscribeChanges(`public:challenges-to:${userId}`, [{ table: 'challenges', filter: `to_id=eq.${userId}` }], () => cb()),
+    broadcast: async () => onMyTopic((ev) => ev === 'challenge' && cb()),
+  });
   return () => sub.close();
 }

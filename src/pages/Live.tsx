@@ -1,4 +1,4 @@
-import { subscribeChanges } from '../services/supabase.ts';
+import { subscribeBroadcast, subscribeChanges, subscribeLive } from '../services/supabase.ts';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { LuArchive, LuClock, LuEye, LuRadio, LuSparkles, LuSwords } from 'react-icons/lu';
 import { Avatar } from '../components/Avatar.tsx';
@@ -62,12 +62,19 @@ export function Live() {
   useEffect(() => {
     void load();
     let t: ReturnType<typeof setTimeout> | null = null;
-    const sub = subscribeChanges('public:live-list', [{ table: 'matches', event: 'INSERT' }, { table: 'matches', event: 'UPDATE', filter: 'status=neq.active' }], (e) => {
-      const r = (e.record ?? {}) as { status?: string };
-      // moves in running games are filtered out on the server (status=neq.active); this is a second guard
-      if (e.type === 'UPDATE' && r.status === 'active') return;
+    const soon = () => {
       if (t) clearTimeout(t);
       t = setTimeout(() => appActive() && void load(), 800);
+    };
+    const sub = subscribeLive({
+      changes: () =>
+        subscribeChanges('public:live-list', [{ table: 'matches', event: 'INSERT' }, { table: 'matches', event: 'UPDATE', filter: 'status=neq.active' }], (e) => {
+          const r = (e.record ?? {}) as { status?: string };
+          // moves in running games are filtered out on the server (status=neq.active); this is a second guard
+          if (e.type === 'UPDATE' && r.status === 'active') return;
+          soon();
+        }),
+      broadcast: () => subscribeBroadcast('live', (ev) => ev === 'live' && soon()),
     });
     const id = setInterval(() => appActive() && void load(), 30_000);
     const onWake = () => document.visibilityState === 'visible' && void load();

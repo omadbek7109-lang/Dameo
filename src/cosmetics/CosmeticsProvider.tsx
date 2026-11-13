@@ -3,7 +3,7 @@ import { useAuth } from '../auth/AuthProvider.tsx';
 import { cosmeticsOf, myNotifications, walletMe, type Cosmetic } from '../services/shop.ts';
 import { fxOf, matchSkin, registerSkins, skinClasses, type Loadout, type Slot } from '../services/skins.ts';
 import { readJSON, writeJSON } from '../services/localStore.ts';
-import { subscribeChanges } from '../services/supabase.ts';
+import { onMyTopic, subscribeChanges, subscribeLive } from '../services/supabase.ts';
 
 /**
  * Player's DAMEO Coins balance + equipped cosmetics, kept in sync with the server:
@@ -75,20 +75,30 @@ export function CosmeticsProvider({ children }: { children: ReactNode }) {
         }
       })
       .catch(() => {});
-    const sub = subscribeChanges(
-      `public:wallet:${uid}`,
-      [
-        { table: 'user_wallets', event: 'UPDATE', filter: `user_id=eq.${uid}` },
-        { table: 'user_notifications', event: 'INSERT', filter: `user_id=eq.${uid}` },
-      ],
-      (e) => {
-        if (e.table === 'user_wallets') setBalance(Number(e.record.balance));
-        else if (!seenNotes.current.has(e.record.id)) {
-          seenNotes.current.add(e.record.id);
-          notify('system', `${e.record.title}: ${e.record.body}`, String(e.record.kind).startsWith('wallet') ? '/wallet' : undefined);
-        }
-      },
-    );
+    const note = (n: { id: number; title: string; body: string; kind: string }) => {
+      if (seenNotes.current.has(n.id)) return;
+      seenNotes.current.add(n.id);
+      notify('system', `${n.title}: ${n.body}`, String(n.kind).startsWith('wallet') ? '/wallet' : undefined);
+    };
+    const sub = subscribeLive({
+      changes: () =>
+        subscribeChanges(
+          `public:wallet:${uid}`,
+          [
+            { table: 'user_wallets', event: 'UPDATE', filter: `user_id=eq.${uid}` },
+            { table: 'user_notifications', event: 'INSERT', filter: `user_id=eq.${uid}` },
+          ],
+          (e) => {
+            if (e.table === 'user_wallets') setBalance(Number(e.record.balance));
+            else note(e.record);
+          },
+        ),
+      broadcast: () =>
+        onMyTopic((ev, d) => {
+          if (ev === 'wallet' && d?.balance != null) setBalance(Number(d.balance));
+          else if (ev === 'notif' && d?.id) note({ ...d, id: Number(d.id) });
+        }),
+    });
     return () => {
       alive = false;
       sub.close();

@@ -18,7 +18,7 @@ import { navigate, useRoute } from '../router.tsx';
 import * as A from '../services/admin.ts';
 import { boardArt, coins, newKey, RARITIES, serialLabel, type ShopItem } from '../services/shop.ts';
 import { registerSkins } from '../services/skins.ts';
-import { SbError } from '../services/supabase.ts';
+import { SbError, db } from '../services/supabase.ts';
 
 /* The admin panel is internal: strings live here (uz / en) instead of the main dictionaries. */
 function useL() {
@@ -91,7 +91,7 @@ export function Admin() {
           </button>
         ))}
       </div>
-      {current === 'dash' && <DashboardTab />}
+      {current === 'dash' && <DashboardTab superAdmin={me.role === 'super_admin'} />}
       {current === 'users' && <UsersTab can={can} superAdmin={me.role === 'super_admin'} />}
       {current === 'payments' && <PaymentsTab canRefund={can('payments.refund')} />}
       {current === 'shop' && <ShopTab />}
@@ -150,7 +150,7 @@ function ReasonDialog({ title, children, onSubmit, onClose, danger }: { title: s
 const when = (s: string | null | undefined) => (s ? new Date(s).toLocaleString('uz-UZ', { timeZone: 'Asia/Tashkent', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—');
 
 /* ------------------------------------------------------------------ dashboard */
-function DashboardTab() {
+function DashboardTab({ superAdmin = false }: { superAdmin?: boolean }) {
   const L = useL();
   const [d, setD] = useState<A.Dashboard | null>(null);
   const [err, setErr] = useState(false);
@@ -178,13 +178,58 @@ function DashboardTab() {
     [L('Cheklangan akkauntlar', 'Restricted accounts'), d.banned],
   ];
   return (
-    <div className="admin-tiles">
-      {tiles.map(([k, v]) => (
-        <div key={k} className="card admin-tile">
-          <span className="muted small">{k}</span>
-          <strong>{v}</strong>
-        </div>
-      ))}
+    <>
+      <div className="admin-tiles">
+        {tiles.map(([k, v]) => (
+          <div key={k} className="card admin-tile">
+            <span className="muted small">{k}</span>
+            <strong>{v}</strong>
+          </div>
+        ))}
+      </div>
+      {superAdmin && <RealtimeSwitch />}
+    </>
+  );
+}
+
+/** Super admin: which live-update path the apps use (migration 0035). One tap back to the old path. */
+function RealtimeSwitch() {
+  const L = useL();
+  const { toast } = useToast();
+  const [mode, setMode] = useState<'changes' | 'broadcast' | null>(null);
+  const [busy, setBusy] = useState(false);
+  const load = useCallback(() => db.rpc<string>('rt_mode').then((m) => setMode(m === 'broadcast' ? 'broadcast' : 'changes'), () => {}), []);
+  useEffect(() => {
+    void load();
+  }, [load]);
+  const flip = async () => {
+    if (!mode) return;
+    const next = mode === 'broadcast' ? 'changes' : 'broadcast';
+    setBusy(true);
+    try {
+      await db.rpc('admin_rt_mode_set', { p_mode: next, p_reason: next === 'broadcast' ? 'Realtime: Broadcast yoqildi (yengil rejim)' : "Realtime: eski usulga qaytarildi" });
+      setMode(next);
+      toast('success', L("O'zgartirildi. O'yinchilar ilovasi 5 daqiqa ichida (yoki qayta ochganda) yangi usulga o'tadi.", 'Switched. Apps follow within 5 minutes (or on reopen).'));
+    } catch {
+      toast('error', L('Xatolik', 'Error'));
+    } finally {
+      setBusy(false);
+    }
+  };
+  if (!mode) return null;
+  return (
+    <div className="card adm-rt">
+      <div>
+        <strong>{L('Jonli yangilanish usuli', 'Live update method')}</strong>
+        <p className="muted small">
+          {mode === 'broadcast'
+            ? L("Yengil rejim (Broadcast) yoqilgan — bazaga yuk kam. Muammo bo'lsa eski usulga qaytaring.", 'Light mode (Broadcast) is on — low database load. Switch back if anything goes wrong.')
+            : L('Eski usul (postgres_changes) — bazaga yuk ko‘proq.', 'Old method (postgres_changes) — more database load.')}
+        </p>
+      </div>
+      <button className={`btn btn-sm ${mode === 'broadcast' ? 'btn-secondary' : 'btn-primary'}`} onClick={flip} disabled={busy}>
+        {mode === 'broadcast' ? L('Eski usulga qaytarish', 'Switch back to old') : L('Yengil rejimni yoqish', 'Turn on light mode')}
+      </button>
     </div>
   );
 }

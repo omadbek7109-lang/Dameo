@@ -21,3 +21,10 @@ alter table storage.objects enable row level security;
 create or replace function storage.foldername(name text) returns text[] language sql immutable as $$ select (string_to_array(name, '/'))[1:array_length(string_to_array(name, '/'), 1) - 1] $$;
 grant usage on schema storage to anon, authenticated, service_role;
 grant all on storage.objects to authenticated;
+
+-- Realtime Broadcast from the database (test stub): realtime.send() records what would be sent.
+create schema if not exists realtime;
+create table if not exists realtime.sent (id bigserial primary key, topic text, event text, payload jsonb, private boolean, at timestamptz default clock_timestamp());
+create or replace function realtime.send(payload jsonb, event text, topic text, private boolean default true) returns void
+language sql as $$ insert into realtime.sent (topic, event, payload, private) values (topic, event, payload, private) $$;
+grant usage on schema realtime to public;

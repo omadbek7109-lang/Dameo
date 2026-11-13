@@ -8,7 +8,7 @@ import { startPresence } from '../services/leaderboard.ts';
 import { LOCAL_ID, clearLocal, loadLocal, localAsPlayer, saveLocal, type LocalProfile } from '../services/localProfile.ts';
 import { loadLiveProfile, updateLiveProfile } from '../services/profiles.ts';
 import { ratingDelta, type Score } from '../services/rating.ts';
-import { adoptSession, auth, db, getSession, onAuthChange, subscribeChanges, type SbSession } from '../services/supabase.ts';
+import { adoptSession, auth, db, getSession, onAuthChange, onMyTopic, subscribeChanges, subscribeLive, type SbSession } from '../services/supabase.ts';
 import { inTelegram, rememberBotUsername, tg } from '../services/telegram.ts';
 import type { AppNotification, MatchSummary, Player, RatingPoint } from '../types/models.ts';
 
@@ -142,14 +142,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // own profile changes (e.g. rating applied by the server) update the UI without reload
     // the presence heartbeat also updates this row every minute — only real changes (rating, name, avatar…) reload
     let lastSig = '';
-    const sub = subscribeChanges('public:me', [{ table: 'profiles', event: 'UPDATE', filter: `id=eq.${session.user.id}` }], (e) => {
-      const sig = profileSig(e.record);
-      if (sig === lastSig) return;
-      lastSig = sig;
-      void refresh();
+    const invited = (code: string) => notify('friend', translate(currentLang(), 'friends.inviteReceived'), `/play?mode=friends&join=${code}`);
+    const sub = subscribeLive({
+      changes: () =>
+        subscribeChanges('public:me', [{ table: 'profiles', event: 'UPDATE', filter: `id=eq.${session.user.id}` }], (e) => {
+          const sig = profileSig(e.record);
+          if (sig === lastSig) return;
+          lastSig = sig;
+          void refresh();
+        }),
+      // Broadcast: the server announces only real profile changes (never the presence heartbeat)
+      broadcast: () => onMyTopic((ev, d) => (ev === 'me' ? void refresh() : ev === 'invite' && d?.code ? invited(String(d.code)) : undefined)),
     });
-    const inv = subscribeChanges('public:invites', [{ table: 'game_invites', event: 'INSERT', filter: `to_id=eq.${session.user.id}` }], (e) => {
-      notify('friend', translate(currentLang(), 'friends.inviteReceived'), `/play?mode=friends&join=${e.record.code}`);
+    const inv = subscribeLive({
+      changes: () => subscribeChanges('public:invites', [{ table: 'game_invites', event: 'INSERT', filter: `to_id=eq.${session.user.id}` }], (e) => invited(e.record.code)),
+      broadcast: () => ({ close() {} }), // delivered on the private topic above
     });
     return () => {
       stop();

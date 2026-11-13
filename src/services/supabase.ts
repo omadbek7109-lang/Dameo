@@ -250,6 +250,9 @@ interface Channel {
   onChange: (e: ChangeEvent) => void;
   onStatus?: (s: ConnectionState) => void;
   joinRef: string | null;
+  /** Broadcast channel (migration 0035): listeners by event; one channel per topic, shared by all its listeners */
+  bc?: Set<{ onEvent: (event: string, payload: any) => void; onStatus?: (s: ConnectionState) => void }>;
+  state?: ConnectionState;
 }
 
 /**
@@ -274,13 +277,20 @@ function hubSend(topic: string, event: string, payload: unknown, joinRef?: strin
   return ref;
 }
 
+function setState(ch: Channel, st: ConnectionState) {
+  ch.state = st;
+  ch.onStatus?.(st);
+  ch.bc?.forEach((l) => l.onStatus?.(st));
+}
+
 function joinChannel(ch: Channel) {
-  ch.onStatus?.('connecting');
+  setState(ch, 'connecting');
   ch.joinRef = hubSend(ch.topic, 'phx_join', {
     config: {
       broadcast: { self: false },
       presence: { key: '' },
-      postgres_changes: ch.specs.map((s) => ({ event: s.event ?? '*', schema: 'public', table: s.table, ...(s.filter ? { filter: s.filter } : {}) })),
+      postgres_changes: ch.bc ? [] : ch.specs.map((s) => ({ event: s.event ?? '*', schema: 'public', table: s.table, ...(s.filter ? { filter: s.filter } : {}) })),
+      ...(ch.bc ? { private: false } : {}),
     },
     access_token: session?.access_token ?? SUPABASE_ANON_KEY,
   });
@@ -288,7 +298,7 @@ function joinChannel(ch: Channel) {
 
 function hubConnect() {
   if (hub.ws || hub.channels.size === 0) return;
-  hub.channels.forEach((c) => c.onStatus?.('connecting'));
+  hub.channels.forEach((c) => setState(c, 'connecting'));
   const url = SUPABASE_URL.replace(/^http/, 'ws') + `/realtime/v1/websocket?apikey=${encodeURIComponent(SUPABASE_ANON_KEY)}&vsn=1.0.0`;
   const ws = new WebSocket(url);
   hub.ws = ws;
@@ -309,13 +319,23 @@ function hubConnect() {
     if (msg.event === 'phx_reply' && msg.ref === ch.joinRef) {
       if (msg.payload?.status === 'ok') {
         hub.attempt = 0;
-        ch.onStatus?.('open');
-      } else ch.onStatus?.('closed');
+        setState(ch, 'open');
+      } else setState(ch, 'closed');
     } else if (msg.event === 'postgres_changes') {
       const d = msg.payload?.data;
       if (d) ch.onChange({ type: d.type, table: d.table, record: d.record, old: d.old_record ?? {} });
+    } else if (msg.event === 'broadcast' && ch.bc) {
+      const ev = String(msg.payload?.event ?? '');
+      const data = msg.payload?.payload ?? {};
+      ch.bc.forEach((l) => {
+        try {
+          l.onEvent(ev, data);
+        } catch (e) {
+          console.warn('[DAMEO] broadcast handler', e);
+        }
+      });
     } else if (msg.event === 'phx_error' || msg.event === 'phx_close') {
-      ch.onStatus?.('closed');
+      setState(ch, 'closed');
     }
   };
   const down = () => {
@@ -323,7 +343,7 @@ function hubConnect() {
     clearInterval(hub.hb);
     hub.ws = null;
     if (hub.channels.size === 0) return;
-    hub.channels.forEach((c) => c.onStatus?.('closed'));
+    hub.channels.forEach((c) => setState(c, 'closed'));
     const wait = Math.min(30_000, 1000 * 2 ** hub.attempt++);
     clearTimeout(hub.retry);
     hub.retry = setTimeout(hubConnect, wait);
@@ -383,4 +403,127 @@ export function subscribeChanges(topicName: string, specs: Spec[], onChange: (e:
       }
     },
   };
+}
+
+
+/* --------------------------- Realtime Broadcast (migration 0035) --------------------------- */
+
+/**
+ * Listen to a Broadcast topic ('m:<match>', 'lb', 'live', 'lc:<match>' or the private 'u:<…>' topic).
+ * All listeners of one topic share one channel on the shared socket.
+ */
+export function subscribeBroadcast(topicName: string, onEvent: (event: string, payload: any) => void, onStatus?: (s: ConnectionState) => void): Subscription {
+  if (!backendConfigured) return { close() {} };
+  const topic = `realtime:${topicName}`;
+  let ch = hub.channels.get(topic);
+  const listener = { onEvent, onStatus };
+  if (!ch || !ch.bc) {
+    ch = { topic, specs: [], onChange: () => {}, joinRef: null, bc: new Set() };
+    hub.channels.set(topic, ch);
+    ch.bc!.add(listener);
+    clearTimeout(hub.idle);
+    if (hub.ws?.readyState === 1) joinChannel(ch);
+    else hubConnect();
+  } else {
+    ch.bc.add(listener);
+    if (ch.state) onStatus?.(ch.state);
+  }
+  const chan = ch;
+  return {
+    close() {
+      chan.bc!.delete(listener);
+      if (chan.bc!.size > 0 || hub.channels.get(topic) !== chan) return;
+      hub.channels.delete(topic);
+      hubSend(topic, 'phx_leave', {}, chan.joinRef);
+      if (hub.channels.size === 0) {
+        hub.idle = setTimeout(() => {
+          if (hub.channels.size === 0) {
+            clearInterval(hub.hb);
+            const w = hub.ws;
+            hub.ws = null;
+            w?.close();
+          }
+        }, 5000);
+      }
+    },
+  };
+}
+
+export type RtMode = 'changes' | 'broadcast';
+let rtModeNow: RtMode = 'changes';
+let rtModeReady: Promise<RtMode> | null = null;
+const rtModeListeners = new Set<(m: RtMode) => void>();
+async function fetchRtMode(): Promise<RtMode> {
+  try {
+    const m = await Promise.race([db.rpc<string>('rt_mode'), new Promise<string>((_, rej) => setTimeout(() => rej(new Error('timeout')), 4000))]);
+    return m === 'broadcast' ? 'broadcast' : 'changes';
+  } catch {
+    return rtModeNow; // keep what we have (the old path by default)
+  }
+}
+/** Which live-update path the server wants (admin switch, migration 0035). Re-checked every 5 min and on wake. */
+export function rtMode(): Promise<RtMode> {
+  if (!rtModeReady) {
+    rtModeReady = fetchRtMode().then((m) => (rtModeNow = m));
+    if (typeof window !== 'undefined') {
+      const recheck = async () => {
+        const m = await fetchRtMode();
+        if (m !== rtModeNow) {
+          rtModeNow = m;
+          rtModeListeners.forEach((f) => f(m));
+        }
+      };
+      setInterval(() => document.visibilityState === 'visible' && void recheck(), 5 * 60_000);
+      document.addEventListener('visibilitychange', () => document.visibilityState === 'visible' && void recheck());
+    }
+  }
+  return rtModeReady;
+}
+export const currentRtMode = () => rtModeNow;
+
+let myTopicP: { uid: string; p: Promise<string | null> } | null = null;
+/** My private Broadcast topic (unguessable; only the server and I know it). */
+export function myRtTopic(): Promise<string | null> {
+  const uid = session?.user?.id ?? '';
+  if (!uid) return Promise.resolve(null);
+  if (!myTopicP || myTopicP.uid !== uid) myTopicP = { uid, p: db.rpc<string | null>('my_rt_topic').catch(() => null) };
+  return myTopicP.p;
+}
+
+/**
+ * One live subscription that uses either the old path (postgres_changes) or Broadcast, as the server says,
+ * and switches over by itself when the admin flips the switch. Callers keep the same callbacks.
+ */
+export function subscribeLive(o: { changes: () => Subscription; broadcast: () => Subscription | Promise<Subscription> }): Subscription {
+  if (!backendConfigured) return { close() {} };
+  let inner: Subscription | null = null;
+  let closed = false;
+  let using: RtMode | null = null;
+  const open = async (m: RtMode) => {
+    if (closed || m === using) return;
+    inner?.close();
+    inner = null;
+    using = m;
+    const sub = m === 'broadcast' ? await o.broadcast() : o.changes();
+    if (closed || using !== m) sub.close();
+    else inner = sub;
+  };
+  const onMode = (m: RtMode) => void open(m);
+  rtModeListeners.add(onMode);
+  void rtMode().then((m) => open(m));
+  return {
+    close() {
+      closed = true;
+      rtModeListeners.delete(onMode);
+      inner?.close();
+      inner = null;
+    },
+  };
+}
+
+/** Listen to my private topic (invites, challenges, pairing, wallet, notifications, friends, profile). */
+export async function onMyTopic(onEvent: (event: string, payload: any) => void, onStatus?: (s: ConnectionState) => void): Promise<Subscription> {
+  const t = await myRtTopic();
+  if (!t) return { close() {} };
+  return subscribeBroadcast(t, onEvent, onStatus);
 }

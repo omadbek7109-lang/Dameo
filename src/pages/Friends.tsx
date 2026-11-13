@@ -10,7 +10,7 @@ import { useI18n, type TKey } from '../i18n/index.tsx';
 import { Link, navigate, useRoute } from '../router.tsx';
 import { isOnline } from '../services/demoData.ts';
 import { demoRelations, demoSearch, inviteFriendLive, liveRelations, liveSearch, removeFriendLive, respondRequestLive, sendRequestLive, type Relations } from '../services/friends.ts';
-import { subscribeChanges } from '../services/supabase.ts';
+import { onMyTopic, subscribeChanges, subscribeLive } from '../services/supabase.ts';
 import type { Player } from '../types/models.ts';
 
 type Tab = 'friends' | 'requests' | 'find';
@@ -58,7 +58,10 @@ export function Friends() {
   loadRef.current = load;
   useEffect(() => {
     if (mode !== 'live' || !signedIn) return;
-    const sub = subscribeChanges('public:friendships', [{ table: 'friendships' }], () => void loadRef.current(true));
+    const sub = subscribeLive({
+      changes: () => subscribeChanges('public:friendships', [{ table: 'friendships' }], () => void loadRef.current(true)),
+      broadcast: () => onMyTopic((ev) => ev === 'friends' && void loadRef.current(true)),
+    });
     return () => sub.close();
   }, [mode, signedIn]);
 

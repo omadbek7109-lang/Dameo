@@ -2,7 +2,7 @@ import type { Player } from '../types/models.ts';
 import { appActive } from './telegram.ts';
 import { backendConfigured } from './config.ts';
 import { DEMO_PLAYERS, isOnline } from './demoData.ts';
-import { db, subscribeChanges, type ConnectionState } from './supabase.ts';
+import { db, subscribeBroadcast, subscribeChanges, subscribeLive, type ConnectionState } from './supabase.ts';
 
 export type RankedPlayer = Player & { rank: number };
 export type Scope = 'all' | 'friends' | 'top100';
@@ -103,27 +103,36 @@ export function subscribeLeaderboard(onUpdate: () => void, onStatus?: (s: Connec
   // every player's presence heartbeat updates their profile row once a minute: refetch only when a
   // rating (or name/avatar) actually changed, and not more often than every 5 s
   const seen = new Map<string, string>();
-  const sub = subscribeChanges(
-    'public:leaderboard',
-    [{ table: 'profiles', event: 'UPDATE' }],
-    (e) => {
-      const r = e.record as { id: string; rating: number; wins?: number; losses?: number; draws?: number; username?: string; avatar?: string };
-      const sig = `${r.rating}|${r.wins}|${r.losses}|${r.draws}|${r.username}|${r.avatar}`;
-      const prev = seen.get(r.id);
-      seen.set(r.id, sig);
-      if (prev === sig) return;
-      if (prev === undefined && relevant && !relevant(r)) return;
-      clearTimeout(t);
-      t = setTimeout(() => {
-        last = Date.now();
-        onUpdate();
-      }, Math.max(400, 5000 - (Date.now() - last)));
-    },
-    (s) => {
-      onStatus?.(s);
-      if (s === 'open') onUpdate(); // catch up after a reconnect
-    },
-  );
+  const soon = () => {
+    clearTimeout(t);
+    t = setTimeout(() => {
+      last = Date.now();
+      onUpdate();
+    }, Math.max(400, 5000 - (Date.now() - last)));
+  };
+  const status = (s: ConnectionState) => {
+    onStatus?.(s);
+    if (s === 'open') onUpdate(); // catch up after a reconnect
+  };
+  const sub = subscribeLive({
+    changes: () =>
+      subscribeChanges(
+        'public:leaderboard',
+        [{ table: 'profiles', event: 'UPDATE' }],
+        (e) => {
+          const r = e.record as { id: string; rating: number; wins?: number; losses?: number; draws?: number; username?: string; avatar?: string };
+          const sig = `${r.rating}|${r.wins}|${r.losses}|${r.draws}|${r.username}|${r.avatar}`;
+          const prev = seen.get(r.id);
+          seen.set(r.id, sig);
+          if (prev === sig) return;
+          if (prev === undefined && relevant && !relevant(r)) return;
+          soon();
+        },
+        status,
+      ),
+    // Broadcast: the server announces only real rating/name/avatar changes (never the presence heartbeat)
+    broadcast: () => subscribeBroadcast('lb', (ev) => ev === 'lb' && soon(), status),
+  });
   return () => {
     clearTimeout(t);
     sub.close();

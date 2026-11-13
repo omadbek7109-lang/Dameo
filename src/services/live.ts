@@ -2,7 +2,7 @@
  * Live spectating, spectator chat, players' match chat, draw / rematch offers, blocking (server: migration 0013).
  * Spectators only read; every write is a server function with rate limits and permission checks.
  */
-import { db, subscribeChanges } from './supabase.ts';
+import { db, subscribeChanges, subscribeBroadcast, subscribeLive } from './supabase.ts';
 
 export interface LiveGame {
   id: string;
@@ -92,13 +92,51 @@ export const setHideGames = (userId: string, hide: boolean) => db.update('profil
 export const myHideGames = async (userId: string) => (await db.select<{ hide_games: boolean }>('profiles', { select: 'hide_games', filter: { id: `eq.${userId}` }, limit: 1 }))[0]?.hide_games ?? false;
 
 /** new spectator messages (realtime; RLS keeps hidden ones and private games out) */
-export function watchLiveChat(matchId: string, cb: (m: ChatMsg) => void): () => void {
-  const sub = subscribeChanges(`public:livechat:${matchId}`, [{ table: 'live_chat_messages', event: 'INSERT', filter: `match_id=eq.${matchId}` }], (e) => cb(e.record));
+export function watchLiveChat(matchId: string, cb: (m?: ChatMsg) => void): () => void {
+  const sub = subscribeLive({
+    changes: () => subscribeChanges(`public:livechat:${matchId}`, [{ table: 'live_chat_messages', event: 'INSERT', filter: `match_id=eq.${matchId}` }], (e) => cb(e.record)),
+    // Broadcast: only a ping ("new message") — the list is re-read with RLS
+    broadcast: () => subscribeBroadcast(`lc:${matchId}`, (ev) => ev === 'livechat' && cb()),
+  });
   return () => sub.close();
 }
 /** new messages / offers in the players' chat (only the two players receive them) */
 export function watchMatchChat(matchId: string, cb: (m: ChatMsg) => void): () => void {
-  const sub = subscribeChanges(`public:matchchat:${matchId}`, [{ table: 'match_chat_messages', event: 'INSERT', filter: `match_id=eq.${matchId}` }], (e) => cb(e.record));
+  const sub = subscribeLive({
+    changes: () => subscribeChanges(`public:matchchat:${matchId}`, [{ table: 'match_chat_messages', event: 'INSERT', filter: `match_id=eq.${matchId}` }], (e) => cb(e.record)),
+    // Broadcast: a ping on the game's topic; the messages themselves are read with RLS (players only) and
+    // each new one is handed to the callback once, exactly like before
+    broadcast: async () => {
+      const seen = new Set<string | number>();
+      try {
+        for (const m of await matchChatHistory(matchId)) seen.add(m.id);
+      } catch {
+        /* first ping fills it */
+      }
+      let busy = false;
+      let again = false;
+      const pull = async () => {
+        if (busy) return void (again = true);
+        busy = true;
+        try {
+          for (const m of await matchChatHistory(matchId)) {
+            if (seen.has(m.id)) continue;
+            seen.add(m.id);
+            cb(m);
+          }
+        } catch {
+          /* next ping */
+        } finally {
+          busy = false;
+          if (again) {
+            again = false;
+            void pull();
+          }
+        }
+      };
+      return subscribeBroadcast(`m:${matchId}`, (ev) => ev === 'matchchat' && void pull());
+    },
+  });
   return () => sub.close();
 }
 
