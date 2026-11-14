@@ -283,7 +283,7 @@ export const uz = {
   'level.expert': 'Ekspert',
   'level.master': 'Usta',
   'rating.how': 'Reyting qanday hisoblanadi?',
-  'rating.explain': "Boshlang'ich reyting 1200 (Level 1). Har bir reytingli o'yindan keyin server hisoblaydi: g'alaba +10 dan +30 gacha, mag'lubiyat −10 dan −30 gacha (tasodifiy), durangda reytingi pastroq o'yinchi biroz qo'shadi (ko'pi bilan ±5). 6 ta yurishdan oldin tugagan o'yinda yutgan ball olmaydi, yutqazgan esa baribir yo'qotadi. Bir raqib bilan kuniga faqat 3 ta o'yin reytingga ta'sir qiladi. Mashq botidagi o'yinlar reytingsiz. Darajalar: 1300 dan har 100 ochkoda yangi Level, 2100+ — Level 10.",
+  'rating.explain': "Boshlang'ich reyting 1200 (Level 1). Har bir reytingli o'yindan keyin server hisoblaydi: g'alaba +10 dan +30 gacha, mag'lubiyat −10 dan −30 gacha (tasodifiy), durangda reytingi pastroq o'yinchi biroz qo'shadi (ko'pi bilan ±5). 6 ta yurishdan oldin tugagan o'yinda yutgan ball olmaydi, yutqazgan esa baribir yo'qotadi. Bir raqib bilan kuniga faqat 3 ta o'yin reytingga ta'sir qiladi. Mashq botidagi o'yinlar reytingsiz. Darajalar: 1300 dan har 100 ochkoda yangi Level, 2200 — Level 11, … 4100+ — eng yuqori Level 30.",
   'chart.summary': "Reyting {n} nuqta: {from} dan {to} gacha",
 
   'ach.firstWin': "Birinchi g'alaba",

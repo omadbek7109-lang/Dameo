@@ -35,7 +35,7 @@ function welcome(lang: string | undefined, name: string) {
   if (lang?.startsWith('en')) {
     return (
       `♟ <b>DAMEO</b> — online checkers\n\n` +
-      `Hi, ${name}! Play friends or the bot, climb the leaderboard and reach Level 10 🏆\n\n` +
+      `Hi, ${name}! Play friends or the bot, climb the leaderboard and reach Level 30 🏆\n\n` +
       `Tap the button below to start 👇\n\n` +
       `━━━━━━━━━━━━\n` +
       `Cheap Premium and Stars: @Flect_starsBot ✨`
@@ -43,7 +43,7 @@ function welcome(lang: string | undefined, name: string) {
   }
   return (
     `♟ <b>DAMEO</b> — onlayn shashka\n\n` +
-    `Salom, ${name}! Do'stlaring yoki bot bilan o'yna, reytingda ko'taril va Level 10 ga yet 🏆\n\n` +
+    `Salom, ${name}! Do'stlaring yoki bot bilan o'yna, reytingda ko'taril va Level 30 ga yet 🏆\n\n` +
     `O'yinni boshlash uchun pastdagi tugmani bosing 👇\n\n` +
     `━━━━━━━━━━━━\n` +
     `Arzon Premium va Stars olish uchun @Flect_starsBot ✨`

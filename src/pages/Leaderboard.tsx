@@ -232,11 +232,13 @@ function LbRow({ p, meId }: { p: RankedPlayer; meId?: string }) {
         <span className="lb-name">
           <span className="row-title">
             {p.username}
-            <LevelBadge rating={p.rating} label={(n) => t('level.short', { n })} />
             {p.id === meId && <span className="badge badge-you">{t('common.you')}</span>}
             {p.demo && p.id !== meId && <span className="badge badge-demo">{t('demo.badge')}</span>}
           </span>
-          <span className="row-sub">{isOnline(p) ? t('common.online') : t('common.offline')}</span>
+          <span className="row-sub lb-sub">
+            <LevelBadge rating={p.rating} label={(n) => t('level.short', { n })} />
+            {isOnline(p) ? t('common.online') : t('common.offline')}
+          </span>
         </span>
       </span>
       <span className="r lb-rating">

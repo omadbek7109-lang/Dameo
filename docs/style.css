@@ -1892,6 +1892,14 @@ a.row:hover,
   flex-direction: column;
   min-width: 0;
 }
+/* level badge on the second line, so the name keeps its room */
+.lb-sub {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.lb-sub .level-badge { flex: none; }
 .lb-rating {
   display: flex;
   flex-direction: column;
@@ -3057,34 +3065,70 @@ html.in-telegram body {
   z-index: 1;
 }
 
-/* level badges: blue → violet → gold as the level climbs */
+/* level badges: blue → violet → pink → gold → emerald → ruby → diamond → legend (lt-1 … lt-8) */
 .level-badge {
+  --lb-a: #6f9bff;
+  --lb-b: #2f5be0;
+  --lb-edge: rgba(255, 255, 255, 0.55);
+  --lb-ink: #fff;
+  position: relative;
   display: inline-flex;
-  align-items: center;
-  padding: 1px 7px;
+  align-items: baseline;
+  gap: 2px;
+  padding: 2px 8px 2px 7px;
   border-radius: 999px;
-  font-size: 0.66rem;
-  font-weight: 800;
-  letter-spacing: 0.03em;
+  line-height: 1.15;
   white-space: nowrap;
   vertical-align: middle;
-  color: #fff;
-  background: linear-gradient(135deg, #5b8cff, #2f5be0);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4);
+  color: var(--lb-ink);
+  background: linear-gradient(160deg, var(--lb-a), var(--lb-b));
+  box-shadow: inset 0 1px 0 var(--lb-edge), inset 0 -1px 0 rgba(0, 0, 0, 0.18), 0 1px 3px rgba(10, 20, 50, 0.25);
+  overflow: hidden;
+  isolation: isolate;
 }
-.level-badge.lv-4,
-.level-badge.lv-5,
-.level-badge.lv-6 {
-  background: linear-gradient(135deg, #8f6bff, #5b3fd6);
+.level-badge .lb-lv {
+  font-size: 0.56rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.85;
 }
-.level-badge.lv-7,
-.level-badge.lv-8,
-.level-badge.lv-9 {
-  background: linear-gradient(135deg, #ff7aa8, #c9367a);
+.level-badge .lb-n {
+  font-family: var(--font-display);
+  font-size: 0.8rem;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.28);
 }
-.level-badge.lv-10 {
-  background: linear-gradient(135deg, #ffe08a, #d99b14);
-  color: #3d2a00;
+.level-badge.lt-2 { --lb-a: #a487ff; --lb-b: #5b3fd6; }
+.level-badge.lt-3 { --lb-a: #ff8db5; --lb-b: #c9367a; }
+.level-badge.lt-4 { --lb-a: #fff0b0; --lb-b: #d99b14; --lb-ink: #3d2a00; --lb-edge: rgba(255, 255, 255, 0.9); }
+.level-badge.lt-4 .lb-n { text-shadow: 0 1px 0 rgba(255, 255, 255, 0.55); }
+.level-badge.lt-5 { --lb-a: #6ff0b4; --lb-b: #0f9a64; }
+.level-badge.lt-6 { --lb-a: #ff6b7d; --lb-b: #b0122e; }
+.level-badge.lt-7 { --lb-a: #e9fbff; --lb-b: #58b8e8; --lb-ink: #06324a; --lb-edge: #fff; }
+.level-badge.lt-7 .lb-n { text-shadow: 0 1px 0 rgba(255, 255, 255, 0.7); }
+.level-badge.lt-8 {
+  --lb-ink: #fff7d6;
+  background: linear-gradient(120deg, #2a0f4d, #6b1fb1 35%, #c2185b 65%, #2a0f4d);
+  box-shadow: inset 0 0 0 1px #ffd34d, inset 0 1px 0 rgba(255, 255, 255, 0.45), 0 0 8px rgba(255, 196, 60, 0.55);
+}
+.level-badge.lt-8 .lb-n { color: #ffd34d; text-shadow: 0 0 6px rgba(255, 211, 77, 0.75); }
+/* a soft light sweep on the higher badges */
+.level-badge.lt-4::after,
+.level-badge.lt-5::after,
+.level-badge.lt-6::after,
+.level-badge.lt-7::after,
+.level-badge.lt-8::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(110deg, transparent 30%, rgba(255, 255, 255, 0.55) 48%, transparent 62%);
+  background-size: 260% 100%;
+  animation: shine 5s ease-in-out infinite;
+  pointer-events: none;
 }
 .row-title .level-badge,
 .player-name .level-badge {
@@ -4522,29 +4566,90 @@ html.light .sheet {
   filter: drop-shadow(0 0 4px rgba(91, 140, 255, 0.65));
 }
 .av-frame-champion {
-  inset: -5px;
-  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 4.5px), #000 calc(100% - 4px));
-  mask: radial-gradient(farthest-side, transparent calc(100% - 4.5px), #000 calc(100% - 4px));
-  background: conic-gradient(from 0deg, #fff3c4, #e8bb4d, #a8730c, #ffe08a, #e8bb4d, #8a5a00, #fff3c4);
-  filter: drop-shadow(0 0 6px rgba(232, 187, 77, 0.8));
-  animation: spin 6s linear infinite;
+  inset: -6px;
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 5.5px), #000 calc(100% - 5px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 5.5px), #000 calc(100% - 5px));
+  background:
+    radial-gradient(farthest-side, transparent calc(100% - 3.4px), rgba(255, 250, 225, 0.95) calc(100% - 3px), transparent calc(100% - 2.2px)),
+    conic-gradient(from 0deg, #fff6cf, #ffd34d 10%, #a8730c 22%, #ffe9a0 33%, #e8bb4d 45%, #7a4a00 55%, #ffd34d 66%, #fff6cf 75%, #c99212 88%, #fff6cf);
+  filter: drop-shadow(0 0 5px rgba(255, 200, 60, 0.85)) drop-shadow(0 0 12px rgba(255, 170, 30, 0.45));
+  animation: spin 7s linear infinite;
+}
+/* outer glow halo that breathes */
+.avatar-framed:has(.av-frame-champion)::after {
+  content: '';
+  position: absolute;
+  inset: -11px;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, transparent 72%, rgba(255, 205, 70, 0.35) 84%, transparent 100%);
+  animation: champ-breathe 2.8s ease-in-out infinite;
+  pointer-events: none;
+  z-index: -1;
+}
+@keyframes champ-breathe {
+  0%, 100% { opacity: 0.55; transform: scale(0.97); }
+  50% { opacity: 1; transform: scale(1.04); }
 }
 .av-crown {
   position: absolute;
   top: 0;
   left: 50%;
-  translate: -50% -72%;
-  rotate: -8deg;
-  fill: #ffd54f;
-  stroke: #8a5a00;
-  stroke-width: 0.8;
-  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.55));
+  translate: -50% -70%;
+  rotate: -9deg;
+  filter: drop-shadow(0 1px 1.5px rgba(0, 0, 0, 0.55)) drop-shadow(0 0 4px rgba(255, 210, 80, 0.6));
   z-index: 2;
   pointer-events: none;
+  overflow: visible;
+}
+/* twinkling sparkles around the champion (large avatars only) */
+.av-champ-fx {
+  position: absolute;
+  inset: -12px;
+  pointer-events: none;
+  z-index: 3;
+}
+.av-champ-fx i {
+  position: absolute;
+  width: 9px;
+  height: 9px;
+  background: #fff6cf;
+  clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%);
+  filter: drop-shadow(0 0 3px #ffd34d);
+  opacity: 0;
+  animation: champ-twinkle 3.2s ease-in-out infinite;
+}
+.av-champ-fx i:nth-child(1) { top: 14%; right: 2%; }
+.av-champ-fx i:nth-child(2) { bottom: 8%; left: 4%; width: 7px; height: 7px; animation-delay: 0.8s; }
+.av-champ-fx i:nth-child(3) { top: 46%; left: -2%; width: 6px; height: 6px; animation-delay: 1.6s; }
+.av-champ-fx i:nth-child(4) { bottom: 4%; right: 12%; width: 8px; height: 8px; animation-delay: 2.4s; }
+@keyframes champ-twinkle {
+  0%, 100% { opacity: 0; transform: scale(0.3) rotate(0deg); }
+  15% { opacity: 1; transform: scale(1) rotate(45deg); }
+  32% { opacity: 0; transform: scale(0.4) rotate(90deg); }
 }
 @media (prefers-reduced-motion: reduce) {
-  .av-frame-champion { animation: none; }
+  .av-frame-champion,
+  .avatar-framed:has(.av-frame-champion)::after,
+  .av-champ-fx i,
+  .level-badge::after { animation: none; }
+  .av-champ-fx { display: none; }
 }
+/* podium #1 with the champion frame: the crown on the avatar replaces the small one above it; the card gets a gold edge */
+.podium-1:has(.av-crown) .podium-crown { visibility: hidden; }
+.podium-1 {
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--gold) 55%, transparent), 0 10px 28px -12px color-mix(in srgb, var(--gold) 60%, transparent), var(--shadow-sm);
+}
+.podium-1::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(60% 45% at 50% 32%, color-mix(in srgb, var(--gold) 28%, transparent), transparent 70%);
+  pointer-events: none;
+}
+.podium-1 > * { position: relative; }
+.podium-1 > .podium-rank { position: absolute; }
+.podium-1:has(.av-crown) > .avatar { margin-bottom: 6px; }
 .frame-card-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
 .frame-card-head .h2 { margin: 0; }
 .frame-opts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
@@ -5175,7 +5280,7 @@ html.in-telegram .modal { margin-top: 4px; }
 @keyframes sk-gleam { 0%, 100% { opacity: 0.18; transform: translate(0, 0); } 50% { opacity: 0.42; transform: translate(2px, 1px); } }
 
 /* decorative loops off: setting, low battery (html.calm), reduced motion */
-html.calm .pfx, html.calm .pfx::after, html.calm .av-frame-art::after, html.calm .av-frame-champion { animation: none !important; }
+html.calm .pfx, html.calm .pfx::after, html.calm .av-frame-art::after, html.calm .av-frame-champion, html.calm .av-champ-fx, html.calm .level-badge::after, html.calm .avatar-framed::after { animation: none !important; }
 @media (prefers-reduced-motion: reduce) {
   .pfx, .pfx::after, .av-frame-art::after { animation: none !important; }
 }

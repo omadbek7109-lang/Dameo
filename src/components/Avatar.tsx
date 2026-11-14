@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import type { Player } from '../types/models.ts';
-import { levelOf } from '../services/levels.ts';
+import { levelOf, levelTier } from '../services/levels.ts';
 import { useFrames } from '../cosmetics/FramesProvider.tsx';
 import { isArtFrame, type FrameId } from '../services/frames.ts';
 
@@ -42,11 +42,11 @@ export function Avatar({ name, seed, size = 40, online, ring, className = '', us
       aria-hidden="true"
     >
       {fr && (isArtFrame(fr) ? <span className={`av-frame-art af-${fr} ${size >= 48 ? 'af-live' : ''}`} /> : <span className={`av-frame av-frame-${fr}`} />)}
-      {fr === 'champion' && (
-        <svg className="av-crown" viewBox="0 0 24 16" style={{ width: Math.max(12, Math.round(size * 0.4)) }} aria-hidden="true">
-          <path d="M2 14 L1 3 L7 8 L12 1 L17 8 L23 3 L22 14 Z" />
-          <rect x="2" y="13.5" width="20" height="2.5" rx="1" />
-        </svg>
+      {fr === 'champion' && <ChampionCrown size={size} />}
+      {fr === 'champion' && size >= 48 && (
+        <span className="av-champ-fx" aria-hidden="true">
+          <i /><i /><i /><i />
+        </span>
       )}
       {photo ? <img src={seed} alt="" loading="lazy" decoding="async" referrerPolicy="no-referrer" onError={() => setBroken(true)} /> : <span className="avatar-face">{initial}</span>}
       {online !== undefined && <span className={`dot ${online ? 'dot-on' : 'dot-off'}`} />}
@@ -58,8 +58,43 @@ export const PlayerAvatar = ({ p, size, online, ring }: { p: Pick<Player, 'usern
   <Avatar name={p.username} seed={p.avatar} size={size} online={online} ring={ring} userId={p.id} />
 );
 
-/** Small "Lv 3" badge; colour climbs from blue to gold with the level. */
+/** The #1's crown: gold with a jewelled band and pearl tips. */
+function ChampionCrown({ size }: { size: number }) {
+  const id = useId().replace(/:/g, '');
+  return (
+    <svg className="av-crown" viewBox="0 0 32 22" style={{ width: Math.max(14, Math.round(size * 0.46)) }} aria-hidden="true">
+      <defs>
+        <linearGradient id={`cg${id}`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#fff6cf" />
+          <stop offset="0.45" stopColor="#ffd34d" />
+          <stop offset="1" stopColor="#c07d0a" />
+        </linearGradient>
+        <linearGradient id={`cb${id}`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#ffe48a" />
+          <stop offset="1" stopColor="#9c6206" />
+        </linearGradient>
+      </defs>
+      <path d="M3 17 L2 6 L9.5 11 L16 2.5 L22.5 11 L30 6 L29 17 Z" fill={`url(#cg${id})`} stroke="#7a4a00" strokeWidth="0.9" strokeLinejoin="round" />
+      <rect x="2.6" y="16" width="26.8" height="4.4" rx="1.3" fill={`url(#cb${id})`} stroke="#7a4a00" strokeWidth="0.8" />
+      <circle cx="2" cy="5.4" r="1.7" fill="#fffaf0" stroke="#b98a2a" strokeWidth="0.5" />
+      <circle cx="16" cy="2" r="1.9" fill="#fffaf0" stroke="#b98a2a" strokeWidth="0.5" />
+      <circle cx="30" cy="5.4" r="1.7" fill="#fffaf0" stroke="#b98a2a" strokeWidth="0.5" />
+      <circle cx="9" cy="18.2" r="1.25" fill="#2f7bff" stroke="#0c2f80" strokeWidth="0.4" />
+      <circle cx="16" cy="18.2" r="1.55" fill="#ff2d55" stroke="#7a0020" strokeWidth="0.4" />
+      <circle cx="23" cy="18.2" r="1.25" fill="#2fd27a" stroke="#0b5a2e" strokeWidth="0.4" />
+      <path d="M16 8.5 l1.6 2.6 -1.6 2.6 -1.6 -2.6 z" fill="#ff2d55" stroke="#7a0020" strokeWidth="0.4" />
+      <path d="M5 8 L6 15.5 M27 8 L26 15.5" stroke="#fff6cf" strokeWidth="0.7" strokeLinecap="round" opacity="0.7" />
+    </svg>
+  );
+}
+
+/** "Lv 12" badge; the colour family climbs with the level (blue → violet → pink → gold → emerald → ruby → diamond → legend). */
 export function LevelBadge({ rating, label }: { rating: number; label: (n: number) => string }) {
   const { level } = levelOf(rating);
-  return <span className={`level-badge lv-${level}`}>{label(level)}</span>;
+  return (
+    <span className={`level-badge lv-${level} lt-${levelTier(level)}`} aria-label={label(level)} title={label(level)}>
+      <span className="lb-lv">Lv </span>
+      <span className="lb-n">{level}</span>
+    </span>
+  );
 }
