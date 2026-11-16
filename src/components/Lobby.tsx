@@ -428,13 +428,12 @@ export function LiveQuickPanel({ autoStart = 0 }: { autoStart?: number }) {
               <li key={p.id} className="row row-static">
                 <Avatar name={p.username} seed={p.avatar} size={38} online userId={p.id} />
                 <span className="row-main">
-                  <span className="row-title">
-                    {p.username}
+                  <span className="row-title">{p.username}</span>
+                  <span className="row-sub lb-sub">
                     <LevelBadge rating={p.rating} label={(n) => t('level.short', { n })} />
+                    {num(p.rating)}
                   </span>
-                  <span className="row-sub">
-                    {num(p.rating)} · {t('lobby.waitingSec', { n: p.waiting_seconds })}
-                  </span>
+                  <span className="row-sub">{t('lobby.waitingSec', { n: p.waiting_seconds })}</span>
                 </span>
                 <button className="btn btn-primary btn-sm" onClick={() => challenge(p)} disabled={busy === p.id || sent?.to.id === p.id}>
                   {busy === p.id ? <LuLoader className="spin" /> : <LuSwords />} {sent?.to.id === p.id ? t('lobby.sentShort') : t('lobby.challenge')}

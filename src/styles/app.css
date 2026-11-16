@@ -1617,6 +1617,11 @@ a.row:hover,
 }
 .play-panel {
   min-height: 360px;
+  min-width: 0;
+}
+/* a long name never widens a list row: the name shrinks with "…", the button keeps its size */
+.row > .btn {
+  flex: none;
 }
 .match-stage {
   display: grid;
@@ -2682,7 +2687,7 @@ button.sq:focus-visible {
     padding-bottom: calc(var(--bottom-h) + 24px + env(safe-area-inset-bottom));
   }
   .hero {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
     padding: 22px;
   }
   .hero-board {
@@ -2700,14 +2705,14 @@ button.sq:focus-visible {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .play-layout {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
   .mode-list {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .game-layout {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
   .game-side {
     position: static;
@@ -2738,10 +2743,10 @@ button.sq:focus-visible {
     grid-column: 1 / -1;
   }
   .radio-cards {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
   .split-actions {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
   .mode-list {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -2765,7 +2770,7 @@ button.sq:focus-visible {
     padding: 0 10px;
   }
   .ach-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 @media (max-width: 480px) {
@@ -2828,7 +2833,7 @@ button.sq:focus-visible {
     padding: 18px;
   }
   .tour-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
   .profile-head {
     gap: 14px;
@@ -4315,7 +4320,7 @@ html.calm .clock-warn { animation: none; }
 .admin-form { display: grid; gap: 10px; }
 .admin-grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 10px; }
 .admin-grid3 { display: grid; grid-template-columns: 56px 1fr 1fr; gap: 6px; }
-@media (max-width: 480px) { .admin-grid2 { grid-template-columns: 1fr; } }
+@media (max-width: 480px) { .admin-grid2 { grid-template-columns: minmax(0, 1fr); } }
 .admin-checks { display: flex; gap: 12px; flex-wrap: wrap; }
 .check { display: inline-flex; gap: 6px; align-items: center; font-size: 0.9rem; }
 .field { display: grid; gap: 4px; font-size: 0.85rem; }
