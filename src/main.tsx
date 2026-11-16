@@ -11,6 +11,12 @@ import { I18nProvider } from './i18n/index.tsx';
 import { SettingsProvider } from './settings/SettingsProvider.tsx';
 import { ThemeProvider } from './theme/ThemeProvider.tsx';
 
+// Long press on a link or picture: no browser/Telegram context menu (it would show the site URL). Text fields keep theirs.
+document.addEventListener('contextmenu', (e) => {
+  const el = e.target as Element | null;
+  if (el?.closest?.('a, img, button, [role="link"], [role="button"]') && !el.closest('input, textarea, [contenteditable="true"]')) e.preventDefault();
+});
+
 class CrashGuard extends Component<{ children: ReactNode }, { error: Error | null }> {
   state = { error: null as Error | null };
   static getDerivedStateFromError(error: Error) {

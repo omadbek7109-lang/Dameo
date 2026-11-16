@@ -32,9 +32,30 @@ export function navigate(to: string) {
   window.location.hash = to.startsWith('/') ? to : `/${to}`;
 }
 
-export function Link({ to, children, ...rest }: { to: string; children: ReactNode } & Omit<AnchorHTMLAttributes<HTMLAnchorElement>, 'href'>) {
+/**
+ * In-app link. Deliberately has no href: inside Telegram a long press on a real link opens a menu with the site's
+ * URL ("Open in Telegram / Copy"), which players don't need and can tap by accident. Click / Enter / Space navigate.
+ */
+export function Link({ to, children, onClick, onKeyDown, ...rest }: { to: string; children: ReactNode } & Omit<AnchorHTMLAttributes<HTMLAnchorElement>, 'href'>) {
+  const go = () => navigate(to);
   return (
-    <a href={`#${to}`} {...rest}>
+    <a
+      role="link"
+      tabIndex={0}
+      data-to={to}
+      {...rest}
+      onClick={(e) => {
+        onClick?.(e);
+        if (!e.defaultPrevented) go();
+      }}
+      onKeyDown={(e) => {
+        onKeyDown?.(e);
+        if (!e.defaultPrevented && (e.key === 'Enter' || e.key === ' ')) {
+          e.preventDefault();
+          go();
+        }
+      }}
+    >
       {children}
     </a>
   );

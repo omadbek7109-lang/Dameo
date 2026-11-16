@@ -10,11 +10,20 @@ const LOGO = new URL('brand/flect-stars.webp', document.baseURI).href;
 
 export function FlectBanner() {
   const { t } = useI18n();
+  // no href: a long press must not pop up the link menu; a tap opens the bot
   const open = (e: MouseEvent) => {
-    if (openTelegramUrl(FLECT_URL)) e.preventDefault();
+    e.preventDefault();
+    if (!openTelegramUrl(FLECT_URL)) window.open(FLECT_URL, '_blank', 'noopener,noreferrer');
   };
   return (
-    <a className="flect-banner" href={FLECT_URL} target="_blank" rel="noopener noreferrer" onClick={open} aria-label={t('flect.aria')}>
+    <a
+      className="flect-banner"
+      role="link"
+      tabIndex={0}
+      onClick={open}
+      onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && open(e as unknown as MouseEvent)}
+      aria-label={t('flect.aria')}
+    >
       <span className="flect-logo">
         <img src={LOGO} alt="FLECT STARS" width={320} height={269} decoding="async" />
       </span>
