@@ -1,4 +1,4 @@
-import { LuCrown } from 'react-icons/lu';
+import { Crown } from './Crown.tsx';
 
 /** Decorative, non-interactive hero visual: a mid-game position with one piece that quietly "moves". */
 const WHITE = [[7, 0], [7, 2], [6, 3], [5, 4], [5, 6], [4, 3], [6, 7]];
@@ -19,12 +19,14 @@ export function HeroBoard() {
         <div className="pieces">
           {WHITE.map(([r, c]) => (
             <div key={`w${r}${c}`} className={`piece piece-w ${KINGS.has(`${r},${c}`) ? 'piece-king' : ''} ${r === 5 && c === 4 ? 'hero-mover' : ''}`} style={{ ['--x' as string]: c, ['--y' as string]: r }}>
-              <span className="piece-disc">{KINGS.has(`${r},${c}`) && <LuCrown className="piece-crown" />}</span>
+              <span className="piece-edge" />
+              <span className="piece-disc">{KINGS.has(`${r},${c}`) && <Crown />}</span>
             </div>
           ))}
           {BLACK.map(([r, c]) => (
             <div key={`b${r}${c}`} className={`piece piece-b ${KINGS.has(`${r},${c}`) ? 'piece-king' : ''}`} style={{ ['--x' as string]: c, ['--y' as string]: r }}>
-              <span className="piece-disc">{KINGS.has(`${r},${c}`) && <LuCrown className="piece-crown" />}</span>
+              <span className="piece-edge" />
+              <span className="piece-disc">{KINGS.has(`${r},${c}`) && <Crown />}</span>
             </div>
           ))}
         </div>

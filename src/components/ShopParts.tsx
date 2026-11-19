@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { LuCrown } from 'react-icons/lu';
+import { Crown } from './Crown.tsx';
 import { useCosmetics } from '../cosmetics/CosmeticsProvider.tsx';
 import { initialState, type Cell } from '../engine/index.ts';
 import { useI18n, type TKey } from '../i18n/index.tsx';
@@ -89,22 +89,26 @@ export function MiniPreview({ item }: { item: Pick<ShopItem, 'slug' | 'slot' | '
         })}
         <div className="pieces">
           <div className="piece piece-b" style={{ ['--x' as string]: 1, ['--y' as string]: 0 }}>
+            <span className="piece-edge" />
             <span className="piece-disc">
               <i className="pfx" />
             </span>
           </div>
           <div className="piece piece-w piece-king" style={{ ['--x' as string]: 2, ['--y' as string]: 1 }}>
+            <span className="piece-edge" />
             <span className="piece-disc">
               <i className="pfx" />
-              <LuCrown className="piece-crown" />
+              <Crown />
             </span>
           </div>
           <div className="piece piece-w" style={{ ['--x' as string]: 0, ['--y' as string]: 3 }}>
+            <span className="piece-edge" />
             <span className="piece-disc">
               <i className="pfx" />
             </span>
           </div>
           <div className="piece piece-b" style={{ ['--x' as string]: 3, ['--y' as string]: 2 }}>
+            <span className="piece-edge" />
             <span className="piece-disc">
               <i className="pfx" />
             </span>
