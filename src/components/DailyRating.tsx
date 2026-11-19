@@ -88,6 +88,9 @@ export function DailyRating() {
           <span className="wk-live" role="status">
             <span className="wk-dot" aria-hidden="true" /> {t('weekly.live')}
           </span>
+          <span className="dr-chip">
+            <LuUsers aria-hidden="true" /> {t('daily.players', { n: ov.players })}
+          </span>
           <span className="wk-season">{shortDay(ov.day, lang)}</span>
         </div>
         <div className="wk-title-row">
@@ -99,50 +102,42 @@ export function DailyRating() {
               DAMEO <span>DAILY</span>
             </h2>
             <p className="wk-sub">
-              {t('daily.title')} · {t('daily.tz')}
+              <LuCalendarClock aria-hidden="true" /> {t('daily.resetAt')}
             </p>
           </div>
         </div>
 
-        <div className="wk-countdown" role="timer" aria-label={t('daily.resetsIn')}>
-          <span className="wk-cd-label">{t('daily.resetsIn')}</span>
-          <div className="wk-cd-tiles dr-cd-tiles">
-            {(
-              [
-                [parts.d * 24 + parts.h, 'weekly.hours'],
-                [parts.m, 'weekly.minutes'],
-                [parts.s, 'weekly.seconds'],
-              ] as Array<[number, TKey]>
-            ).map(([v, k]) => (
-              <div className="wk-cd-tile" key={k}>
-                <strong>{String(v).padStart(2, '0')}</strong>
-                <span>{t(k)}</span>
-              </div>
-            ))}
+        <div className="dr-strip">
+          <div className="wk-countdown dr-countdown" role="timer" aria-label={t('daily.resetsIn')}>
+            <span className="wk-cd-label">{t('daily.resetsIn')}</span>
+            <div className="dr-cd">
+              {(
+                [
+                  [parts.d * 24 + parts.h, 'weekly.hours'],
+                  [parts.m, 'weekly.minutes'],
+                  [parts.s, 'weekly.seconds'],
+                ] as Array<[number, TKey]>
+              ).map(([v, k], i) => (
+                <span className="dr-cd-part" key={k}>
+                  {i > 0 && <i aria-hidden="true">:</i>}
+                  <strong>{String(v).padStart(2, '0')}</strong>
+                  <small>{t(k)}</small>
+                </span>
+              ))}
+            </div>
+          </div>
+          {/* prize */}
+          <div className="dr-prize">
+            <span className="dr-prize-icon" aria-hidden="true">
+              🧸
+            </span>
+            <span className="dr-prize-text">
+              <span className="dr-prize-label">{t('daily.prizeLabel')}</span>
+              <strong>{t('daily.prize')}</strong>
+            </span>
           </div>
         </div>
-
-        {/* prize */}
-        <div className="dr-prize">
-          <span className="dr-prize-icon" aria-hidden="true">
-            🧸
-          </span>
-          <span className="dr-prize-text">
-            <span className="dr-prize-label">{t('daily.prizeLabel')}</span>
-            <strong>{t('daily.prize')}</strong>
-            <span className="dr-prize-hint">{t('daily.prizeHint')}</span>
-          </span>
-        </div>
-
-        <ul className="wk-meta">
-          <li>
-            <LuUsers /> {t('daily.players', { n: ov.players })}
-          </li>
-          <li>
-            <LuCalendarClock /> {t('daily.resetAt')}
-          </li>
-        </ul>
-        <p className="dr-nojoin">{t('daily.noJoin')}</p>
+        <p className="dr-nojoin">{t('daily.prizeHint')} · {t('daily.noJoin')}</p>
 
         {/* my place */}
         {signedIn && my ? (

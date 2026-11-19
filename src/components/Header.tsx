@@ -21,8 +21,8 @@ export const NAV: Array<{ to: string; key: TKey; short?: TKey; icon: IconType; m
   // the rating sits in the middle; tournaments / daily rating live inside it
   { to: '/leaderboard', key: 'nav.leaderboard', short: 'nav.leaderboard.short', icon: LuTrophy, match: (p) => p.startsWith('/leaderboard') || p.startsWith('/tournaments') },
   { to: '/shop', key: 'nav.shop', icon: LuStore, match: (p) => p.startsWith('/shop') || p.startsWith('/inventory') || p.startsWith('/wallet') },
-  // on phones the Profil tab opens the main menu (which links to the profile page); friends live inside the profile
-  { to: '/profile', key: 'nav.profile', icon: LuUser, match: (p) => p.startsWith('/profile') || p.startsWith('/friends') || p.startsWith('/achievements') },
+  // the Profil tab opens the main menu (coins, places, settings); the header avatar opens the profile page itself
+  { to: '/profile', key: 'nav.profile', icon: LuUser, match: (p) => p.startsWith('/profile') || p.startsWith('/friends') || p.startsWith('/achievements'), menu: true },
 ];
 
 export function Header() {
@@ -145,9 +145,10 @@ export function Header() {
           </Popover>
 
           {signedIn && me ? (
-            <button className="user-btn" onClick={openMainMenu} aria-haspopup="dialog" aria-expanded={menuOpen} aria-controls="main-menu" aria-label={t('menu.title')}>
+            // the avatar opens my profile page; the menu lives on the bottom "Profil" tab and the ☰ button
+            <Link to="/profile" className="user-btn" aria-label={t('menu.myProfile')}>
               <Avatar name={me.username} seed={me.avatar} size={34} userId={me.id} />
-            </button>
+            </Link>
           ) : (
             <>
               <button className="btn btn-primary btn-sm" onClick={openAuth}>

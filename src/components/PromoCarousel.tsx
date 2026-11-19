@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState, type MouseEvent } from 'react';
 import { LuArrowRight } from 'react-icons/lu';
 import { useI18n } from '../i18n/index.tsx';
-import { openTelegramUrl } from '../services/telegram.ts';
+import { appActive, openTelegramUrl } from '../services/telegram.ts';
 import { FlectBanner } from './FlectBanner.tsx';
 
 const BOOKLY_URL = 'https://t.me/Booklym_app_Bot';
 const SLIDES = 2;
-const EVERY_MS = 4500;
+const EVERY_MS = 5000;
+// auto-advance about a minute, then rest (a swipe still works) — endless sliding keeps the phone drawing
+const MAX_AUTO = 12;
 
 /** Bookly ad: "create your own book" — art is drawn in CSS/SVG, no image download. */
 function BooklyBanner() {
@@ -83,10 +85,13 @@ export function PromoCarousel() {
   useEffect(() => {
     const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
     if (reduce) return;
+    let n = 0;
     const id = window.setInterval(() => {
       const el = track.current;
-      if (!el || paused.current || document.hidden) return;
+      if (n >= MAX_AUTO) return window.clearInterval(id);
+      if (!el || paused.current || document.hidden || !appActive()) return; // no sliding while Telegram is minimised
       const next = (Math.round(el.scrollLeft / Math.max(1, el.clientWidth)) + 1) % SLIDES;
+      n++;
       el.scrollTo({ left: next * el.clientWidth, behavior: 'smooth' });
     }, EVERY_MS);
     return () => window.clearInterval(id);
