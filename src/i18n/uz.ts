@@ -141,6 +141,11 @@ export const uz = {
   'mode.practice': 'Mashq',
   'mode.practiceDesc': "Reytingga ta'sir qilmaydi: yurish ko'rsatkichlari va maslahat.",
   'mode.findOpponent': 'Raqib qidirish',
+  'quick.demoChip': "Demo: raqib — kompyuter",
+  'friendsPlay.demoChip': "Demo: bitta telefonda ikki kishi",
+  'bot.easyShort': "Yangi boshlovchilar uchun — xato qilib turadi",
+  'bot.mediumShort': "3 yurish oldinga o'ylaydi",
+  'bot.hardShort': "Eng kuchli — har bir xatoni jazolaydi",
   'play.title': "O'ynash",
   'play.sub': "O'yin turini tanlang va boshlang.",
 

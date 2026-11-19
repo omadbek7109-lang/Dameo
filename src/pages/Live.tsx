@@ -9,6 +9,7 @@ import { useI18n, type TKey } from '../i18n/index.tsx';
 import { Link, useRoute } from '../router.tsx';
 import { featuredGames, liveList, liveStats, type FeaturedGame, type LiveGame } from '../services/live.ts';
 import { tg, appActive, everyActive } from '../services/telegram.ts';
+import { backendConfigured } from '../services/config.ts';
 
 const noop = () => {};
 /** small static board for a list card */
@@ -47,6 +48,13 @@ export function Live() {
   const [now, setNow] = useState(Date.now());
 
   const load = useCallback(async () => {
+    // demo / beta without a server: nothing is live — show the friendly empty state, not an error
+    if (!backendConfigured) {
+      setGames([]);
+      setFeatured([]);
+      setError(false);
+      return;
+    }
     try {
       if (tab === 'live') {
         const [g, s] = await Promise.all([liveList(), liveStats()]);
@@ -99,10 +107,9 @@ export function Live() {
           <h1 className="h1">
             <LuRadio /> {t('live.title')}
           </h1>
-          <p className="muted">{t('live.sub')}</p>
         </div>
-        <Link to="/archive" className="btn btn-secondary btn-sm">
-          <LuArchive /> {t('archive.title')}
+        <Link to="/archive" className="icon-btn" aria-label={t('archive.title')} title={t('archive.title')}>
+          <LuArchive />
         </Link>
       </div>
       {stats && tab === 'live' && (

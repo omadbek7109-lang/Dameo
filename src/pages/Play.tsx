@@ -49,13 +49,10 @@ export function Play() {
 
   return (
     <div className="page">
-      <div className="page-head">
-        <div>
-          <h1 className="h1">{t('play.title')}</h1>
-          <p className="muted">{t('play.sub')}</p>
-        </div>
-        <button className="btn btn-ghost" onClick={() => setRules(true)}>
-          <LuBookOpen /> {t('rules.button')}
+      <div className="page-head play-head">
+        <h1 className="h1">{t('play.title')}</h1>
+        <button className="icon-btn play-rules" onClick={() => setRules(true)} aria-label={t('rules.button')} title={t('rules.button')}>
+          <LuBookOpen />
         </button>
       </div>
 
@@ -147,18 +144,16 @@ function QuickPanel({ autoStart = 0 }: { autoStart?: number }) {
   };
 
   return (
-    <div>
-      <h2>{t('mode.quick')}</h2>
-      <p className="muted">{t('mode.quickDesc')}</p>
+    <div className="pp">
+      <p className="pp-desc">{t('mode.quickDesc')}</p>
       {mode === 'demo' && (
-        <div className="notice">
-          <LuWifiOff />
-          <span>{t('quick.demoNotice')}</span>
-        </div>
+        <span className="pp-chip">
+          <LuWifiOff /> {t('quick.demoChip')}
+        </span>
       )}
       <div className="match-stage" aria-live="polite">
         {state === 'idle' && (
-          <button className="btn btn-primary btn-lg" onClick={startDemo}>
+          <button className="btn btn-primary btn-lg btn-block" onClick={startDemo}>
             <LuSwords /> {t('quick.startDemo')}
           </button>
         )}
@@ -235,26 +230,12 @@ function FriendsPanel() {
 
   if (mode === 'demo') {
     return (
-      <div>
-        <h2>{t('mode.friends')}</h2>
-        <p className="muted">{t('mode.friendsDesc')}</p>
-        <div className="notice">
-          <LuWifiOff />
-          <span>{t('friendsPlay.demoNotice')}</span>
-        </div>
-        <div className="split-actions">
-          <div className="option-card disabled-card" aria-disabled="true">
-            <strong>{t('room.create')}</strong>
-            <span className="muted small">{t('friendsPlay.needsBackend')}</span>
-          </div>
-          <div className="option-card disabled-card" aria-disabled="true">
-            <strong>{t('room.join')}</strong>
-            <span className="muted small">{t('friendsPlay.needsBackend')}</span>
-          </div>
-        </div>
-        <h3 className="mt">{t('friendsPlay.localTitle')}</h3>
-        <p className="muted">{t('friendsPlay.localDesc')}</p>
-        <button className="btn btn-primary" onClick={() => navigate('/game?mode=local')}>
+      <div className="pp">
+        <p className="pp-desc">{t('friendsPlay.localDesc')}</p>
+        <span className="pp-chip">
+          <LuWifiOff /> {t('friendsPlay.demoChip')}
+        </span>
+        <button className="btn btn-primary btn-lg btn-block" onClick={() => navigate('/game?mode=local')}>
           <LuUsers /> {t('friendsPlay.localStart')}
         </button>
       </div>
@@ -299,9 +280,8 @@ function FriendsPanel() {
   };
 
   return (
-    <div>
-      <h2>{t('mode.friends')}</h2>
-      <p className="muted">{t('mode.friendsDesc')}</p>
+    <div className="pp">
+      <p className="pp-desc">{t('mode.friendsDesc')}</p>
       <div className="split-actions">
         <div className="option-card">
           <strong>{t('room.create')}</strong>
@@ -379,39 +359,41 @@ function BotPanel({ practice }: { practice: boolean }) {
     const s = side === 'r' ? (Math.random() < 0.5 ? 'w' : 'b') : side;
     navigate(`/game?mode=${practice ? 'practice' : 'bot'}&level=${level === 'random' ? 'medium' : level}&side=${s}`);
   };
+  const stars = { random: 0, easy: 1, medium: 2, hard: 3 } as const;
+  const cur = levels.find((l) => l.id === level) ?? levels[0];
   return (
-    <div>
-      <h2>{practice ? t('mode.practice') : t('mode.bot')}</h2>
-      <p className="muted">{practice ? t('practice.desc') : t('mode.botDesc')}</p>
-      <div className="notice">
-        <span className="badge">{t('common.unrated')}</span>
-        <span>{practice ? t('practice.unrated') : t('bot.unrated')}</span>
-      </div>
-      <fieldset className="fieldset">
-        <legend>{t('bot.difficulty')}</legend>
-        <div className={`radio-cards ${levels.length === 4 ? 'radio-cards-4' : ''}`}>
+    <div className="pp">
+      <p className="pp-desc">{practice ? t('practice.desc') : t('mode.botDesc')}</p>
+      <span className="pp-chip">{practice ? t('practice.unrated') : t('bot.unrated')}</span>
+
+      <div className="pp-field">
+        <span className="pp-label">{t('bot.difficulty')}</span>
+        <div className="pp-levels" role="radiogroup" aria-label={t('bot.difficulty')}>
           {levels.map((l) => (
-            <label key={l.id} className={`radio-card ${level === l.id ? 'radio-card-on' : ''}`}>
-              <input type="radio" name="level" checked={level === l.id} onChange={() => setLevel(l.id)} />
-              <strong>{t(l.title)}</strong>
-              <span className="muted small">{t(l.desc)}</span>
-            </label>
+            <button key={l.id} type="button" role="radio" aria-checked={level === l.id} className={`pp-level ${level === l.id ? 'pp-level-on' : ''}`} onClick={() => setLevel(l.id)}>
+              <span className="pp-stars" aria-hidden="true">
+                {stars[l.id] === 0 ? '?' : Array.from({ length: 3 }, (_, i) => <i key={i} className={i < stars[l.id] ? 'on' : ''} />)}
+              </span>
+              {t(l.title)}
+            </button>
           ))}
         </div>
-      </fieldset>
+        <span className="pp-hint">{t((cur.id === 'random' ? 'bot.randomDesc' : `bot.${cur.id}Short`) as TKey)}</span>
+      </div>
+
       {!serverBot && (
-        <fieldset className="fieldset">
-          <legend>{t('bot.side')}</legend>
-          <div className="seg" role="radiogroup">
+        <div className="pp-field">
+          <span className="pp-label">{t('bot.side')}</span>
+          <div className="seg pp-seg" role="radiogroup">
             {(['w', 'b', 'r'] as const).map((sd) => (
               <button key={sd} role="radio" aria-checked={side === sd} className={`seg-btn ${side === sd ? 'seg-on' : ''}`} onClick={() => setSide(sd)}>
-                {t(sd === 'w' ? 'side.white' : sd === 'b' ? 'side.black' : 'side.random')}
+                <span className={`pp-side pp-side-${sd}`} aria-hidden="true" /> {t(sd === 'w' ? 'side.white' : sd === 'b' ? 'side.black' : 'side.random')}
               </button>
             ))}
           </div>
-        </fieldset>
+        </div>
       )}
-      <button className="btn btn-primary btn-lg" onClick={start} disabled={busy}>
+      <button className="btn btn-primary btn-lg btn-block" onClick={start} disabled={busy}>
         {busy ? <LuLoader className="spin" /> : <LuSwords />} {t('game.start')}
       </button>
     </div>

@@ -143,6 +143,11 @@ export const en: Record<TKey, string> = {
   'mode.practice': 'Practice',
   'mode.practiceDesc': 'Never affects your rating: legal-move hints and undo.',
   'mode.findOpponent': 'Find Opponent',
+  'quick.demoChip': "Demo: opponent is the computer",
+  'friendsPlay.demoChip': "Demo: two players on one phone",
+  'bot.easyShort': "For beginners — makes mistakes",
+  'bot.mediumShort': "Thinks 3 moves ahead",
+  'bot.hardShort': "Strongest — punishes every mistake",
   'play.title': 'Play',
   'play.sub': 'Pick a game mode and start.',
 

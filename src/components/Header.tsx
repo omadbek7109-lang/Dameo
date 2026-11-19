@@ -22,7 +22,7 @@ export const NAV: Array<{ to: string; key: TKey; short?: TKey; icon: IconType; m
   { to: '/play', key: 'nav.play', icon: LuSwords, match: (p) => p.startsWith('/play') || p.startsWith('/game') },
   { to: '/shop', key: 'nav.shop', icon: LuStore, match: (p) => p.startsWith('/shop') || p.startsWith('/inventory') || p.startsWith('/wallet') },
   // on phones the Profil tab opens the main menu (which links to the profile page); friends live inside the profile
-  { to: '/profile', key: 'nav.profile', icon: LuUser, match: (p) => p.startsWith('/profile') || p.startsWith('/friends') || p.startsWith('/achievements'), menu: true },
+  { to: '/profile', key: 'nav.profile', icon: LuUser, match: (p) => p.startsWith('/profile') || p.startsWith('/friends') || p.startsWith('/achievements') },
 ];
 
 export function Header() {

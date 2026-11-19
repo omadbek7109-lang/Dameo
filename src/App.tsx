@@ -147,7 +147,7 @@ export function App() {
         <span className="muted">{t('footer.free')}</span>
       </footer>
       <ChallengeInbox />
-      <BottomNav />
+      {!route.path.startsWith('/game') && <BottomNav />}
     </div>
   );
 }
