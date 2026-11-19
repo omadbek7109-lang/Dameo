@@ -152,12 +152,15 @@ function pieceSideCss(scopes: string[], cls: 'piece-w' | 'piece-b', s: Partial<P
   const glow = s.glow ? col(s.glow, '') : '';
   const edge = s.edge ? col(s.edge, '') : '';
   const anim = oneOf(s.anim, PIECE_ANIMS, 'none');
-  const shadow = [`0 3px 0 rgba(0,0,0,.28)`, `0 6px 10px rgba(0,0,0,.3)`, `inset 0 0 0 2px ${ring}`];
+  // 3D: the thickness is drawn by .piece-edge (below the disc); the disc keeps a bevel and its ring
+  const shadow = [`inset 0 2px 2px rgba(255,255,255,.28)`, `inset 0 -3px 5px rgba(0,0,0,.32)`, `inset 0 0 0 2px ${ring}`];
   if (edge) shadow.push(`0 0 0 2px ${edge}`);
   if (glow) shadow.push(`0 0 12px ${glow}`);
   const sel = (tail: string) => scopes.map((sc) => `.${sc} .${cls} ${tail}`).join(',');
   const disc = sel('.piece-disc');
   let css = `${disc}{--ring-c:${ring};background:${layers.join(',')};box-shadow:${shadow.join(',')};${glow ? `--glow:${glow};` : ''}}`;
+  // the coin's side takes the rim colour (gold rims → gold edge), else the darker body tone
+  css += `${scopes.map((sc) => `.${sc} .${cls}`).join(',')}{--edge-base:${edge || (tex ? ring : c3)};}`;
   if (s.motif) css += `${sel('.piece-disc::before')}{content:${cssString(s.motif)};}`;
   if (tex) css += `${sel('.piece-disc::after')}{display:none;}`; // the stone face has its own rim
   if (s.crown) css += `${sel('.piece-crown')}{color:${col(s.crown, '#e8bb4d')};}`;

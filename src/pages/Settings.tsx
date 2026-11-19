@@ -4,6 +4,7 @@ import { useAuth } from '../auth/AuthProvider.tsx';
 import { Modal } from '../components/Modal.tsx';
 import { useToast } from '../components/Toast.tsx';
 import { LANGS, useI18n } from '../i18n/index.tsx';
+import { SUPABASE_URL, backendConfigured } from '../services/config.ts';
 import { useSettings } from '../settings/SettingsProvider.tsx';
 import { useTheme } from '../theme/ThemeProvider.tsx';
 import { myHideGames, setHideGames } from '../services/live.ts';
@@ -21,6 +22,12 @@ export function Settings() {
   }, [mode, signedIn, me?.id]);
   const { toast } = useToast();
   const [confirm, setConfirm] = useState(false);
+  let host = '';
+  try {
+    host = backendConfigured ? new URL(SUPABASE_URL).host : '';
+  } catch {
+    host = '';
+  }
 
   return (
     <div className="page page-narrow">
@@ -145,20 +152,8 @@ export function Settings() {
         </section>
       )}
 
-      {/* players are always on the live server; the server card (with the local reset) is only for the offline demo build */}
       {mode === 'demo' && (
-      <section className="card settings-section">
-        <h2 className="h3">{t('settings.backend')}</h2>
-        <div className="setting setting-col">
-          <div className="status-line">
-            <LuMonitor />
-            <span>
-              <span className="dot dot-off" /> {t('settings.backendDemo')}
-            </span>
-          </div>
-          <p className="muted small">{t('settings.backendHow')}</p>
-        </div>
-        {mode === 'demo' && (
+        <section className="card settings-section">
           <div className="setting">
             <div>
               <strong>{t('settings.resetTitle')}</strong>
@@ -168,15 +163,8 @@ export function Settings() {
               {t('settings.reset')}
             </button>
           </div>
-        )}
-      </section>
+        </section>
       )}
-
-      <section className="card settings-section">
-        <h2 className="h3">{t('settings.about')}</h2>
-        <p className="muted">{t('settings.aboutText')}</p>
-        <p className="muted small">{t('settings.free')}</p>
-      </section>
 
       <Modal open={confirm} onClose={() => setConfirm(false)} title={t('settings.resetTitle')}>
         <p className="muted">{t('settings.resetConfirm')}</p>

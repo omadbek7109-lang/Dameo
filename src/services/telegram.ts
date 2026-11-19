@@ -85,7 +85,7 @@ export function everyActive(fn: () => void, ms: number): () => void {
 
 export function setTelegramColors(theme: 'light' | 'dark') {
   if (!tg) return;
-  const bg = theme === 'dark' ? '#0a1020' : '#f2f5fb';
+  const bg = theme === 'dark' ? '#08061a' : '#f4f1fc';
   try {
     tg.setHeaderColor?.(bg);
     tg.setBackgroundColor?.(bg);

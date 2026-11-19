@@ -1,244 +1,154 @@
-import { LuArrowRight, LuBot, LuGraduationCap, LuRadio, LuSwords, LuUsers } from 'react-icons/lu';
+import { LuArrowRight, LuBot, LuChartColumn, LuFlame, LuGift, LuGraduationCap, LuStar, LuTrophy, LuUsers, LuZap } from 'react-icons/lu';
 import { useAuth } from '../auth/AuthProvider.tsx';
-import { Avatar, LevelBadge } from '../components/Avatar.tsx';
+import { Avatar } from '../components/Avatar.tsx';
 import { levelOf } from '../services/levels.ts';
-import { FlectBanner } from '../components/FlectBanner.tsx';
-import { EmptyState, ErrorState, Spinner } from '../components/States.tsx';
-import { DemoNotice, Delta, SectionHead, SeeAll, winRate } from '../components/ui.tsx';
+import { PromoCarousel } from '../components/PromoCarousel.tsx';
+import { Spinner } from '../components/States.tsx';
+import { Delta, winRate } from '../components/ui.tsx';
 import { useAsync } from '../hooks/useAsync.ts';
 import { useI18n } from '../i18n/index.tsx';
 import { backendConfigured } from '../services/config.ts';
-import { demoLiveMatches, isOnline } from '../services/demoData.ts';
-import { fetchLeaderboard, onlineCount, recentlyActive } from '../services/leaderboard.ts';
-import { listTournaments } from '../services/tournaments.ts';
+import { demoLiveMatches } from '../services/demoData.ts';
+import { fetchLeaderboard } from '../services/leaderboard.ts';
 import { Link } from '../router.tsx';
+import { MissionsHomeCard } from './Missions.tsx';
 import { db } from '../services/supabase.ts';
 import type { LiveMatch } from '../types/models.ts';
 
 async function loadLive(): Promise<LiveMatch[]> {
   if (!backendConfigured) return demoLiveMatches();
-  const rows = await db.select<any>('match_view', { filter: { status: 'eq.active' }, order: 'created_at.desc', limit: 4 });
+  const rows = await db.select<any>('match_view', { filter: { status: 'eq.active' }, order: 'created_at.desc', limit: 2 });
   return rows.map((r: any) => ({ id: r.id, white: r.white_name, black: r.black_name ?? '—', whiteRating: r.white_rating, blackRating: r.black_rating ?? 0, moves: r.move_count ?? 0 }));
 }
 
+/** Arena: the home screen. One glance — who you are, one big button to play, today's goals, live games. */
 export function Home() {
-  const { t, num, relative, dateTime } = useI18n();
-  const { me, rank, mode, matches, signedIn, local } = useAuth();
+  const { t, num } = useI18n();
+  const { me, rank, mode, matches, signedIn } = useAuth();
 
-  const top = useAsync(() => fetchLeaderboard({ scope: 'all', search: '', page: 0, pageSize: 5 }, { me, friendIds: [] }), [mode, me?.rating]);
-  const online = useAsync(() => onlineCount(), [mode]);
-  const active = useAsync(() => recentlyActive(5), [mode]);
+  // rank only when the auth context has none yet (one small query, not the whole leaderboard UI)
+  const top = useAsync(() => (rank ? Promise.resolve(null) : fetchLeaderboard({ scope: 'all', search: '', page: 0, pageSize: 1 }, { me, friendIds: [] })), [mode, me?.rating, rank]);
   const live = useAsync(loadLive, [mode]);
-  const tours = useAsync(() => listTournaments(local?.tournaments ?? [], me?.id ?? null), [mode, me?.id]);
 
-  const upcoming = (tours.data ?? []).filter((x) => x.status === 'upcoming').slice(0, 3);
-  const modes = [
-    { to: '/play?mode=quick&go=1', icon: LuSwords, key: 'mode.quick', desc: 'mode.quickDesc', accent: true },
-    { to: '/play?mode=friends', icon: LuUsers, key: 'mode.friends', desc: 'mode.friendsDesc' },
-    { to: '/play?mode=bot', icon: LuBot, key: 'mode.bot', desc: 'mode.botDesc' },
-    { to: '/play?mode=practice', icon: LuGraduationCap, key: 'mode.practice', desc: 'mode.practiceDesc' },
-  ] as const;
+  const wr = me ? winRate(me.wins, me.losses, me.draws) : 0;
+  const lastDelta = matches.find((m) => m.rated)?.delta ?? null;
+  const myRank = rank ?? top.data?.me?.rank ?? null;
+  const lv = levelOf(me?.rating ?? 1200);
+  const firstLive = (live.data ?? [])[0];
 
   return (
     <div className="page page-home">
-      <FlectBanner />
+      <PromoCarousel />
 
-      {signedIn && me ? (
-        <section className="home-stats" aria-label={t('common.rating')}>
-          <div>
-            <span className="home-stat-v">{num(me.rating)}</span>
-            <span className="home-stat-l">{t('common.rating')}</span>
-          </div>
-          <div>
-            <span className="home-stat-v">{(rank ?? top.data?.me?.rank) ? `#${num((rank ?? top.data?.me?.rank)!)}` : '—'}</span>
-            <span className="home-stat-l">{t('common.rank')}</span>
-          </div>
-          <div>
-            <span className="home-stat-v">{winRate(me.wins, me.losses, me.draws)}%</span>
-            <span className="home-stat-l">{t('common.winRate')}</span>
-          </div>
-          {mode === 'demo' && <span className="badge badge-demo home-stats-badge">{t('demo.localRating')}</span>}
+      <Link to="/play?mode=quick&go=1" className="arena-find">
+        <LuZap className="arena-find-ico" aria-hidden="true" />
+        <span className="arena-find-text">
+          <span className="arena-find-title">{t('mode.quick')}</span>
+          <span className="arena-find-sub">{t('home.findSub')}</span>
+        </span>
+        <span className="arena-round-go" aria-hidden="true">
+          <LuArrowRight />
+        </span>
+      </Link>
+
+      {signedIn && me && (
+        <section className="arena-stats" aria-label={t('common.rating')}>
+          <Link to="/leaderboard" className="arena-stat">
+            <LuTrophy className="arena-stat-ico ico-gold" aria-hidden="true" />
+            <span className="arena-stat-v">{num(me.rating)}</span>
+            <span className="arena-stat-l">
+              {t('common.rating')} {lastDelta !== null && lastDelta !== 0 && <Delta value={lastDelta} />}
+            </span>
+          </Link>
+          <Link to="/leaderboard" className="arena-stat">
+            <LuChartColumn className="arena-stat-ico ico-indigo" aria-hidden="true" />
+            <span className="arena-stat-v">{myRank ? `#${num(myRank)}` : '—'}</span>
+            <span className="arena-stat-l">{t('common.rank')}</span>
+          </Link>
+          <Link to="/profile" className="arena-stat arena-stat-ring">
+            <span className="arena-ring" aria-hidden="true">
+              <svg viewBox="0 0 64 64">
+                <circle cx="32" cy="32" r="27" className="arena-ring-bg" />
+                <circle cx="32" cy="32" r="27" className="arena-ring-fg" pathLength={100} strokeDasharray={`${wr} 100`} />
+              </svg>
+              <span className="arena-ring-v">{wr}%</span>
+            </span>
+            <span className="arena-stat-l">{t('common.winRate')}</span>
+          </Link>
+          {mode === 'demo' && <span className="badge badge-demo arena-stats-badge">{t('demo.badge')}</span>}
         </section>
-      ) : (
-        <p className="muted small home-guest">{t('hero.guestHint')}</p>
       )}
 
-      {signedIn && mode === 'live' && (
-        <Link to="/missions" className="card ms-promo">
-          <span className="ms-promo-ico" aria-hidden="true">🎯</span>
-          <span className="ms-promo-text">
-            <strong>{t('ms.homeCard')}</strong>
-            <span className="muted small">{t('ms.homeCardSub', { c: 240 })}</span>
+      {me && (
+        <Link to="/profile" className="arena-level">
+          <span className="arena-level-badge">
+            <LuStar aria-hidden="true" /> {t('level.name', { n: lv.level })}
           </span>
-          <span className="ms-promo-go" aria-hidden="true">›</span>
+          <span className="arena-level-bar" aria-hidden="true">
+            <span style={{ width: `${Math.round(lv.progress * 100)}%` }} />
+          </span>
+          <span className="arena-level-next">{lv.next === null ? t('level.max') : t('level.toNext', { next: lv.level + 1, n: lv.next - me.rating })}</span>
         </Link>
       )}
 
-      <DemoNotice text={t('demo.homeNotice')} />
+      <nav className="arena-quick" aria-label={t('home.modes')}>
+        <Link to="/play?mode=bot" className="arena-q">
+          <span className="arena-q-ico q-blue"><LuBot /></span>
+          <span>{t('home.qBot')}</span>
+        </Link>
+        <Link to="/play?mode=friends" className="arena-q">
+          <span className="arena-q-ico q-violet"><LuUsers /></span>
+          <span>{t('home.qFriend')}</span>
+        </Link>
+        <Link to="/referral" className="arena-q">
+          <span className="arena-q-ico q-gold"><LuGift /></span>
+          <span>{t('home.qInvite')}</span>
+        </Link>
+        <Link to="/play?mode=practice" className="arena-q">
+          <span className="arena-q-ico q-green"><LuGraduationCap /></span>
+          <span>{t('home.qPractice')}</span>
+        </Link>
+      </nav>
 
-      <section aria-label={t('home.modes')}>
-        <div className="mode-grid">
-          {modes.map((m) => {
-            const Icon = m.icon;
-            return (
-              <Link key={m.to} to={m.to} className={`mode-card ${'accent' in m ? 'mode-card-accent' : ''}`}>
-                <span className="mode-icon">
-                  <Icon />
-                </span>
-                <span className="mode-go" aria-hidden="true">
-                  <LuArrowRight />
-                </span>
-                <span className="mode-title">{t(m.key)}</span>
-                <span className="mode-desc">{t(m.desc)}</span>
-              </Link>
-            );
-          })}
+      <MissionsHomeCard />
+
+      <section className="arena-live" aria-labelledby="h-live">
+        <div className="arena-sec-head">
+          <h2 id="h-live">
+            <LuFlame className="arena-flame" aria-hidden="true" /> {t('home.liveMatches')}
+          </h2>
+          <Link to="/live" className="arena-see-all">
+            {t('common.seeAll')} <LuArrowRight aria-hidden="true" />
+          </Link>
         </div>
+        {live.loading ? (
+          <Spinner />
+        ) : !firstLive ? (
+          <div className="arena-live-row arena-live-empty">
+            <span className="muted">{t('home.noLive')}</span>
+          </div>
+        ) : (
+          <div className="arena-live-row">
+            <Avatar name={firstLive.white} size={56} />
+            <span className="arena-live-main">
+              <span className="arena-live-on">
+                <span className="dot dot-on" /> {t('common.online')}
+                {firstLive.demo && <span className="badge badge-demo">{t('demo.badge')}</span>}
+              </span>
+              <span className="arena-live-title">
+                {firstLive.white} vs {firstLive.black}
+              </span>
+              <span className="arena-live-sub">
+                {num(firstLive.whiteRating)} · {num(firstLive.blackRating)} · {t('home.movesN', { n: firstLive.moves })}
+              </span>
+            </span>
+            <Link to={firstLive.demo ? '/live' : `/watch?m=${firstLive.id}`} className="arena-watch">
+              {t('home.watch')} <LuArrowRight aria-hidden="true" />
+            </Link>
+          </div>
+        )}
       </section>
 
-      <div className="grid-2">
-        <section className="card" aria-labelledby="h-top">
-          <SectionHead title={t('home.topPlayers')} action={<SeeAll to="/leaderboard" label={t('common.seeAll')} />} />
-          {top.loading ? (
-            <Spinner />
-          ) : top.error ? (
-            <ErrorState onRetry={top.reload} />
-          ) : (
-            <ol className="rows">
-              {top.data!.rows.map((p) => (
-                <li key={p.id}>
-                  <Link to={`/profile/${p.id}`} className="row">
-                    <span className={`rank-chip ${p.rank <= 3 ? `rank-${p.rank}` : ''}`}>{p.rank}</span>
-                    <Avatar name={p.username} seed={p.avatar} size={34} online={isOnline(p)} userId={p.id} />
-                    <span className="row-main">
-                      <span className="row-title">
-                        {p.username}
-                        <LevelBadge rating={p.rating} label={(n) => t('level.short', { n })} />
-                      </span>
-                      <span className="row-sub">
-                        {num(p.wins)} {t('common.winsShort')} · {winRate(p.wins, p.losses, p.draws)}%
-                      </span>
-                    </span>
-                    <span className="row-end">
-                      <strong>{num(p.rating)}</strong>
-                      <Delta value={p.lastDelta} />
-                    </span>
-                  </Link>
-                </li>
-              ))}
-            </ol>
-          )}
-          {top.data?.source === 'demo' && <p className="muted small foot">{t('demo.sampleData')}</p>}
-        </section>
-
-        <section className="card" aria-labelledby="h-live">
-          <SectionHead
-            title={t('home.liveMatches')}
-            action={
-              <span className="online-now" title={t('home.onlineNow')}>
-                <span className="dot dot-on" /> {online.data !== null ? num(online.data) : '…'} {t('home.onlineNow').toLowerCase()}
-              </span>
-            }
-          />
-          {live.loading ? (
-            <Spinner />
-          ) : live.error ? (
-            <ErrorState onRetry={live.reload} />
-          ) : (live.data ?? []).length === 0 ? (
-            <EmptyState title={t('home.noLive')} />
-          ) : (
-            <ul className="rows">
-              {live.data!.map((m) => (
-                <li key={m.id} className="row row-static">
-                  <LuRadio className="live-icon" />
-                  <span className="row-main">
-                    <span className="row-title">
-                      {m.white} <span className="muted">vs</span> {m.black}
-                    </span>
-                    <span className="row-sub">
-                      {num(m.whiteRating)} · {num(m.blackRating)} · {t('home.movesN', { n: m.moves })}
-                    </span>
-                  </span>
-                  {m.demo && <span className="badge badge-demo">{t('demo.badge')}</span>}
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-      </div>
-
-      <div className="grid-3">
-        <section className="card">
-          <SectionHead title={t('home.upcoming')} action={<SeeAll to="/leaderboard?tab=tournaments" label={t('common.seeAll')} />} />
-          {tours.loading ? (
-            <Spinner />
-          ) : tours.error ? (
-            <ErrorState onRetry={tours.reload} />
-          ) : upcoming.length === 0 ? (
-            <EmptyState title={t('tour.emptyUpcoming')} />
-          ) : (
-            <ul className="rows">
-              {upcoming.map((x) => (
-                <li key={x.id}>
-                  <Link to="/leaderboard?tab=tournaments" className="row">
-                    <span className="row-main">
-                      <span className="row-title">{x.name}</span>
-                      <span className="row-sub">{dateTime(x.startsAt)}</span>
-                    </span>
-                    <span className="badge badge-free">{t('common.free')}</span>
-                    {x.demo && <span className="badge badge-demo">{t('demo.badge')}</span>}
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-
-        <section className="card">
-          <SectionHead title={t('home.recentGames')} />
-          {matches.length === 0 ? (
-            <EmptyState title={t('home.noGames')} hint={t('home.noGamesHint')} />
-          ) : (
-            <ul className="rows">
-              {matches.slice(0, 5).map((m) => (
-                <li key={m.id} className="row row-static">
-                  <span className={`result-chip result-${m.result}`}>{t(`result.${m.result}` as 'result.win')}</span>
-                  <span className="row-main">
-                    <span className="row-title">{m.opponent}</span>
-                    <span className="row-sub">{relative(m.ts)}</span>
-                  </span>
-                  {m.rated ? <Delta value={m.delta} /> : <span className="badge">{t('common.unrated')}</span>}
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-
-        <section className="card">
-          <SectionHead title={t('home.recentlyActive')} />
-          {active.loading ? (
-            <Spinner />
-          ) : active.error ? (
-            <ErrorState onRetry={active.reload} />
-          ) : (
-            <ul className="rows">
-              {active.data!.map((p) => (
-                <li key={p.id}>
-                  <Link to={`/profile/${p.id}`} className="row">
-                    <Avatar name={p.username} seed={p.avatar} size={34} online={isOnline(p)} userId={p.id} />
-                    <span className="row-main">
-                      <span className="row-title">{p.username}</span>
-                      <span className="row-sub">{isOnline(p) ? t('common.online') : relative(p.lastSeen)}</span>
-                    </span>
-                    <strong>{num(p.rating)}</strong>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          )}
-          {mode === 'demo' && <p className="muted small foot">{t('demo.sampleData')}</p>}
-        </section>
-      </div>
     </div>
   );
 }

@@ -2,11 +2,9 @@ import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { IconType } from 'react-icons';
 import {
-  LuArchive, LuBackpack, LuBan, LuChevronRight, LuCircleHelp, LuCircleUser, LuFrame, LuGraduationCap, LuInfo, LuLayoutGrid, LuLogIn, LuLogOut,
-  LuMessageSquareWarning, LuMoon, LuPlus, LuRadio, LuSettings, LuShieldCheck, LuSparkles, LuStar, LuSun, LuUsers, LuX,
-  LuGift,
-  LuListChecks,
-} from 'react-icons/lu';
+  LuArchive, LuBackpack, LuBan, LuChevronRight, LuCircleHelp, LuFrame, LuGraduationCap, LuInfo, LuLogIn, LuLogOut,
+  LuMessageSquareWarning, LuMoon, LuPlus, LuRadio, LuSettings, LuShieldCheck, LuSun, LuUsers, LuX,
+  LuGift, LuListChecks } from 'react-icons/lu';
 import { useAuth } from '../auth/AuthProvider.tsx';
 import { useCosmetics } from '../cosmetics/CosmeticsProvider.tsx';
 import { LANGS, useI18n, type TKey } from '../i18n/index.tsx';
@@ -58,27 +56,23 @@ export function MenuSheet() {
   if (!open) return null;
 
   const live = mode === 'live';
-  const account = live && signedIn;
+  const account = (live && signedIn) || mode === 'demo';
+  // quick places — round tiles; the shop, rating and play live in the bottom bar, so they are not repeated here
   const tiles: Item[] = [
-    { to: '/shop?cat=pieces', key: 'menu.pieceShop', icon: LuSparkles },
-    { to: '/shop?cat=boards', key: 'menu.boardShop', icon: LuLayoutGrid },
+    { to: '/missions', key: 'menu.missions', icon: LuListChecks },
+    { to: '/referral', key: 'menu.referral', icon: LuGift },
+    { to: '/friends', key: 'nav.friends', icon: LuUsers },
+    { to: '/inventory', key: 'inv.title', icon: LuBackpack },
     { to: '/live', key: 'menu.live', icon: LuRadio },
-    { to: '/live?tab=featured', key: 'menu.featured', icon: LuStar },
-    { to: '/play?mode=practice', key: 'menu.training', icon: LuGraduationCap },
     { to: '/archive', key: 'menu.archive', icon: LuArchive },
+    { to: '/profile?section=frames', key: 'menu.frames', icon: LuFrame },
+    { to: '/play?mode=practice', key: 'menu.training', icon: LuGraduationCap },
   ];
-  const mine: Item[] = account
-    ? [
-        { to: '/friends', key: 'nav.friends', icon: LuUsers },
-        { to: '/missions', key: 'menu.missions', icon: LuListChecks },
-        { to: '/referral', key: 'menu.referral', icon: LuGift },
-        { to: '/profile?section=frames', key: 'menu.frames', icon: LuFrame },
-        { to: '/inventory', key: 'inv.title', icon: LuBackpack },
-        { to: '/settings', key: 'nav.settings', icon: LuSettings },
-        { to: '/blocked', key: 'menu.blocked', icon: LuBan },
-        ...(isAdmin ? [{ to: '/admin', key: 'menu.admin' as TKey, icon: LuShieldCheck }] : []),
-      ]
-    : [{ to: '/friends', key: 'nav.friends', icon: LuUsers }, { to: '/settings', key: 'nav.settings', icon: LuSettings }];
+  const mine: Item[] = [
+    { to: '/settings', key: 'nav.settings', icon: LuSettings },
+    ...(account ? [{ to: '/blocked', key: 'menu.blocked' as TKey, icon: LuBan }] : []),
+    ...(isAdmin ? [{ to: '/admin', key: 'menu.admin' as TKey, icon: LuShieldCheck }] : []),
+  ];
   const help: Item[] = [
     { to: '/help', key: 'menu.help', icon: LuCircleHelp },
     ...(account ? [{ to: '/feedback', key: 'menu.feedback' as TKey, icon: LuMessageSquareWarning }] : []),
@@ -101,15 +95,18 @@ export function MenuSheet() {
       <nav className="sheet" aria-label={t('menu.title')} id="main-menu">
         <header className="sheet-head">
           {me && (live ? signedIn : true) ? (
-            <div className="sheet-me">
-              <Avatar name={me.username} seed={me.avatar} size={52} userId={me.id} />
+            <Link to="/profile" className="sheet-me sheet-me-link" onClick={onClose}>
+              <Avatar name={me.username} seed={me.avatar} size={56} userId={me.id} />
               <span className="sheet-me-text">
                 <strong>{me.username}</strong>
                 <span className="sheet-me-sub">
                   {me.rating} <LevelBadge rating={me.rating} label={(n) => t('level.short', { n })} />
                 </span>
+                <span className="sheet-me-open">
+                  {t('menu.myProfile')} <LuChevronRight />
+                </span>
               </span>
-            </div>
+            </Link>
           ) : (
             <div className="sheet-me">
               <strong className="sheet-brand">DAMEO</strong>
@@ -121,11 +118,7 @@ export function MenuSheet() {
         </header>
 
         <div className="sheet-body">
-          {me && (live ? signedIn : true) ? (
-            <Link to="/profile" className="btn btn-secondary btn-block sheet-profile" onClick={onClose}>
-              <LuCircleUser /> {t('menu.myProfile')}
-            </Link>
-          ) : (
+          {!(me && (live ? signedIn : true)) && (
             <button
               className="btn btn-primary btn-block sheet-profile"
               onClick={() => {
@@ -141,7 +134,7 @@ export function MenuSheet() {
             <Link to="/wallet" className="sheet-coins" onClick={onClose}>
               <span className="sheet-coins-main">
                 <span className="sheet-coins-label">DAMEO Coins</span>
-                <span className="sheet-coins-value">🪙 {cos?.balance !== null && cos?.balance !== undefined ? coins(cos.balance) : '—'}</span>
+                <span className="sheet-coins-value">{cos?.balance !== null && cos?.balance !== undefined ? coins(cos.balance) : '—'}</span>
               </span>
               <span className="btn btn-primary btn-sm sheet-coins-add">
                 <LuPlus /> {t('menu.topUp')}
@@ -149,10 +142,9 @@ export function MenuSheet() {
             </Link>
           )}
 
-          {live && (
+          {account && (
             <>
-              <h3 className="sheet-group">{t('menu.groupGame')}</h3>
-              <ul className="menu-tiles">
+              <ul className="menu-tiles menu-tiles-round">
                 {tiles.map((i) => (
                   <li key={i.to}>
                     <Link to={i.to} className="menu-tile" onClick={onClose}>
@@ -165,11 +157,10 @@ export function MenuSheet() {
             </>
           )}
 
-          <h3 className="sheet-group">{t('menu.groupAccount')}</h3>
-          <ul className="menu-rows">{mine.map(row)}</ul>
-
-          <h3 className="sheet-group">{t('menu.groupHelp')}</h3>
-          <ul className="menu-rows">{help.map(row)}</ul>
+          <ul className="menu-rows menu-rows-card">
+            {mine.map(row)}
+            {help.map(row)}
+          </ul>
 
           <div className="sheet-prefs">
             <div className="seg" role="radiogroup" aria-label={t('settings.language')}>

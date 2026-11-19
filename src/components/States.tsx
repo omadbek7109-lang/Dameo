@@ -39,13 +39,19 @@ export function EmptyState({ title, hint, action }: { title: string; hint?: stri
   );
 }
 
-/** Full-screen elegant loader shown while the app boots. */
+/** Full-screen intro while the app boots: glowing mark with an orbit, the wordmark and the motto. */
 export function SplashLoader() {
   return (
-    <div className="splash" role="status" aria-live="polite">
+    <div className="splash" role="status" aria-live="polite" aria-label="DAMEO">
+      <div className="splash-glow" aria-hidden="true" />
       <div className="splash-mark">
-        <LogoMark size={72} />
+        <span className="splash-orbit" aria-hidden="true" />
+        <LogoMark size={84} />
       </div>
+      <div className="splash-word" aria-hidden="true">
+        DAMEO
+      </div>
+      <div className="splash-tag">Every Move Matters.</div>
       <div className="splash-bar" />
     </div>
   );

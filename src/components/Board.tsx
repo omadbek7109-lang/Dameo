@@ -1,5 +1,6 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
-import { LuCrown } from 'react-icons/lu';
+import { Crown } from './Crown.tsx';
+import { FxCanvas } from './FxCanvas.tsx';
 import { isDark, rc, squareName, type Cell } from '../engine/index.ts';
 import { useT } from '../i18n/index.tsx';
 import { useCosmetics } from '../cosmetics/CosmeticsProvider.tsx';
@@ -78,6 +79,22 @@ function BoardImpl({ board, ids, flipped, selected, targets, pathMarks, mustMove
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pieces]);
 
+  // a man that just became a king (same piece id, now ±2) gets the crowning moment for ~1.3 s
+  const prevKings = useRef<Map<number, boolean>>(new Map());
+  const [crowned, setCrowned] = useState<number | null>(null);
+  useEffect(() => {
+    const before = prevKings.current;
+    const now = new Map(pieces.map((p) => [p.id, Math.abs(p.cell) === 2]));
+    prevKings.current = now;
+    if (!lastMove || before.size === 0) return;
+    const fresh = pieces.find((p) => Math.abs(p.cell) === 2 && before.get(p.id) === false);
+    if (!fresh) return;
+    setCrowned(fresh.id);
+    const id = window.setTimeout(() => setCrowned((c) => (c === fresh.id ? null : c)), 1300);
+    timers.current.push(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pieces]);
+
   // Premium Stones idle shine runs in short bursts, not non-stop: ~5 s after every move and ~4 s every 20 s.
   // In between the stones rest (no animation → the GPU draws nothing), so long sessions do not drain the battery.
   // live → rest (shine fades out, 0.6 s) → off (animations removed: zero redraws); any move wakes them again
@@ -126,7 +143,7 @@ function BoardImpl({ board, ids, flipped, selected, targets, pathMarks, mustMove
   };
 
   return (
-    <div className={`board-wrap ${skinClass} ${lively === 'live' ? '' : lively === 'rest' ? 'st-rest' : 'st-rest st-off'}`}>
+    <div className={`board-wrap fx-premium ${skinClass} ${lively === 'live' ? '' : lively === 'rest' ? 'st-rest' : 'st-rest st-off'}`}>
       <div key={shake} className={`board ${shake > 0 ? 'board-shake' : ''} ${disabled ? 'board-disabled' : ''}`} role="grid" aria-label={t('board.label')}>
         {squares.map((i) => {
           const [r, c] = rc(i);
@@ -173,8 +190,10 @@ function BoardImpl({ board, ids, flipped, selected, targets, pathMarks, mustMove
             const p = pos(i);
             return (
               <div key={`g${id}-${k}`} className={`piece piece-gone ${cell > 0 ? 'piece-w' : 'piece-b'} ${cell === 2 || cell === -2 ? 'piece-king' : ''}`} style={{ ['--x' as string]: p.x, ['--y' as string]: p.y }}>
+                <span className="piece-edge" />
                 <span className="piece-disc">
                   <i className="pfx" />
+                  <i className="p-gloss" />
                 </span>
                 {[0, 1, 2, 3, 4, 5, 6, 7].map((n) => (
                   <i key={n} className="shard" />
@@ -187,15 +206,21 @@ function BoardImpl({ board, ids, flipped, selected, targets, pathMarks, mustMove
             const white = cell > 0;
             const king = cell === 2 || cell === -2;
             return (
-              <div key={id} className={`piece ${white ? 'piece-w' : 'piece-b'} ${king ? 'piece-king' : ''} ${selected === i ? 'piece-selected' : ''}`} style={{ ['--x' as string]: p.x, ['--y' as string]: p.y }}>
+              <div key={id} className={`piece ${white ? 'piece-w' : 'piece-b'} ${king ? 'piece-king' : ''} ${selected === i ? 'piece-selected' : ''} ${crowned === id ? 'piece-crowned' : ''}`} style={{ ['--x' as string]: p.x, ['--y' as string]: p.y }}>
+                <span className="piece-edge" />
                 <span className="piece-disc">
                   <i className="pfx" />
-                  {king && <LuCrown className="piece-crown" />}
+                  <i className="p-gloss" />
+                  {king && <Crown />}
                 </span>
+                {crowned === id && <span className="crown-burst" />}
               </div>
             );
           })}
         </div>
+        {lastFx !== null && lastMove && moverCell !== 0 && (
+          <FxCanvas fxClass={lastFx || skinClass} from={pos(lastMove.from)} to={pos(lastMove.to)} trigger={`${lastMove.from}-${lastMove.to}-${ids[lastMove.to]}`} />
+        )}
         {/* coordinates */}
         {Array.from({ length: 8 }, (_, k) => (
           <span key={`f${k}`} className={`coord coord-file ${coordDark(7, k) ? 'coord-on-dark' : 'coord-on-light'}`} style={{ gridColumn: `${k + 1} / ${k + 2}`, gridRow: '1 / 9' }}>

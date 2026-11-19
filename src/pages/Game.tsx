@@ -500,7 +500,7 @@ function OnlineGame({ matchId }: { matchId: string }) {
         pvp ? (
           <>
             <button
-              className="btn btn-secondary"
+              className="ga"
               disabled={match.status !== 'active'}
               onClick={() =>
                 offerDraw(matchId)
@@ -508,17 +508,19 @@ function OnlineGame({ matchId }: { matchId: string }) {
                   .catch((e) => toast('error', t(chatErrorKey(e instanceof SbError ? e.message : ''))))
               }
             >
-              <LuHandshake /> {t('chat.offerDraw')}
+              <span className="ga-ico"><LuHandshake /></span>
+              {t('chat.offerDraw')}
             </button>
             <button
-              className="btn btn-ghost"
+              className="ga"
               onClick={() =>
                 setMatchVisibility(matchId, !match.isPublic)
                   .then(() => load())
                   .catch(() => toast('error', t('chat.cannotPublic')))
               }
             >
-              {match.isPublic ? <LuEyeOff /> : <LuEye />} {t(match.isPublic ? 'game.hideGame' : 'game.showGame')}
+              <span className="ga-ico">{match.isPublic ? <LuEyeOff /> : <LuEye />}</span>
+              {t(match.isPublic ? 'game.hideGame' : 'game.showGame')}
             </button>
           </>
         ) : undefined
@@ -650,9 +652,14 @@ function GameScreen({ g, kind, humanColor, top, bottom, canRestart, canUndo, can
   const showHistoryEmpty = pairs.length === 0;
   return (
     <div className="page game-page">
-      <button className="link-btn back-link" onClick={onExit}>
-        <LuArrowLeft /> {t('game.back')}
-      </button>
+      <div className="game-top">
+        <button className="game-back" onClick={onExit}>
+          <LuArrowLeft /> {t('game.back')}
+        </button>
+        <button className="icon-btn game-rules" onClick={() => setRules(true)} aria-label={t('rules.button')} title={t('rules.button')}>
+          <LuBookOpen />
+        </button>
+      </div>
       {banner}
       <div className="game-layout">
         <div className="game-main">
@@ -680,53 +687,59 @@ function GameScreen({ g, kind, humanColor, top, bottom, canRestart, canUndo, can
           </p>
         </div>
 
-        <aside className="game-side card">
+        <aside className="game-side">
           <div className={`turn-pill ${over ? 'turn-over' : ''}`}>
             {(g.thinking || serverThinking) && <LuLoader className="spin" />} {turnText}
           </div>
-          <h3 className="side-title">{t('game.moves')}</h3>
-          <ol className="history" ref={histRef} aria-label={t('game.moves')}>
-            {showHistoryEmpty ? (
-              <li className="muted small history-empty">{t('game.noMoves')}</li>
-            ) : (
-              pairs.map(([w, b], i) => (
-                <li key={i}>
-                  <span className="hn">{i + 1}.</span>
-                  <span className="hm">{w}</span>
-                  <span className="hm">{b ?? ''}</span>
-                </li>
-              ))
-            )}
-          </ol>
-          <div className="controls">
+          <div className="game-actions">
             {canHint && (
-              <button className="btn btn-secondary" onClick={g.askHint} disabled={over || !g.humanTurn || g.thinking}>
-                <LuLightbulb /> {t('game.hint')}
+              <button className="ga" onClick={g.askHint} disabled={over || !g.humanTurn || g.thinking}>
+                <span className="ga-ico"><LuLightbulb /></span>
+                {t('game.hint')}
               </button>
             )}
             {canUndo && (
-              <button className="btn btn-secondary" onClick={g.undo} disabled={!g.canUndo}>
-                <LuUndo2 /> {t('game.undo')}
+              <button className="ga" onClick={g.undo} disabled={!g.canUndo}>
+                <span className="ga-ico"><LuUndo2 /></span>
+                {t('game.undo')}
               </button>
             )}
             {canDraw && (
-              <button className="btn btn-secondary" onClick={ask('draw', g.drawByAgreement)} disabled={over}>
-                <LuHandshake /> {t('game.draw')}
+              <button className="ga" onClick={ask('draw', g.drawByAgreement)} disabled={over}>
+                <span className="ga-ico"><LuHandshake /></span>
+                {t('game.draw')}
               </button>
             )}
             {canRestart && (
-              <button className="btn btn-secondary" onClick={g.game.history.length === 0 ? onRestart : ask('restart', onRestart)}>
-                <LuRotateCcw /> {t('game.restart')}
+              <button className="ga" onClick={g.game.history.length === 0 ? onRestart : ask('restart', onRestart)}>
+                <span className="ga-ico"><LuRotateCcw /></span>
+                {t('game.restart')}
               </button>
             )}
             {extraControls}
-            <button className="btn btn-danger" onClick={ask('resign', onResign)} disabled={over}>
-              <LuFlag /> {t('game.resign')}
-            </button>
-            <button className="btn btn-ghost" onClick={() => setRules(true)}>
-              <LuBookOpen /> {t('rules.button')}
+            <button className="ga ga-danger" onClick={ask('resign', onResign)} disabled={over}>
+              <span className="ga-ico"><LuFlag /></span>
+              {t('game.resign')}
             </button>
           </div>
+          <details className="game-moves">
+            <summary>
+              {t('game.moves')} <span className="game-moves-n">{g.game.history.length}</span>
+            </summary>
+            <ol className="history" ref={histRef} aria-label={t('game.moves')}>
+              {showHistoryEmpty ? (
+                <li className="muted small history-empty">{t('game.noMoves')}</li>
+              ) : (
+                pairs.map(([w, b], i) => (
+                  <li key={i}>
+                    <span className="hn">{i + 1}.</span>
+                    <span className="hm">{w}</span>
+                    <span className="hm">{b ?? ''}</span>
+                  </li>
+                ))
+              )}
+            </ol>
+          </details>
         </aside>
       </div>
 

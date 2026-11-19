@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState, type CSSProperties } from 'react';
 type PtrEv = { clientX: number; pointerId: number; currentTarget: EventTarget | null };
-import { LuCheck, LuCrown, LuLoader, LuPlus, LuShoppingBag, LuSparkles } from 'react-icons/lu';
+import { LuCheck, LuLoader, LuPlus, LuShoppingBag, LuSparkles } from 'react-icons/lu';
+import { Crown } from './Crown.tsx';
 import { useAuth } from '../auth/AuthProvider.tsx';
 import { useCosmetics } from '../cosmetics/CosmeticsProvider.tsx';
 import { useI18n } from '../i18n/index.tsx';
@@ -30,9 +31,10 @@ export function StonePiece({ slug, side = 'w', king = false, size = 96 }: { slug
   return (
     <span className={`board-wrap stone-solo ${skinClasses({ piece: slug })}`} style={{ width: size, height: size }} aria-hidden="true">
       <span className={`piece ${side === 'w' ? 'piece-w' : 'piece-b'} ${king ? 'piece-king' : ''}`}>
+        <span className="piece-edge" />
         <span className="piece-disc">
           <i className="pfx" />
-          {king && <LuCrown className="piece-crown" />}
+          {king && <Crown />}
         </span>
       </span>
     </span>
