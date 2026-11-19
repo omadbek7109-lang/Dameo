@@ -23,7 +23,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     const root = document.documentElement;
     root.setAttribute('data-theme', theme);
     setTelegramColors(theme);
-    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme === 'dark' ? '#0a1020' : '#f3f5fa');
+    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme === 'dark' ? '#08061a' : '#f4f1fc');
   }, [theme]);
 
   const setTheme = useCallback((t: Theme) => {

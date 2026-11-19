@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import { LuBot, LuCalendarCheck, LuCheck, LuClock, LuFlame, LuGift, LuLoader, LuMedal, LuSend, LuShieldCheck, LuSwords, LuTrophy, LuUserPlus } from 'react-icons/lu';
+import { LuBot, LuCalendarCheck, LuChevronRight, LuTarget, LuCheck, LuClock, LuFlame, LuGift, LuLoader, LuMedal, LuSend, LuShieldCheck, LuSwords, LuTrophy, LuUserPlus } from 'react-icons/lu';
 import { useAuth } from '../auth/AuthProvider.tsx';
 import { ErrorState, Spinner } from '../components/States.tsx';
 import { useToast } from '../components/Toast.tsx';
@@ -398,5 +398,35 @@ function ChannelCard({ c, hasTelegram, onDone }: { c: MissionChannel; hasTelegra
         ) : null}
       </span>
     </li>
+  );
+}
+
+/** Arena home: the missions banner (a red dot when a reward is ready to claim). */
+export function MissionsHomeCard() {
+  const { t } = useI18n();
+  const { signedIn, mode } = useAuth();
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    if (!signedIn || mode !== 'live') return;
+    missionsOverview().then(
+      (o) => setReady([...(o.daily ?? []), ...(o.once ?? [])].some((m) => m.done && !m.claimed)),
+      () => setReady(false),
+    );
+  }, [signedIn, mode]);
+  if (!signedIn || mode !== 'live') return null;
+  return (
+    <Link to="/missions" className={`card ms-home ${ready ? 'ms-ready' : ''}`}>
+      <span className="ms-ico ms-ico-gold" aria-hidden>
+        <LuTarget />
+      </span>
+      <span className="ms-main">
+        <span className="ms-title">{t('ms.homeCard')}</span>
+        <span className="muted small">{t('ms.homeCardSub', { c: 240 })}</span>
+      </span>
+      {ready && <span className="ms-dot" aria-hidden />}
+      <span className="ms-home-go" aria-hidden>
+        <LuChevronRight />
+      </span>
+    </Link>
   );
 }

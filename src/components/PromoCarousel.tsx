@@ -11,11 +11,20 @@ const EVERY_MS = 4500;
 /** Bookly ad: "create your own book" — art is drawn in CSS/SVG, no image download. */
 function BooklyBanner() {
   const { t } = useI18n();
+  // no href: a long press must not pop up Telegram's link menu; a tap opens the bot
   const open = (e: MouseEvent) => {
-    if (openTelegramUrl(BOOKLY_URL)) e.preventDefault();
+    e.preventDefault();
+    if (!openTelegramUrl(BOOKLY_URL)) window.open(BOOKLY_URL, '_blank', 'noopener,noreferrer');
   };
   return (
-    <a className="bookly-banner" href={BOOKLY_URL} target="_blank" rel="noopener noreferrer" onClick={open} aria-label={t('bookly.aria')}>
+    <a
+      className="bookly-banner"
+      role="link"
+      tabIndex={0}
+      onClick={open}
+      onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && open(e as unknown as MouseEvent)}
+      aria-label={t('bookly.aria')}
+    >
       <span className="bookly-art" aria-hidden="true">
         <svg viewBox="0 0 120 90" className="bookly-book">
           <defs>
