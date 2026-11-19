@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { LuCheck, LuLoader, LuLock, LuPlus, LuShoppingBag } from 'react-icons/lu';
+import { LuCheck, LuChevronDown, LuLoader, LuLock, LuPlus, LuShoppingBag } from 'react-icons/lu';
 import { useAuth } from '../auth/AuthProvider.tsx';
 import { useAuthDialog } from './AuthDialog.tsx';
 import { useCosmetics } from '../cosmetics/CosmeticsProvider.tsx';
@@ -32,6 +32,8 @@ export function FramePicker({ variant = 'profile' }: { variant?: 'profile' | 'sh
   const [catalog, setCatalog] = useState<FrameItem[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
   const [open, setOpen] = useState<FrameItem | null>(null);
+  // on the profile the frames fold into one row; tap to open the list (opens by itself when linked from the menu)
+  const [expanded, setExpanded] = useState(variant === 'shop');
 
   const load = useCallback(async () => {
     if (mode !== 'live') return;
@@ -44,6 +46,7 @@ export function FramePicker({ variant = 'profile' }: { variant?: 'profile' | 'sh
   }, [load, me?.id, me?.rating]);
   // opened from the menu ("Ramkalar") → bring the card into view
   useEffect(() => {
+    if (variant === 'profile' && query.get('section') === 'frames') setExpanded(true);
     if (variant === 'profile' && query.get('section') === 'frames') setTimeout(() => ref.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 120);
   }, [query, variant]);
 
@@ -73,15 +76,31 @@ export function FramePicker({ variant = 'profile' }: { variant?: 'profile' | 'sh
     { id: 'dameo', title: t('frame.classic'), sub: t('shop.free'), locked: false },
     { id: 'champion', title: t('frame.champion'), sub: t(mine?.champion_ok ? 'frame.championSub' : 'frame.championLocked'), locked: !mine?.champion_ok },
   ];
+  const eq = mine?.equipped ?? null;
+  const currentName = eq === null ? t('frame.none') : eq === 'dameo' ? t('frame.classic') : eq === 'champion' ? t('frame.champion') : (catalog.find((c) => c.slug === eq) ? name(catalog.find((c) => c.slug === eq)!) : eq);
   const avName = me?.username ?? 'DAMEO';
   const avSeed = me?.avatar;
   return (
     <section className={`card frame-card ${variant === 'shop' ? 'frame-card-shop' : ''}`} ref={ref} id="frames" aria-label={t('frame.collection')}>
-      <div className="frame-card-head">
-        <h2 className="h2">{t('frame.collection')}</h2>
-        <span className="muted small">{t('frame.collectionSub')}</span>
-      </div>
-      <div className="frame-opts" role="radiogroup" aria-label={t('frame.collection')}>
+      {variant === 'profile' ? (
+        <button type="button" className="frame-fold" aria-expanded={expanded} aria-controls="frame-opts" onClick={() => setExpanded((x) => !x)}>
+          <span className="frame-fold-av">
+            <Avatar name={avName} seed={avSeed} size={44} frame={mine?.equipped ?? null} />
+          </span>
+          <span className="frame-fold-text">
+            <strong>{t('menu.frames')}</strong>
+            <span className="muted small">{currentName}</span>
+          </span>
+          <LuChevronDown className="frame-fold-chev" aria-hidden="true" />
+        </button>
+      ) : (
+        <div className="frame-card-head">
+          <h2 className="h2">{t('frame.collection')}</h2>
+          <span className="muted small">{t('frame.collectionSub')}</span>
+        </div>
+      )}
+      {expanded && (
+      <div className="frame-opts" id="frame-opts" role="radiogroup" aria-label={t('frame.collection')}>
         {free.map((o) => {
           const on = (mine?.equipped ?? null) === o.id && !(o.id === 'champion' && o.locked);
           return (
@@ -124,6 +143,7 @@ export function FramePicker({ variant = 'profile' }: { variant?: 'profile' | 'sh
           );
         })}
       </div>
+      )}
       {open && (
         <FrameBuyDialog
           item={open}

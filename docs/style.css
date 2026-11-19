@@ -7202,3 +7202,29 @@ body:has(.game-page) .main { padding-bottom: calc(24px + env(safe-area-inset-bot
 @media (prefers-reduced-motion: reduce) {
   .splash-glow, .splash-orbit, .splash-mark, .splash-word, .splash-tag { animation: none; }
 }
+
+/* profile: frames folded into one row, tap to open */
+.frame-fold {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  min-height: 52px;
+}
+.frame-fold-av { flex: none; display: grid; place-items: center; width: 56px; height: 56px; }
+.frame-fold-text { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.frame-fold-text strong { font-size: 1.05rem; }
+.frame-fold-text .muted { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.frame-fold-chev { flex: none; font-size: 1.3rem; color: var(--muted); transition: transform 0.2s var(--ease); }
+.frame-fold[aria-expanded='true'] .frame-fold-chev { transform: rotate(180deg); }
+.frame-fold + .frame-opts { margin-top: 14px; }
+
+/* rating podium: the champion frame brings its own crown */
+.lb-pod-1:has(.av-crown) .lb-pod-crown { display: none; }

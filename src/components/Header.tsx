@@ -17,9 +17,9 @@ import { useCosmetics } from '../cosmetics/CosmeticsProvider.tsx';
 
 export const NAV: Array<{ to: string; key: TKey; short?: TKey; icon: IconType; match: (p: string) => boolean; menu?: boolean }> = [
   { to: '/', key: 'nav.home', icon: LuHouse, match: (p) => p === '/' },
-  // tournaments live inside the rating page (its third tab)
-  { to: '/leaderboard', key: 'nav.leaderboard', short: 'nav.leaderboard.short', icon: LuTrophy, match: (p) => p.startsWith('/leaderboard') || p.startsWith('/tournaments') },
   { to: '/play', key: 'nav.play', icon: LuSwords, match: (p) => p.startsWith('/play') || p.startsWith('/game') },
+  // the rating sits in the middle; tournaments / daily rating live inside it
+  { to: '/leaderboard', key: 'nav.leaderboard', short: 'nav.leaderboard.short', icon: LuTrophy, match: (p) => p.startsWith('/leaderboard') || p.startsWith('/tournaments') },
   { to: '/shop', key: 'nav.shop', icon: LuStore, match: (p) => p.startsWith('/shop') || p.startsWith('/inventory') || p.startsWith('/wallet') },
   // on phones the Profil tab opens the main menu (which links to the profile page); friends live inside the profile
   { to: '/profile', key: 'nav.profile', icon: LuUser, match: (p) => p.startsWith('/profile') || p.startsWith('/friends') || p.startsWith('/achievements') },
