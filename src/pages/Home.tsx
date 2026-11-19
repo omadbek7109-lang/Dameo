@@ -1,9 +1,8 @@
-import { LuArrowRight, LuChartColumn, LuFlame, LuStar, LuSwords, LuTrophy, LuUsers, LuZap } from 'react-icons/lu';
-import { Crown } from '../components/Crown.tsx';
+import { LuArrowRight, LuBot, LuChartColumn, LuFlame, LuGift, LuGraduationCap, LuStar, LuTrophy, LuUsers, LuZap } from 'react-icons/lu';
 import { useAuth } from '../auth/AuthProvider.tsx';
 import { Avatar } from '../components/Avatar.tsx';
 import { levelOf } from '../services/levels.ts';
-import { FlectBanner } from '../components/FlectBanner.tsx';
+import { PromoCarousel } from '../components/PromoCarousel.tsx';
 import { Spinner } from '../components/States.tsx';
 import { Delta, winRate } from '../components/ui.tsx';
 import { useAsync } from '../hooks/useAsync.ts';
@@ -34,26 +33,12 @@ export function Home() {
   const wr = me ? winRate(me.wins, me.losses, me.draws) : 0;
   const lastDelta = matches.find((m) => m.rated)?.delta ?? null;
   const myRank = rank ?? top.data?.me?.rank ?? null;
-  const lvl = me ? levelOf(me.rating).level : 1;
+  const lv = levelOf(me?.rating ?? 1200);
   const firstLive = (live.data ?? [])[0];
 
   return (
     <div className="page page-home">
-      <section className="arena-hero">
-        <span className="arena-hero-art" aria-hidden="true">
-          <Crown className="arena-hero-crown" />
-        </span>
-        <span className="arena-hero-text">
-          <span className="arena-hero-title">{t('home.greeting', { name: me?.username ?? t('home.player') })}!</span>
-          <span className="arena-hero-sub">{t('home.heroSub')}</span>
-          <span className="arena-chip">
-            <LuStar aria-hidden="true" /> {t('level.name', { n: lvl })}
-          </span>
-        </span>
-        <Link to="/profile" className="arena-round-go arena-hero-go" aria-label={t('nav.profile')}>
-          <LuArrowRight />
-        </Link>
-      </section>
+      <PromoCarousel />
 
       <Link to="/play?mode=quick&go=1" className="arena-find">
         <LuZap className="arena-find-ico" aria-hidden="true" />
@@ -94,35 +79,38 @@ export function Home() {
         </section>
       )}
 
-      <MissionsHomeCard />
+      {me && (
+        <Link to="/profile" className="arena-level">
+          <span className="arena-level-badge">
+            <LuStar aria-hidden="true" /> {t('level.name', { n: lv.level })}
+          </span>
+          <span className="arena-level-bar" aria-hidden="true">
+            <span style={{ width: `${Math.round(lv.progress * 100)}%` }} />
+          </span>
+          <span className="arena-level-next">{lv.next === null ? t('level.max') : t('level.toNext', { next: lv.level + 1, n: lv.next - me.rating })}</span>
+        </Link>
+      )}
 
-      <section className="arena-modes" aria-label={t('home.modes')}>
-        <div className="arena-mode arena-mode-blue">
-          <span className="arena-mode-art" aria-hidden="true">
-            <i className="am-piece am-p1" />
-            <i className="am-piece am-p2" />
-            <i className="am-piece am-p3" />
-          </span>
-          <LuSwords className="arena-mode-ico" aria-hidden="true" />
-          <span className="arena-mode-title">{t('home.vsOpponent')}</span>
-          <span className="arena-mode-desc">{t('home.vsOpponentDesc')}</span>
-          <Link to="/play" className="arena-mode-btn">
-            {t('home.start')} <LuArrowRight aria-hidden="true" />
-          </Link>
-        </div>
-        <div className="arena-mode arena-mode-violet">
-          <span className="arena-mode-art" aria-hidden="true">
-            <i className="am-head am-h1" />
-            <i className="am-head am-h2" />
-          </span>
-          <LuUsers className="arena-mode-ico" aria-hidden="true" />
-          <span className="arena-mode-title">{t('mode.friends')}</span>
-          <span className="arena-mode-desc">{t('home.friendsDesc')}</span>
-          <Link to="/play?mode=friends" className="arena-mode-btn">
-            {t('home.invite')} <LuArrowRight aria-hidden="true" />
-          </Link>
-        </div>
-      </section>
+      <nav className="arena-quick" aria-label={t('home.modes')}>
+        <Link to="/play?mode=bot" className="arena-q">
+          <span className="arena-q-ico q-blue"><LuBot /></span>
+          <span>{t('home.qBot')}</span>
+        </Link>
+        <Link to="/play?mode=friends" className="arena-q">
+          <span className="arena-q-ico q-violet"><LuUsers /></span>
+          <span>{t('home.qFriend')}</span>
+        </Link>
+        <Link to="/referral" className="arena-q">
+          <span className="arena-q-ico q-gold"><LuGift /></span>
+          <span>{t('home.qInvite')}</span>
+        </Link>
+        <Link to="/play?mode=practice" className="arena-q">
+          <span className="arena-q-ico q-green"><LuGraduationCap /></span>
+          <span>{t('home.qPractice')}</span>
+        </Link>
+      </nav>
+
+      <MissionsHomeCard />
 
       <section className="arena-live" aria-labelledby="h-live">
         <div className="arena-sec-head">
@@ -161,7 +149,6 @@ export function Home() {
         )}
       </section>
 
-      <FlectBanner />
     </div>
   );
 }
