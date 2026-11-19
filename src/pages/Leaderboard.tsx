@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { everyActive } from '../services/telegram.ts';
-import { LuChevronLeft, LuChevronRight, LuCrown, LuSearch } from 'react-icons/lu';
+import { LuChevronLeft, LuChevronRight, LuCrown, LuSearch, LuTrendingUp, LuTrophy } from 'react-icons/lu';
+import { levelOf } from '../services/levels.ts';
 import { useAuth } from '../auth/AuthProvider.tsx';
-import { Avatar, LevelBadge } from '../components/Avatar.tsx';
+import { Avatar } from '../components/Avatar.tsx';
 import { EmptyState, ErrorState, Spinner } from '../components/States.tsx';
-import { DemoNotice, Delta, SignInPrompt, winRate } from '../components/ui.tsx';
+import { Delta, winRate } from '../components/ui.tsx';
 import { useI18n } from '../i18n/index.tsx';
 import { Link, navigate, useRoute } from '../router.tsx';
 import { Tournaments } from './Tournaments.tsx';
@@ -17,7 +18,7 @@ const PAGE_SIZE = 10;
 type View = 'all' | 'top100' | 'tournaments';
 
 export function Leaderboard({ initialTab }: { initialTab?: View } = {}) {
-  const { t, num, relative } = useI18n();
+  const { t, num } = useI18n();
   const { me, mode, signedIn, friendIds } = useAuth();
   const { query } = useRoute();
   const qTab = query.get('tab');
@@ -34,6 +35,15 @@ export function Leaderboard({ initialTab }: { initialTab?: View } = {}) {
   const [conn, setConn] = useState<ConnectionState | null>(null);
   const [, tick] = useState(0);
   const seq = useRef(0);
+  const meCardRef = useRef<HTMLDivElement>(null);
+  const [meCardVisible, setMeCardVisible] = useState(true);
+  useEffect(() => {
+    const el = meCardRef.current;
+    if (!el || typeof IntersectionObserver === 'undefined') return;
+    const io = new IntersectionObserver(([e]) => setMeCardVisible(e.isIntersecting), { rootMargin: '-60px 0px 0px 0px' });
+    io.observe(el);
+    return () => io.disconnect();
+  });
 
   // debounce search
   useEffect(() => {
@@ -116,138 +126,164 @@ export function Leaderboard({ initialTab }: { initialTab?: View } = {}) {
   );
 
   const tabs: Array<{ id: View; label: string }> = [
-    { id: 'all', label: t('lb.all') },
+    { id: 'all', label: t('common.seeAll') },
     { id: 'top100', label: t('lb.top100') },
     { id: 'tournaments', label: t('daily.tab') },
   ];
 
   const order = podium.length === 3 ? [podium[1], podium[0], podium[2]] : podium;
+  const meRow = data?.me ?? data?.rows.find((r) => r.id === me?.id) ?? null;
+  const topPct = meRow && data?.total ? Math.max(1, Math.ceil((meRow.rank / data.total) * 100)) : null;
   return (
-    <div className="page">
-      <div className="page-head">
-        <div>
-          <h1 className="h1">{t('nav.leaderboard')}</h1>
-          <p className="muted">{t('lb.pageSub')}</p>
-        </div>
-        <div className="updated">
-          {status}
-          {data && <span className="muted small">{t('lb.updated', { when: relative(data.updatedAt) })}</span>}
-        </div>
+    <div className="page lb-page">
+      <div className="lb-top">
+        <h1 className="h1">{t('nav.leaderboard')}</h1>
+        {status}
       </div>
-      <DemoNotice text={t('demo.lbNotice')} />
 
-      {podium.length > 0 && (
-        <section className="podium" aria-label={t('lb.podium')}>
-          {order.map((p) => (
-            <Link key={p.id} to={`/profile/${p.id}`} className={`podium-card podium-${p.rank}`}>
-              <span className="podium-crown">{p.rank === 1 && <LuCrown />}</span>
-              <Avatar userId={p.id} name={p.username} seed={p.avatar} size={p.rank === 1 ? 76 : 60} ring={p.rank === 1 ? 'gold' : p.rank === 2 ? 'silver' : 'bronze'} />
-              <span className="podium-name">{p.username}</span>
-              <LevelBadge rating={p.rating} label={(n) => t('level.short', { n })} />
-              <span className="podium-rating">{num(p.rating)}</span>
-              <span className="podium-rank">{p.rank}</span>
-            </Link>
-          ))}
-        </section>
+      {meRow && signedIn && view !== 'tournaments' && (
+        <div ref={meCardRef}>
+          <MeCard p={meRow} total={data?.total ?? 0} topPct={topPct} ctxMe={me} friendIds={friendIds} />
+        </div>
       )}
 
-      <div className="toolbar">
-        <div className="tabs" role="tablist">
-          {tabs.map((x) => (
-            <button key={x.id} role="tab" aria-selected={view === x.id} className={`tab ${view === x.id ? 'tab-active' : ''}`} onClick={() => (setView(x.id), setPage(0))}>
-              {x.label}
-            </button>
-          ))}
-        </div>
-        {view !== 'tournaments' && (
-          <label className="search">
-            <LuSearch aria-hidden="true" />
-            <span className="sr-only">{t('lb.search')}</span>
-            <input value={input} onChange={(e) => setInput(e.target.value)} placeholder={t('lb.search')} type="search" />
-          </label>
-        )}
+      <div className="tabs lb-tabs" role="tablist">
+        {tabs.map((x) => (
+          <button key={x.id} role="tab" aria-selected={view === x.id} className={`tab ${view === x.id ? 'tab-active' : ''}`} onClick={() => (setView(x.id), setPage(0))}>
+            {x.label}
+          </button>
+        ))}
       </div>
 
       {view === 'tournaments' ? (
         <Tournaments embedded />
       ) : (
-      <>
-      {data?.me && !data.rows.some((r) => r.id === data.me!.id) && (
-        <div className="my-pos">
-          <span className="muted small">{t('lb.yourPosition')}</span>
-          <LbRow p={data.me} meId={me?.id} />
-        </div>
-      )}
-
-      {needsAccount ? (
-        <SignInPrompt text={t('lb.friendsNeedAccount')} />
-      ) : loading && !data ? (
-        <Spinner />
-      ) : error ? (
-        <ErrorState onRetry={() => load(false)} />
-      ) : data && data.rows.length === 0 ? (
-        <EmptyState title={t('lb.noResults')} />
-      ) : (
         <>
-          <div className="lb-head" aria-hidden="true">
-            <span>#</span>
-            <span>{t('lb.player')}</span>
-            <span className="r">{t('common.rating')}</span>
-            <span className="r hide-sm">{t('common.wins')}</span>
-            <span className="r hide-sm">{t('common.games')}</span>
-            <span className="r">{t('common.winRate')}</span>
-          </div>
-          <ol className={`lb-list ${loading ? 'is-loading' : ''}`}>
-            {data?.rows.map((p) => (
-              <li key={p.id}>
-                <LbRow p={p} meId={me?.id} />
-              </li>
-            ))}
-          </ol>
-          <div className="pager">
-            <button className="icon-btn" onClick={() => setPage((p) => Math.max(0, p - 1))} disabled={page === 0} aria-label={t('common.prev')}>
-              <LuChevronLeft />
-            </button>
-            <span className="muted">{t('common.pageOf', { page: page + 1, total: totalPages })}</span>
-            <button className="icon-btn" onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))} disabled={page >= totalPages - 1} aria-label={t('common.next')}>
-              <LuChevronRight />
-            </button>
-          </div>
+          {podium.length > 0 && !search && page === 0 && (
+            <section className="lb-podium" aria-label={t('lb.podium')}>
+              {order.map((p) => (
+                <Link key={p.id} to={`/profile/${p.id}`} className={`lb-pod lb-pod-${p.rank}`}>
+                  {p.rank === 1 && <LuCrown className="lb-pod-crown" aria-hidden="true" />}
+                  <Avatar userId={p.id} name={p.username} seed={p.avatar} size={p.rank === 1 ? 74 : 58} ring={p.rank === 1 ? 'gold' : p.rank === 2 ? 'silver' : 'bronze'} />
+                  <span className="lb-pod-name">{p.username}</span>
+                  <span className="lb-pod-rating">{num(p.rating)}</span>
+                  <span className="lb-pod-step">
+                    <span className="lb-pod-n">{p.rank}</span>
+                  </span>
+                </Link>
+              ))}
+            </section>
+          )}
+
+          <label className="search lb-search">
+            <LuSearch aria-hidden="true" />
+            <span className="sr-only">{t('lb.search')}</span>
+            <input value={input} onChange={(e) => setInput(e.target.value)} placeholder={t('lb.searchShort')} type="search" />
+          </label>
+
+          {loading && !data ? (
+            <Spinner />
+          ) : error ? (
+            <ErrorState onRetry={() => load(false)} />
+          ) : data && data.rows.length === 0 ? (
+            <EmptyState title={t('lb.noResults')} />
+          ) : (
+            <>
+              <ol className={`lb-cards ${loading ? 'is-loading' : ''}`}>
+                {data?.rows
+                  .filter((p) => search || page > 0 || p.rank > 3)
+                  .map((p) => (
+                    <li key={p.id}>
+                      <LbRow p={p} meId={me?.id} />
+                    </li>
+                  ))}
+              </ol>
+              {totalPages > 1 && (
+                <div className="pager lb-pager">
+                  <button className="icon-btn" onClick={() => setPage((p) => Math.max(0, p - 1))} disabled={page === 0} aria-label={t('common.prev')}>
+                    <LuChevronLeft />
+                  </button>
+                  <span className="lb-pager-n">{t('common.pageOf', { page: page + 1, total: totalPages })}</span>
+                  <button className="icon-btn" onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))} disabled={page >= totalPages - 1} aria-label={t('common.next')}>
+                    <LuChevronRight />
+                  </button>
+                </div>
+              )}
+            </>
+          )}
         </>
       )}
-      </>
+
+      {meRow && signedIn && view !== 'tournaments' && !meCardVisible && (
+        <button type="button" className="lb-mebar" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>
+          <span className="lb-mebar-rank">#{num(meRow.rank)}</span>
+          <Avatar userId={meRow.id} name={meRow.username} seed={meRow.avatar} size={30} />
+          <span className="lb-mebar-name">{t('common.you')}</span>
+          <strong>{num(meRow.rating)}</strong>
+        </button>
       )}
     </div>
   );
 }
 
+/** "Where am I" card: rank, rating, top-%, and how many points to climb one place. */
+function MeCard({ p, total, topPct, ctxMe, friendIds }: { p: RankedPlayer; total: number; topPct: number | null; ctxMe: any; friendIds: string[] }) {
+  const { t, num } = useI18n();
+  const [gap, setGap] = useState<number | null>(null);
+  useEffect(() => {
+    let on = true;
+    if (p.rank <= 1) return;
+    fetchLeaderboard({ scope: 'all', search: '', page: p.rank - 2, pageSize: 1 }, { me: ctxMe, friendIds }).then(
+      (r) => on && r.rows[0] && setGap(Math.max(1, r.rows[0].rating - p.rating + 1)),
+      () => undefined,
+    );
+    return () => {
+      on = false;
+    };
+  }, [p.rank, p.rating]);
+  const lv = levelOf(p.rating);
+  return (
+    <section className="lb-me" aria-label={t('lb.yourPosition')}>
+      <div className="lb-me-left">
+        <span className="lb-me-label">{t('lb.yourPosition')}</span>
+        <span className="lb-me-rank">#{num(p.rank)}</span>
+        <span className="lb-me-of">{t('lb.ofPlayers', { n: num(total) })}</span>
+      </div>
+      <div className="lb-me-right">
+        <span className="lb-me-chip">
+          <LuTrophy aria-hidden="true" /> {num(p.rating)}
+        </span>
+        <span className="lb-me-chip lb-me-chip-lv">{t('level.name', { n: lv.level })}</span>
+        {topPct !== null && <span className="lb-me-chip lb-me-chip-pct">{t('lb.topPct', { n: topPct })}</span>}
+      </div>
+      <div className="lb-me-foot">
+        <LuTrendingUp aria-hidden="true" />
+        {p.rank <= 1 ? t('lb.isFirst') : gap !== null ? t('lb.toClimb', { n: gap, rank: p.rank - 1 }) : '…'}
+      </div>
+    </section>
+  );
+}
+
 function LbRow({ p, meId }: { p: RankedPlayer; meId?: string }) {
   const { t, num } = useI18n();
-  const games = p.wins + p.losses + p.draws;
+  const mine = p.id === meId;
   return (
-    <Link to={`/profile/${p.id}`} className={`lb-row ${p.id === meId ? 'lb-me' : ''}`}>
-      <span className={`rank-chip ${p.rank <= 3 ? `rank-${p.rank}` : ''}`}>{p.rank}</span>
-      <span className="lb-player">
-        <Avatar name={p.username} seed={p.avatar} size={36} online={isOnline(p)} userId={p.id} />
-        <span className="lb-name">
-          <span className="row-title">
-            {p.username}
-            {p.id === meId && <span className="badge badge-you">{t('common.you')}</span>}
-            {p.demo && p.id !== meId && <span className="badge badge-demo">{t('demo.badge')}</span>}
-          </span>
-          <span className="row-sub lb-sub">
-            <LevelBadge rating={p.rating} label={(n) => t('level.short', { n })} />
-            {isOnline(p) ? t('common.online') : t('common.offline')}
-          </span>
+    <Link to={`/profile/${p.id}`} className={`lb-card ${mine ? 'lb-card-me' : ''}`}>
+      <span className={`lb-card-rank ${p.rank <= 10 ? 'lb-card-rank-top' : ''}`}>{p.rank}</span>
+      <Avatar name={p.username} seed={p.avatar} size={42} online={isOnline(p)} userId={p.id} />
+      <span className="lb-card-main">
+        <span className="lb-card-name">
+          {p.username}
+          {mine && <span className="badge badge-you">{t('common.you')}</span>}
+        </span>
+        <span className="lb-card-sub">
+          {t('level.short', { n: levelOf(p.rating).level })} · {winRate(p.wins, p.losses, p.draws)}% {t('lb.winsShort')}
         </span>
       </span>
-      <span className="r lb-rating">
+      <span className="lb-card-end">
         <strong>{num(p.rating)}</strong>
         <Delta value={p.lastDelta} />
       </span>
-      <span className="r hide-sm">{num(p.wins)}</span>
-      <span className="r hide-sm">{num(games)}</span>
-      <span className="r">{winRate(p.wins, p.losses, p.draws)}%</span>
     </Link>
   );
 }
