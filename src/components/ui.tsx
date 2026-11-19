@@ -63,9 +63,12 @@ export function SignInPrompt({ text }: { text: string }) {
 }
 
 /** Honest banner for sample data. */
+const ARENA_HIDE_DEMO_NOTES = true;
+
 export function DemoNotice({ text }: { text: string }) {
   const { mode } = useAuth();
-  if (mode !== 'demo') return null;
+  // Arena (beta 3.3): long demo explanations are hidden — the small DEMO badges stay where data is sample data
+  if (mode !== 'demo' || ARENA_HIDE_DEMO_NOTES) return null;
   return (
     <div className="notice" role="note">
       <span className="badge badge-demo">DEMO</span>

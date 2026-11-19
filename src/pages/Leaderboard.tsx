@@ -127,7 +127,7 @@ export function Leaderboard({ initialTab }: { initialTab?: View } = {}) {
       <div className="page-head">
         <div>
           <h1 className="h1">{t('nav.leaderboard')}</h1>
-          <p className="muted">{t('lb.sub')}</p>
+          <p className="muted">{t('lb.pageSub')}</p>
         </div>
         <div className="updated">
           {status}
