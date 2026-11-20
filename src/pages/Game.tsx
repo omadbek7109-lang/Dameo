@@ -653,9 +653,14 @@ function GameScreen({ g, kind, humanColor, top, bottom, canRestart, canUndo, can
   return (
     <div className="page game-page">
       <div className="game-top">
-        <button className="game-back" onClick={onExit}>
-          <LuArrowLeft /> {t('game.back')}
-        </button>
+        {/* no "back" while the game runs: an accidental tap must never take a player out of a live game */}
+        {over ? (
+          <button className="game-back" onClick={onExit}>
+            <LuArrowLeft /> {t('game.back')}
+          </button>
+        ) : (
+          <span />
+        )}
         <button className="icon-btn game-rules" onClick={() => setRules(true)} aria-label={t('rules.button')} title={t('rules.button')}>
           <LuBookOpen />
         </button>
