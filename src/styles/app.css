@@ -3132,7 +3132,7 @@ html.in-telegram body {
   z-index: -1;
   background: linear-gradient(110deg, transparent 30%, rgba(255, 255, 255, 0.55) 48%, transparent 62%);
   background-size: 260% 100%;
-  animation: shine 5s ease-in-out infinite;
+  animation: shine 5s ease-in-out 2; /* a couple of sweeps, then still (lists hold many badges) */
   pointer-events: none;
 }
 .row-title .level-badge,
@@ -7304,3 +7304,103 @@ body:has(.game-page) .main { padding-bottom: calc(24px + env(safe-area-inset-bot
   .dr-strip { grid-template-columns: minmax(0, 1fr); }
 }
 :root[data-theme='light'] .dr .wk-table td { background: rgba(124, 58, 237, 0.06); }
+
+/* ---------- level badges 31–100: each ten levels a richer family ---------- */
+.level-badge .lb-ico { flex: none; font-size: 0.78rem; margin-right: 1px; align-self: center; filter: drop-shadow(0 0 3px currentColor); }
+.level-badge.lb-elite { padding: 2px 9px 2px 7px; }
+.level-badge.lt-9,
+.level-badge.lt-10,
+.level-badge.lt-11,
+.level-badge.lt-12,
+.level-badge.lt-13,
+.level-badge.lt-14,
+.level-badge.lt-15 { align-items: center; gap: 3px; }
+.level-badge.lt-9::after,
+.level-badge.lt-10::after,
+.level-badge.lt-11::after,
+.level-badge.lt-12::after,
+.level-badge.lt-13::after,
+.level-badge.lt-14::after,
+.level-badge.lt-15::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(110deg, transparent 30%, rgba(255, 255, 255, 0.6) 48%, transparent 62%);
+  background-size: 260% 100%;
+  animation: shine 4s ease-in-out 2;
+  pointer-events: none;
+}
+/* 40–49 MYTHIC: obsidian with a gold rim */
+.level-badge.lt-9 {
+  --lb-ink: #ffe6a3;
+  background: linear-gradient(150deg, #2b2b33, #0d0d12 60%, #2a2318);
+  box-shadow: inset 0 0 0 1px #d9a836, inset 0 1px 0 rgba(255, 255, 255, 0.25), 0 0 8px rgba(217, 168, 54, 0.45);
+}
+.level-badge.lt-9 .lb-ico { color: #f6c343; }
+.level-badge.lt-9 .lb-n { color: #ffd76a; }
+/* 50–59 CELESTIAL: night sky, silver stars */
+.level-badge.lt-10 {
+  --lb-ink: #eaf2ff;
+  background:
+    radial-gradient(1px 1px at 20% 30%, #fff 50%, transparent 51%),
+    radial-gradient(1px 1px at 70% 65%, #fff 50%, transparent 51%),
+    radial-gradient(1px 1px at 85% 25%, #cfe3ff 50%, transparent 51%),
+    linear-gradient(150deg, #1f3c88, #0b1638 65%, #241a5c);
+  box-shadow: inset 0 0 0 1px #9cc4ff, inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 0 10px rgba(120, 170, 255, 0.55);
+}
+.level-badge.lt-10 .lb-ico { color: #dce9ff; }
+/* 60–69 INFERNO: molten fire */
+.level-badge.lt-11 {
+  --lb-ink: #fff4e0;
+  background: linear-gradient(160deg, #ffcf5a, #ff7a1a 35%, #d61f1f 70%, #6b0a0a);
+  box-shadow: inset 0 0 0 1px #ffd27a, inset 0 1px 0 rgba(255, 255, 255, 0.45), 0 0 12px rgba(255, 110, 30, 0.7);
+}
+.level-badge.lt-11 .lb-ico { color: #fff3c4; }
+.level-badge.lt-11 .lb-n { text-shadow: 0 0 6px rgba(255, 200, 80, 0.9), 0 1px 1px rgba(0, 0, 0, 0.4); }
+/* 70–79 AURORA: northern lights */
+.level-badge.lt-12 {
+  --lb-ink: #f2fffb;
+  background: linear-gradient(120deg, #0f766e, #22c3a6 25%, #6d5cff 55%, #d946ef 80%, #0f766e);
+  box-shadow: inset 0 0 0 1px rgba(200, 255, 240, 0.9), inset 0 1px 0 rgba(255, 255, 255, 0.5), 0 0 12px rgba(80, 230, 200, 0.6), 0 0 18px rgba(170, 90, 255, 0.35);
+}
+.level-badge.lt-12 .lb-ico { color: #e8fff8; }
+/* 80–89 PRISM: diamond rainbow */
+.level-badge.lt-13 {
+  --lb-ink: #1a1030;
+  background: linear-gradient(115deg, #ffffff, #c8f3ff 18%, #ffd6f5 36%, #fff2b8 54%, #c9ffd9 72%, #d9d2ff 90%);
+  box-shadow: inset 0 0 0 1.5px #ffffff, 0 0 0 1px rgba(160, 120, 255, 0.6), 0 0 14px rgba(200, 160, 255, 0.75);
+}
+.level-badge.lt-13 .lb-ico { color: #7c3aed; filter: none; }
+.level-badge.lt-13 .lb-n { text-shadow: 0 1px 0 #fff; }
+/* 90–99 DIVINE: white gold with a halo */
+.level-badge.lt-14 {
+  --lb-ink: #4a3200;
+  background: radial-gradient(120% 140% at 50% 0%, #fffdf2, #fff0b8 45%, #e9b83c 100%);
+  box-shadow: inset 0 0 0 1.5px #fff8dc, 0 0 0 2px #e6b33a, 0 0 16px rgba(255, 214, 90, 0.9), 0 0 28px rgba(255, 240, 180, 0.5);
+}
+.level-badge.lt-14 .lb-ico { color: #c98a12; filter: none; }
+.level-badge.lt-14 .lb-n { text-shadow: 0 1px 0 rgba(255, 255, 255, 0.8); }
+/* 100 MAX: the crown — gold on black with a double gold ring */
+.level-badge.lt-15 {
+  --lb-ink: #ffe9a8;
+  padding: 3px 11px 3px 8px;
+  background: linear-gradient(160deg, #1a1206, #000 50%, #2a1d05);
+  box-shadow: inset 0 0 0 1.5px #ffd34d, 0 0 0 2px #000, 0 0 0 3.5px #c99212, 0 0 18px rgba(255, 196, 60, 0.85), 0 0 34px rgba(255, 150, 40, 0.45);
+}
+.level-badge.lt-15 .lb-ico { color: #ffd34d; font-size: 0.9rem; }
+.level-badge.lt-15 .lb-n {
+  background: linear-gradient(180deg, #fff6cf, #ffd34d 55%, #c99212);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  text-shadow: none;
+  filter: drop-shadow(0 0 4px rgba(255, 211, 77, 0.8));
+}
+@media (prefers-reduced-motion: reduce) {
+  .level-badge::after { animation: none !important; }
+}
+
+/* rating rows: the level badge leads the second line */
+.lb-card-sub { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.lb-card-sub .level-badge, .lb-me-right .level-badge { flex: none; }

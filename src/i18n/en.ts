@@ -315,7 +315,7 @@ export const en: Record<TKey, string> = {
   'level.expert': 'Expert',
   'level.master': 'Master',
   'rating.how': 'How is the rating calculated?',
-  'rating.explain': "Everyone starts at 1200 (Level 1). After every rated game the server applies: win +10 to +30, loss −10 to −30 (random); in a draw the lower-rated player gains a little (at most ±5). A game that ends before 6 moves gives the winner nothing while the loser still loses. Only 5 games per day against the same opponent count. Practice-bot games are unrated. Levels: a new level every 100 points from 1300, 2200 is Level 11, … 4100+ is the top, Level 30.",
+  'rating.explain': "Everyone starts at 1200 (Level 1). After every rated game the server applies: win +10 to +30, loss −10 to −30 (random); in a draw the lower-rated player gains a little (at most ±5). A game that ends before 6 moves gives the winner nothing while the loser still loses. Only 5 games per day against the same opponent count. Practice-bot games are unrated. Levels: a new level every 100 points from 1300, 2200 is Level 11, 4100 is Level 30, … 11100+ is the top, Level 100. The badge gets richer as you climb.",
   'chart.summary': 'Rating over {n} points: from {from} to {to}',
 
   'ach.firstWin': 'First win',

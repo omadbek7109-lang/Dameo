@@ -3,7 +3,7 @@ import { everyActive } from '../services/telegram.ts';
 import { LuChevronLeft, LuChevronRight, LuCrown, LuSearch, LuTrendingUp, LuTrophy } from 'react-icons/lu';
 import { levelOf } from '../services/levels.ts';
 import { useAuth } from '../auth/AuthProvider.tsx';
-import { Avatar } from '../components/Avatar.tsx';
+import { Avatar, LevelBadge } from '../components/Avatar.tsx';
 import { EmptyState, ErrorState, Spinner } from '../components/States.tsx';
 import { Delta, winRate } from '../components/ui.tsx';
 import { useI18n } from '../i18n/index.tsx';
@@ -253,7 +253,7 @@ function MeCard({ p, total, topPct, ctxMe, friendIds }: { p: RankedPlayer; total
         <span className="lb-me-chip">
           <LuTrophy aria-hidden="true" /> {num(p.rating)}
         </span>
-        <span className="lb-me-chip lb-me-chip-lv">{t('level.name', { n: lv.level })}</span>
+        <LevelBadge rating={p.rating} label={(n) => t('level.name', { n })} />
         {topPct !== null && <span className="lb-me-chip lb-me-chip-pct">{t('lb.topPct', { n: topPct })}</span>}
       </div>
       <div className="lb-me-foot">
@@ -277,7 +277,8 @@ function LbRow({ p, meId }: { p: RankedPlayer; meId?: string }) {
           {mine && <span className="badge badge-you">{t('common.you')}</span>}
         </span>
         <span className="lb-card-sub">
-          {t('level.short', { n: levelOf(p.rating).level })} · {winRate(p.wins, p.losses, p.draws)}% {t('lb.winsShort')}
+          <LevelBadge rating={p.rating} label={(n) => t('level.short', { n })} />
+          {winRate(p.wins, p.losses, p.draws)}% {t('lb.winsShort')}
         </span>
       </span>
       <span className="lb-card-end">

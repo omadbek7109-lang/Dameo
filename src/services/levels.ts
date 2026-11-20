@@ -1,9 +1,9 @@
 /**
  * DAMEO levels (from rating), every level is 100 points:
- *   Level 1: 0–1299 · Level 2: 1300–1399 · … · Level 10: 2100–2199 · Level 11: 2200–2299 · … · Level 30: 4100+
+ *   Level 1: 0–1299 · Level 2: 1300–1399 · … · Level 11: 2200–2299 · … · Level 30: 4100–4199 · … · Level 100: 11100+
  * New players start at 1200 → Level 1. Rating up → level up; rating down → level down.
  */
-export const MAX_LEVEL = 30;
+export const MAX_LEVEL = 100;
 export interface LevelInfo {
   level: number; // 1..MAX_LEVEL
   min: number; // first rating of this level
@@ -21,9 +21,14 @@ export function levelOf(rating: number): LevelInfo {
   return { level, min, next, progress };
 }
 
-/** Colour family of a level badge: 1–3 blue · 4–6 violet · 7–9 pink · 10–14 gold · 15–19 emerald · 20–24 ruby · 25–29 diamond · 30 legend. */
+/**
+ * Badge family (gets richer as the level climbs):
+ *  1–3 blue · 4–6 violet · 7–9 pink · 10–14 gold · 15–19 emerald · 20–24 ruby · 25–29 diamond ·
+ *  30–39 legend · 40–49 mythic · 50–59 celestial · 60–69 inferno · 70–79 aurora · 80–89 prism · 90–99 divine · 100 MAX
+ */
 export function levelTier(level: number): number {
-  if (level >= MAX_LEVEL) return 8;
+  if (level >= MAX_LEVEL) return 15;
+  if (level >= 30) return 8 + Math.floor((level - 30) / 10); // 30→8 … 90→14
   if (level >= 25) return 7;
   if (level >= 20) return 6;
   if (level >= 15) return 5;

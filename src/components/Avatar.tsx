@@ -1,4 +1,6 @@
 import { useId, useState } from 'react';
+import type { IconType } from 'react-icons';
+import { LuCrown, LuFlame, LuGem, LuShield, LuSparkles, LuStar, LuSun } from 'react-icons/lu';
 import type { Player } from '../types/models.ts';
 import { levelOf, levelTier } from '../services/levels.ts';
 import { useFrames } from '../cosmetics/FramesProvider.tsx';
@@ -88,11 +90,17 @@ function ChampionCrown({ size }: { size: number }) {
   );
 }
 
-/** "Lv 12" badge; the colour family climbs with the level (blue → violet → pink → gold → emerald → ruby → diamond → legend). */
+/** Emblems on the highest badges (from Level 40 the badge carries one; Level 100 wears the crown). */
+const TIER_ICON: Record<number, IconType> = { 9: LuShield, 10: LuStar, 11: LuFlame, 12: LuSparkles, 13: LuGem, 14: LuSun, 15: LuCrown };
+
+/** "Lv 12" badge; it grows richer with the level: blue → violet → pink → gold → emerald → ruby → diamond → legend → … → MAX. */
 export function LevelBadge({ rating, label }: { rating: number; label: (n: number) => string }) {
   const { level } = levelOf(rating);
+  const tier = levelTier(level);
+  const Icon = TIER_ICON[tier];
   return (
-    <span className={`level-badge lv-${level} lt-${levelTier(level)}`} aria-label={label(level)} title={label(level)}>
+    <span className={`level-badge lv-${level} lt-${tier} ${tier >= 8 ? 'lb-elite' : ''}`} aria-label={label(level)} title={label(level)}>
+      {Icon && <Icon className="lb-ico" aria-hidden="true" />}
       <span className="lb-lv">Lv </span>
       <span className="lb-n">{level}</span>
     </span>
