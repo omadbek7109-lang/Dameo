@@ -6,6 +6,7 @@
 //    the SIGNED initData — so the code is taken only from there, after the signature check, and linked by SQL
 //    (referral_attach decides: new player only, no self-referral, one inviter). `{ referral: true }` links without
 //    signing in (for a player who already has a session).
+// 5. Every first sign-in and every ref-link open is noted in referral_log (start_param + result) — diagnostics only.
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
 const cors = {
@@ -84,7 +85,16 @@ Deno.serve(async (req) => {
   const url = Deno.env.get('SUPABASE_URL')!;
   const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
   const admin = createClient(url, serviceKey, { auth: { persistSession: false } });
-  const refCode = /^ref_([A-Za-z2-9]{8})$/.exec(params.get('start_param') ?? '')?.[1] ?? null;
+  const startParam = params.get('start_param');
+  const refCode = /^ref_([A-Za-z2-9]{8})$/.exec(startParam ?? '')?.[1] ?? null;
+  // diagnostics only — never blocks or changes the sign-in
+  const note = async (userId: string | null, isNew: boolean, result: string | null) => {
+    try {
+      await admin.from('referral_log').insert({ tg_id: tgUser.id, user_id: userId, new_account: isNew, start_param: startParam ? startParam.slice(0, 64) : null, result });
+    } catch {
+      /* the log is optional */
+    }
+  };
   const attach = async (userId: string): Promise<string | null> => {
     if (!refCode) return null;
     const { data, error } = await admin.rpc('referral_attach', { p_invitee: userId, p_code: refCode });
@@ -93,7 +103,9 @@ Deno.serve(async (req) => {
   if (body?.referral === true) {
     const { data: p } = await admin.from('profiles').select('id').eq('tg_id', tgUser.id).maybeSingle();
     if (!p) return json({ ok: false, error: 'no-account' }, 404);
-    return json({ ok: true, referral: (await attach(p.id)) ?? 'no-code' });
+    const r = (await attach(p.id)) ?? 'no-code';
+    await note(p.id, false, r);
+    return json({ ok: true, referral: r });
   }
   const email = `tg${tgUser.id}@tg.dameo-app.com`;
   const password = hex(await hmac(enc.encode(serviceKey), `dameo-tg:${tgUser.id}`));
@@ -123,6 +135,7 @@ Deno.serve(async (req) => {
 
   const s = signed.session;
   const referral = await attach(signed.user!.id);
+  if (existing == null || refCode) await note(signed.user!.id, existing == null, referral);
   return json({
     ok: true,
     referral,
