@@ -650,6 +650,7 @@ export const uz = {
   'gift.err.generic': "Xarid amalga oshmadi. Coin yechilmadi — qayta urinib ko'ring.",
   'gift.err.soldOut': "Hozircha sovg'a kodlari tugadi. Keyinroq urinib ko'ring.",
   'gift.note': "Sovg'a qo'lda yuboriladi; yuborilgach DAMEO bot sizga xabar beradi.",
+  'gift.paused': "Telegram sovg'alari vaqtincha mavjud emas. Tez orada qaytadi!",
   'ledger.gift': "Telegram sovg'a",
   'common.more': "Ko'proq",
   'shop.title': "DAMEO Shop",

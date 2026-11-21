@@ -5777,6 +5777,7 @@ html.calm .ref-coins i { animation: none; }
 .gift-name { font-size: 1.02rem; }
 .gift-price { font-weight: 800; font-variant-numeric: tabular-nums; }
 .gift-note { margin: 0; }
+.gift-paused { margin: 0; padding: 14px 16px; text-align: center; color: var(--muted, inherit); font-weight: 600; }
 .gift-orders h3 { margin: 0 0 8px; }
 .gift-orders ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
 .gift-orders li { display: flex; align-items: center; gap: 10px; }

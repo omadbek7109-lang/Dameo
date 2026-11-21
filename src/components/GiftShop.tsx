@@ -108,6 +108,7 @@ export function GiftShop({ balance, onBalance }: { balance: number | null; onBal
         </h2>
         <p className="muted small">{t('gift.sub')}</p>
       </div>
+      {items.length === 0 && <p className="card gift-paused">{t('gift.paused')}</p>}
       <div className="gift-grid">
         {items.map((g) => {
           const short = balance !== null && balance < g.price;
@@ -125,7 +126,7 @@ export function GiftShop({ balance, onBalance }: { balance: number | null; onBal
           );
         })}
       </div>
-      <p className="muted small gift-note">{t('gift.note')}</p>
+      {items.length > 0 && <p className="muted small gift-note">{t('gift.note')}</p>}
 
       {orders.length > 0 && (
         <div className="card gift-orders">

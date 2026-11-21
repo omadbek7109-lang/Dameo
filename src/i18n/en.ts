@@ -652,6 +652,7 @@ export const en: Record<TKey, string> = {
   'gift.err.generic': "The purchase failed. No coins were taken — please try again.",
   'gift.err.soldOut': "Gift codes are temporarily unavailable. Please try later.",
   'gift.note': "Gifts are sent by hand; the DAMEO bot will message you once it is sent.",
+  'gift.paused': 'Telegram gifts are temporarily unavailable. They will be back soon!',
   'ledger.gift': "Telegram gift",
   'common.more': "Load more",
   'shop.title': "DAMEO Shop",
