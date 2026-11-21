@@ -77,6 +77,11 @@ Deno.serve(async (req) => {
     return Response.json(results);
   }
 
+  if (req.method === 'GET' && url.searchParams.get('me') === '1') {
+    const me = await tg(token, 'getMe', {});
+    const r = me?.result ?? {};
+    return Response.json({ username: r.username, has_main_web_app: r.has_main_web_app ?? null });
+  }
   if (req.method !== 'POST') return new Response('ok');
   if (req.headers.get('x-telegram-bot-api-secret-token') !== secret) return new Response('forbidden', { status: 403 });
 
@@ -197,6 +202,9 @@ Deno.serve(async (req) => {
     }
     // "/start join_ABC123" (deep link) opens the game straight into that room
     const param = text.split(' ')[1] ?? '';
+    // "/start ref_CODE" (invite link): remember the code; the Mini App sign-in links the friend (referral_pending)
+    const refStart = /^ref_([A-Za-z2-9]{8})$/.exec(param)?.[1];
+    if (refStart) await db().rpc('referral_pending_set', { p_tg: msg.chat.id, p_code: refStart }).then(() => {}, () => {});
     const appUrl = /^join_[A-Z0-9]{4,8}$/i.test(param) ? `${WEBAPP_URL}#/play?mode=friends&join=${param.slice(5).toUpperCase()}` : WEBAPP_URL;
     // coloured buttons (Bot API `style`): green = play, blue = channel; older apps show them in the default colour
     const buttons = [

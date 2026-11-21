@@ -37,7 +37,7 @@ export async function referralOverview(): Promise<ReferralOverview> {
 
 /** Telegram Mini App deep link — the only way a referral works (no web URL). */
 export function referralLink(code: string): string {
-  return `https://t.me/${botUsername() || DAMEO_BOT}?startapp=ref_${code}`;
+  return `https://t.me/${botUsername() || DAMEO_BOT}?start=ref_${code}`;
 }
 
 /** "ref_<CODE>" from the Telegram launch (start_param), or null. */

@@ -12,7 +12,7 @@ import { coins } from '../services/shop.ts';
 import { haptic, inTelegram } from '../services/telegram.ts';
 
 /**
- * DAMEO Referral: my Telegram invite link (t.me/<bot>?startapp=ref_<CODE>), share/copy, stats, my friends' progress.
+ * DAMEO Referral: my Telegram invite link (t.me/<bot>?start=ref_<CODE>: opens the bot, which remembers the code), share/copy, stats, my friends' progress.
  * Every number comes from the server (referral_overview); coins are paid only by the server after 2 real games.
  */
 export function Referral() {

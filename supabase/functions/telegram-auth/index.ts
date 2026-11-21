@@ -7,6 +7,8 @@
 //    (referral_attach decides: new player only, no self-referral, one inviter). `{ referral: true }` links without
 //    signing in (for a player who already has a session).
 // 5. Every first sign-in and every ref-link open is noted in referral_log (start_param + result) — diagnostics only.
+// 6. Invite links that go through the bot (t.me/<bot>?start=ref_<CODE>): the bot remembers the code for this Telegram
+//    user (referral_pending); with no start_param, the first sign-in takes that remembered code instead.
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
 const cors = {
@@ -86,11 +88,12 @@ Deno.serve(async (req) => {
   const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
   const admin = createClient(url, serviceKey, { auth: { persistSession: false } });
   const startParam = params.get('start_param');
-  const refCode = /^ref_([A-Za-z2-9]{8})$/.exec(startParam ?? '')?.[1] ?? null;
+  let refCode = /^ref_([A-Za-z2-9]{8})$/.exec(startParam ?? '')?.[1] ?? null;
+  let via = startParam;
   // diagnostics only — never blocks or changes the sign-in
   const note = async (userId: string | null, isNew: boolean, result: string | null) => {
     try {
-      await admin.from('referral_log').insert({ tg_id: tgUser.id, user_id: userId, new_account: isNew, start_param: startParam ? startParam.slice(0, 64) : null, result });
+      await admin.from('referral_log').insert({ tg_id: tgUser.id, user_id: userId, new_account: isNew, start_param: via ? via.slice(0, 64) : null, result });
     } catch {
       /* the log is optional */
     }
@@ -134,6 +137,18 @@ Deno.serve(async (req) => {
   if (existing == null) await admin.from('profiles').update({ tg_id: tgUser.id }).eq('id', signed.user!.id);
 
   const s = signed.session;
+  if (!refCode) {
+    // came through the bot's /start ref_<CODE>? use the code the bot remembered
+    try {
+      const { data: pending } = await admin.rpc('referral_pending_take', { p_tg: tgUser.id });
+      if (typeof pending === 'string' && /^[A-Za-z2-9]{8}$/.test(pending)) {
+        refCode = pending;
+        via = `bot:ref_${pending}`;
+      }
+    } catch {
+      /* optional */
+    }
+  }
   const referral = await attach(signed.user!.id);
   if (existing == null || refCode) await note(signed.user!.id, existing == null, referral);
   return json({
