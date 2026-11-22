@@ -5828,6 +5828,13 @@ img {
 a[role='link'] {
   cursor: pointer;
 }
+/* Telegram on Android opens its own image menu (Open in / Download / copy link) on long press, ignoring JS;
+   pictures that can't be hit-tested never get it. Taps fall through to the card/button around them. */
+img {
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
 
 /* ================================================================= DAMEO 3.2 — premium 3D pieces, kings, move effects */
 .piece-w { --edge-base: #b3bedb; }
