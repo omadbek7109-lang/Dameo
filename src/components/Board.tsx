@@ -1,6 +1,7 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { Crown } from './Crown.tsx';
 import { FxCanvas } from './FxCanvas.tsx';
+import { ComboFx, type ComboTier } from './ComboFx.tsx';
 import { isDark, rc, squareName, type Cell } from '../engine/index.ts';
 import { useT } from '../i18n/index.tsx';
 import { useCosmetics } from '../cosmetics/CosmeticsProvider.tsx';
@@ -24,11 +25,13 @@ interface Props {
   skin?: string;
   /** per-side move effect classes (real games: each player's effect plays only on their own moves) */
   fx?: { w?: string; b?: string };
+  /** DAMEO Pass combo effect for the last move (several captures in one move) */
+  combo?: { from: number; path: number[]; captures: number[]; tier: ComboTier; key: string } | null;
 }
 
 const FILES = 'abcdefgh';
 
-function BoardImpl({ board, ids, flipped, selected, targets, pathMarks, mustMove, hint, lastMove, showLegal, disabled, shake, onSquare, skin, fx }: Props) {
+function BoardImpl({ board, ids, flipped, selected, targets, pathMarks, mustMove, hint, lastMove, showLegal, disabled, shake, onSquare, skin, fx, combo }: Props) {
   const t = useT();
   const cosmetics = useCosmetics();
   const skinClass = skin ?? cosmetics?.boardClass ?? '';
@@ -220,6 +223,12 @@ function BoardImpl({ board, ids, flipped, selected, targets, pathMarks, mustMove
         </div>
         {lastFx !== null && lastMove && moverCell !== 0 && (
           <FxCanvas fxClass={lastFx || skinClass} from={pos(lastMove.from)} to={pos(lastMove.to)} trigger={`${lastMove.from}-${lastMove.to}-${ids[lastMove.to]}`} />
+        )}
+        {combo && (
+          <ComboFx
+            key={combo.key}
+            combo={{ path: [combo.from, ...combo.path].map(pos), caps: combo.captures.map(pos), n: combo.captures.length, tier: combo.tier, key: combo.key }}
+          />
         )}
         {/* coordinates */}
         {Array.from({ length: 8 }, (_, k) => (

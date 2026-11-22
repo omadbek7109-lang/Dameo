@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { appActive } from '../services/telegram.ts';
 import {
-  LuBan, LuCheck, LuChevronRight, LuCoins, LuGauge, LuHistory, LuImage, LuLoader, LuPackage, LuPlus, LuRefreshCw, LuSearch,
+  LuBan, LuCheck, LuCrown, LuChevronRight, LuCoins, LuGauge, LuHistory, LuImage, LuLoader, LuPackage, LuPlus, LuRefreshCw, LuSearch,
   LuBot, LuGift, LuMegaphone, LuSend, LuShieldCheck, LuShoppingBag, LuTrophy, LuTriangleAlert, LuUndo2, LuUserCog, LuUsers, LuVolumeX,
 } from 'react-icons/lu';
 import { useAuth } from '../auth/AuthProvider.tsx';
@@ -16,6 +16,7 @@ import { useToast } from '../components/Toast.tsx';
 import { useI18n } from '../i18n/index.tsx';
 import { navigate, useRoute } from '../router.tsx';
 import * as A from '../services/admin.ts';
+import { adminGrantPremium } from '../services/pass/index.ts';
 import { boardArt, coins, newKey, RARITIES, serialLabel, type ShopItem } from '../services/shop.ts';
 import { registerSkins } from '../services/skins.ts';
 import { SbError, db } from '../services/supabase.ts';
@@ -27,7 +28,7 @@ function useL() {
 }
 const errText = (e: unknown) => (e instanceof SbError ? e.message : e instanceof Error ? e.message : 'error');
 
-type Tab = 'dash' | 'users' | 'payments' | 'shop' | 'gifts' | 'packages' | 'reports' | 'weekly' | 'virtual' | 'channels' | 'broadcast' | 'roles' | 'audit';
+type Tab = 'dash' | 'users' | 'payments' | 'shop' | 'gifts' | 'packages' | 'reports' | 'weekly' | 'virtual' | 'channels' | 'broadcast' | 'roles' | 'audit' | 'pass';
 const TABS: Array<{ id: Tab; perm: string; icon: typeof LuGauge; uz: string; en: string }> = [
   { id: 'dash', perm: 'dashboard', icon: LuGauge, uz: 'Dashboard', en: 'Dashboard' },
   { id: 'users', perm: 'users.view', icon: LuUsers, uz: 'Foydalanuvchilar', en: 'Users' },
@@ -42,6 +43,7 @@ const TABS: Array<{ id: Tab; perm: string; icon: typeof LuGauge; uz: string; en:
   { id: 'broadcast', perm: 'roles.manage', icon: LuMegaphone, uz: 'Xabar yuborish', en: 'Broadcast' },
   { id: 'roles', perm: 'roles.manage', icon: LuUserCog, uz: 'Rollar', en: 'Roles' },
   { id: 'audit', perm: 'audit.view', icon: LuHistory, uz: 'Audit log', en: 'Audit log' },
+  { id: 'pass', perm: 'payments.view', icon: LuCrown, uz: 'DAMEO Pass', en: 'DAMEO Pass' },
 ];
 const ROLE_LABEL: Record<A.Role, [string, string]> = {
   super_admin: ['Super Admin', 'Super Admin'],
@@ -104,6 +106,7 @@ export function Admin() {
       {current === 'broadcast' && <BroadcastTab />}
       {current === 'roles' && <RolesTab />}
       {current === 'audit' && <AuditTab />}
+      {current === 'pass' && <PassTab />}
     </div>
   );
 }
@@ -1665,5 +1668,34 @@ function VirtualTab() {
         </ReasonDialog>
       )}
     </div>
+  );
+}
+
+/** DAMEO Pass: give a player Premium for this season (free; the server writes it to the audit log). */
+function PassTab() {
+  const { t } = useI18n();
+  const { toast } = useToast();
+  const [id, setId] = useState('');
+  const [busy, setBusy] = useState(false);
+  const give = async () => {
+    const user = id.trim();
+    if (!/^[0-9a-f-]{36}$/i.test(user)) return toast('error', t('shop.err.generic'));
+    setBusy(true);
+    const r = await adminGrantPremium(user);
+    setBusy(false);
+    if (r.ok) {
+      toast('success', t('admin.pass.ok'));
+      setId('');
+    } else toast(r.already ? 'info' : 'error', t(r.already ? 'admin.pass.already' : 'shop.err.generic'));
+  };
+  return (
+    <section className="card admin-form">
+      <h2 className="h3">{t('admin.pass.title')}</h2>
+      <p className="muted small">{t('admin.pass.hint')}</p>
+      <input className="input" value={id} onChange={(e) => setId(e.target.value)} placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" />
+      <button className="btn btn-primary btn-block" onClick={give} disabled={busy || !id.trim()}>
+        {t('admin.pass.give')}
+      </button>
+    </section>
   );
 }

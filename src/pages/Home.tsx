@@ -12,6 +12,7 @@ import { demoLiveMatches } from '../services/demoData.ts';
 import { fetchLeaderboard } from '../services/leaderboard.ts';
 import { Link } from '../router.tsx';
 import { MissionsHomeCard } from './Missions.tsx';
+import { PassHomeCard } from './Pass.tsx';
 import { db } from '../services/supabase.ts';
 import type { LiveMatch } from '../types/models.ts';
 
@@ -110,6 +111,7 @@ export function Home() {
         </Link>
       </nav>
 
+      <PassHomeCard />
       <MissionsHomeCard />
 
       <section className="arena-live" aria-labelledby="h-live">

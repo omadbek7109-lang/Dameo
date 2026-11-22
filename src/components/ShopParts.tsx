@@ -72,6 +72,10 @@ export function MiniPreview({ item }: { item: Pick<ShopItem, 'slug' | 'slot' | '
     const full = boardArt(item.image_url);
     return <img className="board-art mini-art" src={full.replace(/\.webp$/, '-sm.webp')} width={256} height={256} alt="" loading="lazy" decoding="async" />;
   }
+  // DAMEO Pass effects are shown with their own artwork
+  if (item.slot === 'effect' && item.image_url) {
+    return <img className="board-art mini-art fx-art" src={boardArt(item.image_url)} alt="" loading="lazy" decoding="async" />;
+  }
   const loop = useLoop(2200, item.slot === 'effect');
   const sq = Array.from({ length: 16 }, (_, i) => i);
   return (

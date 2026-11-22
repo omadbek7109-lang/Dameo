@@ -3,7 +3,7 @@
  * Mobile / Telegram WebView autoplay rules: the AudioContext is created and resumed on the first user gesture.
  * Callers play a sound once per server-confirmed event (online games) — this module only plays what it is told.
  */
-export type SoundKind = 'move' | 'opponent' | 'capture' | 'king' | 'win' | 'loss' | 'draw' | 'notify';
+export type SoundKind = 'move' | 'opponent' | 'capture' | 'king' | 'win' | 'loss' | 'draw' | 'notify' | 'combo2' | 'combo3' | 'victory';
 
 let ctx: AudioContext | null = null;
 let enabled = true;
@@ -124,6 +124,32 @@ export function playSound(kind: SoundKind) {
     case 'draw':
       tone(a, t0, 440, 0.25, 'sine', 0.2);
       tone(a, t0 + 0.2, 440, 0.3, 'sine', 0.18);
+      break;
+    case 'combo2':
+      // two hits, then a bright rising chord (Double Strike)
+      [0, 0.45].forEach((d) => {
+        click(a, t0 + d, 900, 1);
+        tone(a, t0 + d, 200, 0.14, 'sine', 0.3, 90);
+      });
+      [523, 784, 1047].forEach((f, i) => tone(a, t0 + 0.9 + i * 0.08, f, 0.45, 'triangle', 0.2));
+      tone(a, t0 + 0.9, 1568, 0.5, 'sine', 0.08, 2093);
+      break;
+    case 'combo3':
+      // three hits, a low boom and a royal fanfare (Triple Strike)
+      [0, 0.45, 0.9].forEach((d, i) => {
+        click(a, t0 + d, 900 + i * 200, 1);
+        tone(a, t0 + d, 220 - i * 20, 0.14, 'sine', 0.32, 90);
+      });
+      tone(a, t0 + 1.35, 110, 0.7, 'sine', 0.45, 55);
+      [523, 659, 784, 1047, 1319].forEach((f, i) => tone(a, t0 + 1.35 + i * 0.09, f, 0.6, 'triangle', 0.2));
+      tone(a, t0 + 1.45, 2093, 0.7, 'sine', 0.07, 2637);
+      break;
+    case 'victory':
+      // royal fanfare for the DAMEO Pass victory animation
+      [392, 523, 659, 784].forEach((f, i) => tone(a, t0 + i * 0.12, f, 0.3, 'triangle', 0.22));
+      [523, 659, 784, 1047].forEach((f) => tone(a, t0 + 0.55, f, 0.9, 'triangle', 0.14));
+      tone(a, t0 + 0.55, 131, 0.8, 'sine', 0.3, 98);
+      tone(a, t0 + 0.6, 2093, 0.9, 'sine', 0.06, 3136);
       break;
     case 'notify':
       tone(a, t0, 880, 0.12, 'sine', 0.2);

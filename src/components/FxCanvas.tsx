@@ -6,7 +6,7 @@
  */
 import { useEffect, useRef } from 'react';
 
-type Kind = 'ripple' | 'sparkle' | 'fire' | 'lightning' | 'stardust';
+type Kind = 'ripple' | 'sparkle' | 'fire' | 'lightning' | 'stardust' | 'trail' | 'royal';
 type V = { x: number; y: number };
 interface P {
   x: number;
@@ -24,8 +24,8 @@ interface P {
   c?: [number, number, number];
 }
 
-const DUR: Record<Kind, number> = { ripple: 1.3, sparkle: 1.3, fire: 1.4, lightning: 1.0, stardust: 1.6 };
-export const kindOf = (cls: string): Kind | null => (cls.match(/(?:^|\s)fx-(ripple|sparkle|fire|lightning|stardust)(?:\s|$)/)?.[1] as Kind) ?? null;
+const DUR: Record<Kind, number> = { ripple: 1.3, sparkle: 1.3, fire: 1.4, lightning: 1.0, stardust: 1.6, trail: 1.1, royal: 1.35 };
+export const kindOf = (cls: string): Kind | null => (cls.match(/(?:^|\s)fx-(ripple|sparkle|fire|lightning|stardust|trail|royal)(?:\s|$)/)?.[1] as Kind) ?? null;
 
 function rgbOf(css: string, fallback: [number, number, number]): [number, number, number] {
   const c = document.createElement('canvas').getContext('2d');
@@ -58,6 +58,157 @@ function bolt(a: V, b: V, rough: number, depth: number): V[] {
   return [...bolt(a, m, rough / 2, depth - 1).slice(0, -1), ...bolt(m, b, rough / 2, depth - 1)];
 }
 
+/* ---------- DAMEO Pass effects: Purple Trail (free) and Royal Lightning (premium) — an arc from the old square to the
+ * new one with a glowing tail and chevrons, a ring where the piece lands; Royal adds gold, crown sparks and a short bolt. */
+function crown(ctx: CanvasRenderingContext2D, x: number, y: number, r: number) {
+  ctx.beginPath();
+  ctx.moveTo(x - r, y + r * 0.55);
+  ctx.lineTo(x - r, y - r * 0.35);
+  ctx.lineTo(x - r * 0.5, y + r * 0.05);
+  ctx.lineTo(x, y - r * 0.6);
+  ctx.lineTo(x + r * 0.5, y + r * 0.05);
+  ctx.lineTo(x + r, y - r * 0.35);
+  ctx.lineTo(x + r, y + r * 0.55);
+  ctx.closePath();
+  ctx.fill();
+}
+function passTrail(ctx: CanvasRenderingContext2D, rect: DOMRect, kind: 'trail' | 'royal', A: V, B: V, S: number, col: [number, number, number]) {
+  const royal = kind === 'royal';
+  const gold: [number, number, number] = royal ? col : [255, 210, 120];
+  const purple: [number, number, number] = royal ? [180, 92, 255] : col;
+  const white: [number, number, number] = [255, 255, 255];
+  const dx = B.x - A.x;
+  const dy = B.y - A.y;
+  const len = Math.hypot(dx, dy) || 1;
+  // control point: lifted to the "upper" side of the move, so the trail arcs like a jump
+  let nx = -dy / len;
+  let ny = dx / len;
+  if (ny > 0) {
+    nx = -nx;
+    ny = -ny;
+  }
+  const lift = Math.min(1.1, 0.35 + len / S / 6) * S;
+  const C = { x: (A.x + B.x) / 2 + nx * lift, y: (A.y + B.y) / 2 + ny * lift };
+  const at = (k: number): V => ({ x: (1 - k) * (1 - k) * A.x + 2 * (1 - k) * k * C.x + k * k * B.x, y: (1 - k) * (1 - k) * A.y + 2 * (1 - k) * k * C.y + k * k * B.y });
+  const ease = (x: number) => 1 - Math.pow(1 - Math.max(0, Math.min(1, x)), 3);
+  const dur = DUR[kind];
+  const sparks: P[] = [];
+  const crowns: P[] = [];
+  const zap = royal ? bolt({ x: B.x + rnd(-0.6, 0.6) * S, y: B.y - 2.2 * S }, B, S * 0.9, 5) : [];
+  let raf = 0;
+  const start = performance.now();
+  let last = start;
+  let emitted = 0;
+  const frame = (now: number) => {
+    const t = (now - start) / 1000;
+    const dt = Math.min(0.05, (now - last) / 1000);
+    last = now;
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    // normal blending with a glow, so the trail also shows on light boards
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.shadowColor = rgba(royal ? gold : purple, 0.9);
+    ctx.shadowBlur = S * 0.3;
+    const head = ease(t / 0.4);
+    const tail = ease((t - 0.22) / 0.7);
+    // the trail: short segments from the tail to the head, wider and brighter towards the head
+    if (head > tail + 0.01) {
+      const N = 26;
+      for (let i = 0; i < N; i++) {
+        const k0 = tail + ((head - tail) * i) / N;
+        const k1 = tail + ((head - tail) * (i + 1)) / N;
+        const f = (i + 1) / N; // 0 at the tail → 1 at the head
+        const p0 = at(k0);
+        const p1 = at(k1);
+        const c = royal ? mix(purple, gold, f) : mix(purple, white, f * 0.35);
+        ctx.strokeStyle = rgba(c, 0.35 + 0.6 * f);
+        ctx.lineCap = 'round';
+        ctx.lineWidth = S * (0.12 + 0.42 * f);
+        ctx.beginPath();
+        ctx.moveTo(p0.x, p0.y);
+        ctx.lineTo(p1.x, p1.y);
+        ctx.stroke();
+        ctx.strokeStyle = rgba(white, 0.25 * f);
+        ctx.lineWidth = S * 0.06 * (0.5 + f);
+        ctx.stroke();
+      }
+      ctx.shadowBlur = 0;
+      // chevrons along the trail, pointing the way the piece went
+      ctx.lineWidth = S * 0.06;
+      for (let j = 1; j <= 3; j++) {
+        const k = tail + ((head - tail) * j) / 4;
+        const p = at(k);
+        const q = at(Math.min(1, k + 0.02));
+        const ang = Math.atan2(q.y - p.y, q.x - p.x);
+        const r = S * 0.16;
+        ctx.strokeStyle = rgba(royal ? gold : white, 0.55);
+        ctx.beginPath();
+        ctx.moveTo(p.x - Math.cos(ang - 0.7) * r, p.y - Math.sin(ang - 0.7) * r);
+        ctx.lineTo(p.x, p.y);
+        ctx.lineTo(p.x - Math.cos(ang + 0.7) * r, p.y - Math.sin(ang + 0.7) * r);
+        ctx.stroke();
+      }
+    }
+    // sparks shed by the head
+    const want = Math.floor(Math.min(1, t / 0.4) * (royal ? 26 : 18));
+    while (emitted < want) {
+      const p = at(ease(emitted / (royal ? 26 : 18)) * 0.98);
+      sparks.push({ x: p.x, y: p.y, vx: rnd(-0.6, 0.6) * S, vy: rnd(-1, 0.2) * S, life: 0, max: rnd(0.4, 0.8), size: rnd(0.04, 0.08) * S, c: royal && Math.random() < 0.6 ? gold : mix(purple, white, rnd(0, 0.5)) });
+      emitted++;
+    }
+    // landing ring(s)
+    for (const [d0, k] of royal ? [[0.32, 1], [0.46, 0.7]] : [[0.32, 1]]) {
+      const u = (t - d0) / 0.7;
+      if (u > 0 && u < 1) {
+        ctx.strokeStyle = rgba(royal ? gold : purple, (1 - u) * 0.9 * k);
+        ctx.lineWidth = S * 0.07 * (1 - u * 0.6);
+        ctx.beginPath();
+        ctx.ellipse(B.x, B.y + S * 0.05, S * (0.3 + 0.45 * ease(u)), S * (0.22 + 0.33 * ease(u)), 0, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+    }
+    if (royal) {
+      // a short bolt onto the square, then three little crowns rising
+      const z = (t - 0.34) / 0.18;
+      if (z > 0 && z < 1) {
+        ctx.strokeStyle = rgba(mix(gold, white, 0.5), 1 - z);
+        ctx.lineWidth = S * 0.05;
+        ctx.beginPath();
+        zap.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)));
+        ctx.stroke();
+      }
+      if (t > 0.38 && crowns.length === 0)
+        for (let i = 0; i < 3; i++) crowns.push({ x: B.x + (i - 1) * S * 0.35, y: B.y - S * 0.2, vx: (i - 1) * S * 0.25, vy: -S * rnd(0.9, 1.3), life: 0, max: rnd(0.7, 0.9), size: S * rnd(0.1, 0.14) });
+      for (const c of crowns) {
+        c.life += dt;
+        c.x += c.vx * dt;
+        c.y += c.vy * dt;
+        const k = c.life / c.max;
+        if (k >= 1) continue;
+        ctx.fillStyle = rgba(gold, 1 - k);
+        crown(ctx, c.x, c.y, c.size * (1 + k * 0.3));
+      }
+    }
+    let alive = 0;
+    for (const p of sparks) {
+      p.life += dt;
+      if (p.life >= p.max) continue;
+      alive++;
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+      p.vy += S * 1.2 * dt;
+      ctx.fillStyle = rgba(p.c ?? white, 1 - p.life / p.max);
+      star(ctx, p.x, p.y, p.size * 1.6, p.life * 4);
+    }
+    if (t < dur || alive > 0) raf = requestAnimationFrame(frame);
+    else ctx.clearRect(0, 0, rect.width, rect.height);
+  };
+  raf = requestAnimationFrame(frame);
+  return () => {
+    cancelAnimationFrame(raf);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+  };
+}
+
 export function FxCanvas({ fxClass, from, to, trigger }: { fxClass: string; from: V; to: V; trigger: string }) {
   const cv = useRef<HTMLCanvasElement>(null);
   const probe = useRef<HTMLSpanElement>(null);
@@ -77,9 +228,13 @@ export function FxCanvas({ fxClass, from, to, trigger }: { fxClass: string; from
     const S = rect.width / 8; // one square
     const A = { x: (from.x + 0.5) * S, y: (from.y + 0.5) * S };
     const B = { x: (to.x + 0.5) * S, y: (to.y + 0.5) * S };
-    const defaults: Record<Kind, [number, number, number]> = { ripple: [79, 195, 247], sparkle: [255, 213, 79], fire: [255, 87, 34], lightning: [128, 216, 255], stardust: [179, 136, 255] };
+    const defaults: Record<Kind, [number, number, number]> = { ripple: [79, 195, 247], sparkle: [255, 213, 79], fire: [255, 87, 34], lightning: [128, 216, 255], stardust: [179, 136, 255], trail: [180, 92, 255], royal: [255, 194, 61] };
     const col = rgbOf(probe.current ? getComputedStyle(probe.current).getPropertyValue('--fx-c') : '', defaults[kind]);
     const white: [number, number, number] = [255, 255, 255];
+    if (kind === 'trail' || kind === 'royal') {
+      const stop = passTrail(ctx, rect, kind, A, B, S, col);
+      return stop;
+    }
     const ps: P[] = [];
     const dur = DUR[kind];
 

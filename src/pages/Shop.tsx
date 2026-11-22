@@ -58,7 +58,8 @@ export function Shop() {
   // the Football tab shows the football collection (those sets also stay on the main pieces page)
   // default tab: the server's first category (Toshlar)
   const cat = picked ?? data?.categories[0]?.id ?? 'stones';
-  const items = useMemo(() => (data?.items ?? []).filter((i) => (cat === 'football' ? i.collection === 'football' : i.category_id === cat)), [data, cat]);
+  // DAMEO Pass items (collection 'pass') are not sold: they only come from the Pass and live in the inventory
+  const items = useMemo(() => (data?.items ?? []).filter((i) => i.collection !== 'pass' && (cat === 'football' ? i.collection === 'football' : i.category_id === cat)), [data, cat]);
   const groups = useMemo(() => {
     const m = new Map<string, ShopItem[]>();
     for (const i of items) m.set(i.collection, [...(m.get(i.collection) ?? []), i]);

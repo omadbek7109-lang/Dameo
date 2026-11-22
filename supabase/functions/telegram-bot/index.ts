@@ -98,7 +98,12 @@ Deno.serve(async (req) => {
   const pcq = update?.pre_checkout_query;
   if (pcq?.id) {
     let error: string | null = 'Order not found';
-    if (UUID.test(String(pcq.invoice_payload ?? ''))) {
+    const passId = String(pcq.invoice_payload ?? '').replace(/^pass:/, '');
+    if (String(pcq.invoice_payload ?? '').startsWith('pass:') && UUID.test(passId)) {
+      // DAMEO Pass Premium order
+      const { data, error: e } = await db().rpc('pass_payment_precheck', { p_order: passId, p_stars: pcq.total_amount, p_currency: pcq.currency, p_tg: pcq.from?.id });
+      error = e ? 'Server error, please try again' : (data as string | null);
+    } else if (UUID.test(String(pcq.invoice_payload ?? ''))) {
       const { data, error: e } = await db().rpc('payment_precheck', {
         p_order: pcq.invoice_payload, p_stars: pcq.total_amount, p_currency: pcq.currency, p_tg: pcq.from?.id,
       });
@@ -128,6 +133,31 @@ Deno.serve(async (req) => {
 
   // ---- Stars: the payment went through → credit the coins (idempotent on the Telegram charge id)
   const paid = msg?.successful_payment;
+  if (paid && String(paid.invoice_payload ?? '').startsWith('pass:')) {
+    // DAMEO Pass Premium: opens only here, once (unique Telegram charge id)
+    const id = String(paid.invoice_payload).slice(5);
+    const { data, error } = await db().rpc('pass_payment_complete', {
+      p_order: UUID.test(id) ? id : '00000000-0000-0000-0000-000000000000',
+      p_charge: paid.telegram_payment_charge_id, p_provider_charge: paid.provider_payment_charge_id ?? null,
+      p_stars: paid.total_amount, p_tg: msg.from?.id, p_raw: paid,
+    });
+    if (error) return new Response('retry', { status: 500 });
+    const en = msg.from?.language_code?.startsWith('en');
+    const r = data as { ok: boolean; duplicate?: boolean };
+    if (r?.ok && !r.duplicate) {
+      await tg(token, 'sendMessage', {
+        chat_id: msg.chat.id,
+        text: en ? '👑 Premium Pass is open! 20 exclusive rewards are waiting for you.' : "👑 Premium Pass ochildi! 20 ta eksklyuziv mukofot sizni kutmoqda.",
+        reply_markup: { inline_keyboard: [[{ text: en ? '🎁 Open DAMEO PASS' : '🎁 DAMEO PASS ni ochish', web_app: { url: `${WEBAPP_URL}#/pass` } }]] },
+      });
+    } else if (r && !r.ok) {
+      await tg(token, 'sendMessage', {
+        chat_id: msg.chat.id,
+        text: en ? '⚠️ We received your payment but need to check it. Support will contact you.' : "⚠️ To'lov qabul qilindi, lekin tekshiruv kerak. Yordam xizmati siz bilan bog'lanadi.",
+      });
+    }
+    return new Response('ok');
+  }
   if (paid) {
     const { data, error } = await db().rpc('payment_complete', {
       p_order: UUID.test(String(paid.invoice_payload ?? '')) ? paid.invoice_payload : '00000000-0000-0000-0000-000000000000',

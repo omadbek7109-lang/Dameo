@@ -1,4 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
+import { backendConfigured } from '../services/config.ts';
+import { BadgeArt, NameEmoji, PassFrame, ProfileBg, TitleTag, useWorn } from '../components/PassArt.tsx';
 import { LuCamera, LuLoader, LuPencil, LuSearch, LuUserPlus, LuUsers } from 'react-icons/lu';
 import { useAuth } from '../auth/AuthProvider.tsx';
 import { Avatar, LevelBadge, isPhoto } from '../components/Avatar.tsx';
@@ -65,26 +67,38 @@ export function Profile() {
 }
 
 function ProfileView({ view }: { view: View }) {
-  const { t, num, relative, dateTime } = useI18n();
+  const { t, num, relative, dateTime, lang } = useI18n();
   const { mode } = useAuth();
   const { player: p, rank, matches, history, own } = view;
   const [editing, setEditing] = useState(false);
   const games = p.wins + p.losses + p.draws;
   const online = own ? true : isOnline(p);
   const lv = levelOf(p.rating);
+  // DAMEO Pass cosmetics: in the beta only this device's own profile has them
+  const worn = useWorn(p.id, own || backendConfigured);
 
   return (
     <div className="page">
       <DemoNotice text={own ? t('demo.profileNotice') : t('demo.otherProfileNotice')} />
-      <section className="card profile-head">
+      <section className={`card profile-head ${worn.background ? 'has-pbg' : ''}`}>
+        <ProfileBg id={worn.background} />
         <div className="profile-avatar">
-          <Avatar name={p.username} seed={p.avatar} size={96} online={online} ring={rank === 1 ? 'gold' : undefined} userId={p.id} />
+          <PassFrame id={worn.frame} size={worn.frame ? 84 : 96}>
+            <Avatar name={p.username} seed={p.avatar} size={worn.frame ? 84 : 96} online={online} ring={rank === 1 ? 'gold' : undefined} userId={p.id} />
+          </PassFrame>
         </div>
         <div className="profile-id">
           <h1 className="h1">
             {p.username}
+            <NameEmoji worn={worn} size={24} />
             {p.demo && !own && <span className="badge badge-demo">{t('demo.badge')}</span>}
           </h1>
+          {(worn.title || worn.badge) && (
+            <div className="profile-pass">
+              {worn.title && <TitleTag id={worn.title} lang={lang} />}
+              {worn.badge && <BadgeArt id={worn.badge} size={30} />}
+            </div>
+          )}
           <div className="chips">
             <span className="chip">ID: {p.id === 'local' ? 'LOCAL' : p.id.replace(/-/g, '').slice(0, 8).toUpperCase()}</span>
             <LevelBadge rating={p.rating} label={(n) => t('level.short', { n })} />

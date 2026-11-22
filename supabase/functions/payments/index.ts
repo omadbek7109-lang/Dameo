@@ -1,4 +1,4 @@
-// Edge Function `payments` (Deno): DAMEO Coins top-ups with Telegram Stars, and admin refunds.
+// Edge Function `payments` (Deno): DAMEO Coins top-ups and DAMEO Pass Premium with Telegram Stars, and admin refunds.
 //  - action "create": a signed-in player picks a package → the server creates a pending order (SQL payment_create) and asks
 //    the Bot API for a Stars invoice link (currency XTR). The Mini App opens it with Telegram.WebApp.openInvoice.
 //    Coins are credited ONLY when Telegram sends `successful_payment` to the telegram-bot webhook — never from here.
@@ -63,6 +63,29 @@ Deno.serve(async (req) => {
     });
     if (!link?.ok) return json({ ok: false, error: 'telegram', detail: link?.description ?? null }, 502);
     return json({ ok: true, order_id: order.order_id, link: link.result, stars: order.stars, coins: order.coins });
+  }
+
+  // DAMEO Pass Premium: one Stars invoice per season; Premium opens only on successful_payment (telegram-bot webhook)
+  if (body?.action === 'pass_premium') {
+    const { data: order, error } = await admin.rpc('pass_order_create', { p_user: uid });
+    if (error || !order) {
+      const msg = error?.message ?? '';
+      return json({ ok: false, error: /already/.test(msg) ? 'already' : /restricted/.test(msg) ? 'restricted' : /too many/.test(msg) ? 'too-many' : 'server' }, 400);
+    }
+    const en = body.lang === 'en';
+    const title = `DAMEO PASS · Premium · Season ${String(order.season).padStart(2, '0')}`;
+    const description = en
+      ? '20 exclusive Premium rewards: crown frames, crystal pieces, combo effects, a gold board, emoji 👑'
+      : "20 ta eksklyuziv Premium mukofot: tojli ramkalar, billur donalar, combo effektlar, oltin doska, emoji 👑";
+    const link = await botApi(token, 'createInvoiceLink', {
+      title,
+      description,
+      payload: `pass:${order.order_id}`,
+      currency: 'XTR',
+      prices: [{ label: 'Premium Pass', amount: order.stars }],
+    });
+    if (!link?.ok) return json({ ok: false, error: 'telegram', detail: link?.description ?? null }, 502);
+    return json({ ok: true, order_id: order.order_id, link: link.result, stars: order.stars });
   }
 
   if (body?.action === 'refund') {

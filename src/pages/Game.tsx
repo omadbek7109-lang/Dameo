@@ -30,6 +30,10 @@ import { useCosmetics, useMatchSkin } from '../cosmetics/CosmeticsProvider.tsx';
 import { db } from '../services/supabase.ts';
 import { useSettings } from '../settings/SettingsProvider.tsx';
 import { botLevelFor } from './Play.tsx';
+import { useWorn } from '../components/PassArt.tsx';
+import { VictoryFx } from '../components/VictoryFx.tsx';
+import { getPass } from '../services/pass/index.ts';
+import { levelOf } from '../services/pass/core.ts';
 
 /* ------------------------------------------------------------------ */
 
@@ -593,6 +597,42 @@ function GameScreen({ g, kind, humanColor, top, bottom, canRestart, canUndo, can
   const over = g.game.result.status !== 'playing';
   const counts = countPieces(g.game.board);
   const flipped = humanColor === 'b' && kind !== 'local';
+  // DAMEO Pass: combo effects (own moves with 2+ captures) and the victory animation
+  const { me } = useAuth();
+  const worn = useWorn(me?.id);
+  const lastRec = g.game.history[g.game.history.length - 1];
+  const combo = useMemo(() => {
+    const owned = (worn.combo ?? '').split(',');
+    const n = lastRec?.captures.length ?? 0;
+    if (!lastRec || n < 2 || (kind !== 'local' && lastRec.color !== humanColor)) return null;
+    const tier = n >= 3 && owned.includes('cb-triple') ? 'triple' : owned.includes('cb-double') ? 'double' : null;
+    return tier ? { from: lastRec.from, path: lastRec.path, captures: lastRec.captures, tier, key: `${g.game.history.length}-${lastRec.from}` } as const : null;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [g.game.history.length, worn.combo]);
+
+  // DAMEO Pass XP of this game: pass XP when the game starts vs right after it ends
+  const xpBefore = useRef<number | null>(null);
+  const [gameXp, setGameXp] = useState<PassGain | null>(null);
+  useEffect(() => {
+    if (over) return;
+    setGameXp(null);
+    getPass().then((p) => (xpBefore.current = p.earned ?? p.xp), () => undefined);
+  }, [over]);
+  useEffect(() => {
+    if (!result || xpBefore.current === null) return;
+    const before = xpBefore.current;
+    const id = setTimeout(() => {
+      getPass().then(
+        (p) => {
+          const xp = p.earned ?? p.xp;
+          const lv = levelOf(xp);
+          setGameXp({ n: Math.max(0, xp - before), lv: lv.level, left: lv.nextAt === null ? 0 : lv.nextAt - xp, capped: xp === before && kind !== 'local' && kind !== 'practice' });
+        },
+        () => undefined,
+      );
+    }, 500);
+    return () => clearTimeout(id);
+  }, [result]);
 
   useEffect(() => setResultOpen(true), [result]);
   useEffect(() => {
@@ -685,6 +725,7 @@ function GameScreen({ g, kind, humanColor, top, bottom, canRestart, canUndo, can
             onSquare={g.clickSquare}
             skin={skin?.cls}
             fx={skin?.fx}
+            combo={combo}
           />
           {bar(bottom, g.game.turn === bottom.color, bottom.color === 'w' ? counts.w : counts.b)}
           <p className={`msg-line ${g.message?.tone === 'error' ? 'msg-error' : ''}`} role="status" aria-live="polite" key={g.message?.n ?? 0}>
@@ -772,7 +813,7 @@ function GameScreen({ g, kind, humanColor, top, bottom, canRestart, canUndo, can
       <RulesDialog open={rules} onClose={() => setRules(false)} />
       {aside}
       {overlay}
-      {result && <ResultDialog open={resultOpen} onClose={() => setResultOpen(false)} result={result} onPlayAgain={onPlayAgain} onExit={onExit} kind={kind} onRematch={onRematch ? () => { setResultOpen(false); onRematch(); } : undefined} />}
+      {result && <ResultDialog passXp={gameXp} victory={worn.victory} open={resultOpen} onClose={() => setResultOpen(false)} result={result} onPlayAgain={onPlayAgain} onExit={onExit} kind={kind} onRematch={onRematch ? () => { setResultOpen(false); onRematch(); } : undefined} />}
       {over && !result && kind === 'online' && <div className="notice"><LuLoader className="spin" /> {t('online.finalizing')}</div>}
       {over && result && !resultOpen && (
         <div className="row-actions center">
@@ -790,13 +831,19 @@ function GameScreen({ g, kind, humanColor, top, bottom, canRestart, canUndo, can
   );
 }
 
-function ResultDialog({ open, onClose, result, onPlayAgain, onExit, kind, onRematch }: { open: boolean; onClose: () => void; result: ResultInfo; onPlayAgain: () => void; onExit: () => void; kind: GameKind; onRematch?: () => void }) {
+interface PassGain {
+  n: number;
+  lv: number;
+  left: number;
+  capped: boolean;
+}
+function ResultDialog({ open, onClose, result, onPlayAgain, onExit, kind, onRematch, victory, passXp }: { passXp?: PassGain | null; victory?: string; open: boolean; onClose: () => void; result: ResultInfo; onPlayAgain: () => void; onExit: () => void; kind: GameKind; onRematch?: () => void }) {
   const { t, num } = useI18n();
   const win = result.outcome === 'win';
   useEffect(() => {
     if (!open) return;
     haptic(win ? 'win' : 'error');
-    playSound(result.outcome === 'win' ? 'win' : result.outcome === 'loss' ? 'loss' : 'draw');
+    playSound(result.outcome === 'win' ? (victory ? 'victory' : 'win') : result.outcome === 'loss' ? 'loss' : 'draw');
   }, [open, win]);
   const title = result.outcome === 'win' ? t('result.victory') : result.outcome === 'loss' ? t('result.defeat') : result.outcome === 'draw' ? t('result.drawn') : t(result.winnerColor === 'w' ? 'result.whiteWins' : 'result.blackWins');
   const hasRating = result.rated && result.before !== undefined && result.after !== undefined;
@@ -804,6 +851,7 @@ function ResultDialog({ open, onClose, result, onPlayAgain, onExit, kind, onRema
   const delta = hasRating ? result.after! - result.before! : 0;
   return (
     <Modal open={open} onClose={onClose} title={title}>
+      {open && win && victory && <VictoryFx />}
       <div className={`result ${win ? 'result-win' : ''}`}>
         {win && <Confetti />}
         <div className={`result-crown ${win ? 'result-crown-win' : ''}`}>
@@ -820,6 +868,12 @@ function ResultDialog({ open, onClose, result, onPlayAgain, onExit, kind, onRema
           <p className="muted small">{kind === 'online' && result.rated ? t('result.updating') : t('result.unrated')}</p>
         )}
         {result.coins !== undefined && <CoinReward coins={result.coins} win={win} moves={result.moves ?? 0} />}
+        {passXp && (passXp.n > 0 || passXp.capped) && (
+          <Link to="/pass" className="pass-xp-chip" onClick={onClose}>
+            <b>{passXp.n > 0 ? t('pass.gameXp', { n: passXp.n }) : t('pass.gameXpCap')}</b>
+            {passXp.left > 0 && <span>{t('pass.gameXpLv', { lv: passXp.lv, left: passXp.left })}</span>}
+          </Link>
+        )}
         <div className="row-actions center">
           {onRematch && (
             <button className="btn btn-secondary" onClick={onRematch}>

@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { IconType } from 'react-icons';
+import { NameEmoji, PassFrame, useWorn } from './PassArt.tsx';
 import {
-  LuArchive, LuBackpack, LuBan, LuChevronRight, LuCircleHelp, LuFrame, LuGraduationCap, LuInfo, LuLogIn, LuLogOut,
+  LuArchive, LuBackpack, LuBan, LuChevronRight, LuCircleHelp, LuFrame, LuInfo, LuLogIn, LuLogOut,
   LuMessageSquareWarning, LuMoon, LuPlus, LuRadio, LuSettings, LuShieldCheck, LuSun, LuUsers, LuX,
-  LuGift, LuListChecks } from 'react-icons/lu';
+  LuGift, LuListChecks, LuCrown } from 'react-icons/lu';
 import { useAuth } from '../auth/AuthProvider.tsx';
 import { useCosmetics } from '../cosmetics/CosmeticsProvider.tsx';
 import { LANGS, useI18n, type TKey } from '../i18n/index.tsx';
@@ -32,6 +33,7 @@ export function MenuSheet() {
   const { t, lang, setLang } = useI18n();
   const { theme, toggle } = useTheme();
   const { me, mode, signedIn, signOut } = useAuth();
+  const worn = useWorn(me?.id);
   const { openAuth } = useAuthDialog();
   const cos = useCosmetics();
   const { path, query } = useRoute();
@@ -57,8 +59,9 @@ export function MenuSheet() {
 
   const live = mode === 'live';
   const account = (live && signedIn) || mode === 'demo';
-  // quick places — round tiles; the shop, rating and play live in the bottom bar, so they are not repeated here
+  // quick places — round tiles (8 = two rows; training lives on Home's quick row); the shop, rating and play live in the bottom bar, so they are not repeated here
   const tiles: Item[] = [
+    { to: '/pass', key: 'menu.pass', icon: LuCrown },
     { to: '/missions', key: 'menu.missions', icon: LuListChecks },
     { to: '/referral', key: 'menu.referral', icon: LuGift },
     { to: '/friends', key: 'nav.friends', icon: LuUsers },
@@ -66,7 +69,6 @@ export function MenuSheet() {
     { to: '/live', key: 'menu.live', icon: LuRadio },
     { to: '/archive', key: 'menu.archive', icon: LuArchive },
     { to: '/profile?section=frames', key: 'menu.frames', icon: LuFrame },
-    { to: '/play?mode=practice', key: 'menu.training', icon: LuGraduationCap },
   ];
   const mine: Item[] = [
     { to: '/settings', key: 'nav.settings', icon: LuSettings },
@@ -96,9 +98,14 @@ export function MenuSheet() {
         <header className="sheet-head">
           {me && (live ? signedIn : true) ? (
             <Link to="/profile" className="sheet-me sheet-me-link" onClick={onClose}>
-              <Avatar name={me.username} seed={me.avatar} size={56} userId={me.id} />
+              <PassFrame id={worn.frame} size={worn.frame ? 46 : 56}>
+                <Avatar name={me.username} seed={me.avatar} size={worn.frame ? 46 : 56} userId={me.id} />
+              </PassFrame>
               <span className="sheet-me-text">
-                <strong>{me.username}</strong>
+                <strong>
+                  {me.username}
+                  <NameEmoji worn={worn} />
+                </strong>
                 <span className="sheet-me-sub">
                   {me.rating} <LevelBadge rating={me.rating} label={(n) => t('level.short', { n })} />
                 </span>
