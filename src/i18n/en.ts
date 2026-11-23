@@ -160,6 +160,7 @@ export const en: Record<TKey, string> = {
   'quick.opponent': 'Opponent',
   'quick.demoOpponent': 'Demo: the opponent is controlled by the computer.',
   'quick.failed': 'Could not start matchmaking.',
+  'quick.blocked': "You left 3 games early within an hour. Quick match opens again in {n} min. You can still play a friend in a room.",
   'quick.needAccount': 'Sign in to find online opponents.',
 
   'friendsPlay.demoNotice': 'Rooms and codes need a backend, which is not connected — so no fake room is created.',
@@ -316,7 +317,7 @@ export const en: Record<TKey, string> = {
   'level.expert': 'Expert',
   'level.master': 'Master',
   'rating.how': 'How is the rating calculated?',
-  'rating.explain': "Everyone starts at 1200 (Level 1). After every rated game the server applies: win +10 to +30, loss −10 to −30 (random); in a draw the lower-rated player gains a little (at most ±5). A game that ends before 6 moves gives the winner nothing while the loser still loses. Only 5 games per day against the same opponent count. Practice-bot games are unrated. Levels: a new level every 100 points from 1300, 2200 is Level 11, 4100 is Level 30, … 11100+ is the top, Level 100. The badge gets richer as you climb.",
+  'rating.explain': "Everyone starts at 1200 (Level 1). After every rated game the server applies Elo: equal players ±20; beating a stronger player gives more (up to 40), beating a weaker one less (at least +1), and losing to a weaker player costs more. In a draw the lower-rated player gains a little (at most ±10). A game that ends before 12 moves changes nobody's rating. Leaving 3 games within an hour before move 12 (resigning or running out of time) pauses quick match for 10 minutes. Only 5 games per day against the same opponent count. Practice-bot games are unrated. Levels: a new level every 100 points from 1300, 2200 is Level 11, 4100 is Level 30, … 11100+ is the top, Level 100. The badge gets richer as you climb.",
   'chart.summary': 'Rating over {n} points: from {from} to {to}',
 
   'ach.firstWin': 'First win',
@@ -804,7 +805,7 @@ export const en: Record<TKey, string> = {
   'help.q.rules': "What are the rules?",
   'help.a.rules': "Russian draughts: men move forward, capturing is compulsory and also backwards; a man reaching the last row becomes a flying king.",
   'help.q.rating': "How does the rating work?",
-  'help.a.rating': "Rated games: win +10…+30, loss −10…−30 (random each time), draw up to ±5. Only the server calculates it. A game ending before 6 moves gives the winner nothing; more than 5 games a day against the same opponent don't count.",
+  'help.a.rating': "Rated games use Elo: equal players ±20, beating a stronger player gives more, beating a weaker one less. Only the server calculates it. A game ending before 12 moves doesn't change the rating; leaving 3 games early within an hour pauses quick match for 10 minutes; more than 5 games a day against the same opponent don't count.",
   'help.q.clock': "How does the clock work?",
   'help.a.clock': "Pick 3, 5 or 8 minutes; each player has their own clock, at most 30 seconds per move. Run out of time and your opponent wins.",
   'help.q.weekly': "What is the daily rating?",

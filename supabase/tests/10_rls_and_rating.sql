@@ -4,7 +4,7 @@ create temp table results (name text, ok boolean, detail text);
 grant all on results to public;
 create function pg_temp.check(n text, cond boolean, d text default '') returns void language plpgsql as $$ begin insert into results values (n, coalesce(cond, false), d); end $$;
 -- the older tests below expect exact points: use a fixed ±5 instead of 0019's random +15…+30 (restored + tested at the end)
-create or replace function public._rand_delta(p_score numeric, p_me int, p_opp int) returns int
+create or replace function public._elo_delta(p_score numeric, p_me int, p_opp int) returns int
 language sql volatile as $$ select case when p_score = 1 then 5 when p_score = 0 then -5 else 0 end; $$;
 
 -- three users (the signup trigger creates their profiles)
@@ -330,7 +330,7 @@ update public.matches set turn_started_at = clock_timestamp() - interval '32.5 s
 select pg_temp.check('move after 30 s (+2 s grace) is refused', (public.clock_take_turn((select id from tmid), 3) ->> 'error') = 'timeout');
 select pg_temp.check('… and Black loses on the move limit',
   (select status = 'finished' and result = 'white' and timeout_kind = 'move' and rating_applied from public.matches where id = (select id from tmid)));
-select pg_temp.check('timeout after 2 moves: loser −5, winner gains nothing (short game)', (select white_delta = 0 and black_delta = -5 and rating_note = 'short' from public.matches where id = (select id from tmid)));
+select pg_temp.check('0045: timeout after 2 moves: nobody''s rating changes (short game)', (select white_delta = 0 and black_delta = 0 and rating_note = 'short' from public.matches where id = (select id from tmid)));
 reset role;
 
 -- clock (not the 30 s limit) runs out → claim by the opponent
@@ -1042,8 +1042,8 @@ select pg_temp.check('virtual: bot without enough clock loses on time', public.v
 reset role;
 select pg_temp.check('… game finished, the player won on the clock',
   (select status = 'finished' and result = 'white' and timeout_kind = 'clock' from public.matches where id = (select v::uuid from vt where k = 'm1')));
-select pg_temp.check('… the virtual player''s own stats/rating updated (loss, −5)',
-  (select v.losses >= 1 and v.rating = (select v2::int from (select v as v2 from vt where k = 'rating_before') z) - 5
+select pg_temp.check('… the virtual player''s own stats updated (loss; 4 moves → rating unchanged, 0045)',
+  (select v.losses >= 1 and v.rating = (select v2::int from (select v as v2 from vt where k = 'rating_before') z)
      from public.virtual_players v where v.id = (select virtual_id from public.matches where id = (select v::uuid from vt where k = 'm1'))));
 select pg_temp.check('… rated, but after 4 moves the winner gains nothing (short game)', (select white_delta = 0 and rating_applied and rating_note = 'short' from public.matches where id = (select v::uuid from vt where k = 'm1')));
 select pg_temp.check('… gone from the live list', not exists (select 1 from json_array_elements(public.live_list(50, 0)) x where x->>'id' = (select v from vt where k = 'm1')));
@@ -1086,12 +1086,14 @@ select pg_temp.check('a fresh untimed game is left alone', (select status = 'act
 
 -- ===================== 0019: rating rules, anti-abuse, achievements, virtual v2
 reset role;
--- the real random rule back in place (0025: ±10…30)
-create or replace function public._rand_delta(p_score numeric, p_me int, p_opp int) returns int
-language sql volatile as $$
-  select case when p_score = 1 then 10 + floor(random() * 21)::int
-              when p_score = 0 then -(10 + floor(random() * 21)::int)
-              else greatest(-5, least(5, round((coalesce(p_opp, 1200) - p_me) / 50.0)::int)) end;
+-- the real rule back in place (0045: Elo, K = 40)
+create or replace function public._elo_delta(p_score numeric, p_me int, p_opp int) returns int
+language sql immutable set search_path = public as $$
+  select case
+    when p_score = 1 then greatest(1, round(40 * (1 - e))::int)
+    when p_score = 0 then least(-1, round(-40 * e)::int)
+    else greatest(-10, least(10, round(40 * (0.5 - e))::int)) end
+  from (select 1 / (1 + power(10::numeric, (coalesce(p_opp, 1200) - p_me) / 400.0)) as e) x
 $$;
 insert into auth.users (id, email, raw_user_meta_data) values
   ('f019f019-0000-4000-8000-000000000001', 'r1@x.io', '{"username":"rr_one"}'),
@@ -1104,17 +1106,17 @@ create temp table rg as
   select pg_temp.pvp('f019f019-0000-4000-8000-000000000001', 'f019f019-0000-4000-8000-000000000002', 'white', now() - (i || ' days')::interval - interval '2 days') as id
   from generate_series(1, 40) i;
 grant all on rg to public;
-select pg_temp.check('rating: every win is +10…+30', (select bool_and(m.white_delta between 10 and 30) from public.matches m join rg on rg.id = m.id));
-select pg_temp.check('rating: every loss is −10…−30', (select bool_and(m.black_delta between -30 and -10) from public.matches m join rg on rg.id = m.id));
-select pg_temp.check('rating: points are random (not one fixed value)', (select count(distinct m.white_delta) >= 6 from public.matches m join rg on rg.id = m.id));
+select pg_temp.check('0045 Elo: first game between equals is +20 / −20', (select white_delta = 20 and black_delta = -20 from public.matches m join rg on rg.id = m.id order by m.ended_at desc limit 1));
+select pg_temp.check('0045 Elo: every win +1…+40, every loss −1…−40', (select bool_and(m.white_delta between 1 and 40 and m.black_delta between -40 and -1) from public.matches m join rg on rg.id = m.id));
+select pg_temp.check('0045 Elo: the more you lead, the less a win gives', (select (array_agg(m.white_delta order by m.ended_at desc))[1] > (array_agg(m.white_delta order by m.ended_at desc))[40] from public.matches m join rg on rg.id = m.id));
 select pg_temp.check('rating: history keeps every change with source and delta',
-  (select count(*) = 40 and bool_and(source = 'pvp' and delta between 10 and 30) from public.rating_history where user_id = 'f019f019-0000-4000-8000-000000000001' and match_id is not null));
+  (select count(*) = 40 and bool_and(source = 'pvp' and delta between 1 and 40) from public.rating_history where user_id = 'f019f019-0000-4000-8000-000000000001' and match_id is not null));
 select pg_temp.check('rating: profile = sum of the changes', (select p.rating = 1200 + (select sum(white_delta) from public.matches m join rg on rg.id = m.id) from public.profiles p where p.id = 'f019f019-0000-4000-8000-000000000001'));
 -- draws: small and balanced (the lower-rated player gains)
 create temp table dg as select pg_temp.pvp('f019f019-0000-4000-8000-000000000002', 'f019f019-0000-4000-8000-000000000001', 'draw', now() - interval '60 days') as id;
 grant all on dg to public;
-select pg_temp.check('rating: draw — lower-rated gains, higher-rated loses, max 5',
-  (select white_delta between 1 and 5 and black_delta between -5 and -1 from public.matches where id = (select id from dg)));
+select pg_temp.check('rating: draw — lower-rated gains, higher-rated loses, max 10',
+  (select white_delta between 1 and 10 and black_delta between -10 and -1 from public.matches where id = (select id from dg)));
 -- the same pair: 5 rated games per 24 h (0038), then nothing changes
 create temp table pl as
   select i, pg_temp.pvp('f019f019-0000-4000-8000-000000000003', 'f019f019-0000-4000-8000-000000000004', 'white', now() - (i || ' minutes')::interval) as id
@@ -1466,7 +1468,7 @@ reset role;
 
 -- ===================== 0025: one game per virtual opponent, no virtual rematch, ±10…30 for every rated game
 reset role;
-select pg_temp.check('0025: the migration''s rating rule is ±10…30', (select prosrc like '%10 + floor(random() * 21)%' from pg_proc where proname = '_rand_delta'));
+select pg_temp.check('0045: the migration''s rating rule is Elo K=40', (select prosrc like '%40 * (1 - e)%' from pg_proc where proname = '_elo_delta'));
 insert into auth.users (id, email, raw_user_meta_data) values ('f0250025-0000-4000-8000-000000000001', 'once@x.io', '{"username":"once_only"}');
 update public.virtual_settings set enabled = true, auto_off = false, pool_size = 4 where id;
 create temp table v25 (n int primary key, match_id uuid, virtual_id uuid);
@@ -1502,8 +1504,8 @@ select pg_temp.check('0025: … and creates no new game', (select count(*) from 
 -- virtual games use the same ±10…30 as player-vs-player
 update public.matches set rated = true, move_count = 40, rating_applied = false where id in (select match_id from v25);
 select public.apply_match_result(match_id) from v25;
-select pg_temp.check('0025: virtual wins give +10…+30 too', (select bool_and(white_delta between 10 and 30) from public.matches where id in (select match_id from v25)));
-select pg_temp.check('0025: … and the virtual loser −10…−30', (select bool_and(black_delta between -30 and -10) from public.matches where id in (select match_id from v25)));
+select pg_temp.check('0045: virtual wins use Elo too (+1…+40)', (select bool_and(white_delta between 1 and 40) from public.matches where id in (select match_id from v25)));
+select pg_temp.check('0045: … and the virtual loser −1…−40', (select bool_and(black_delta between -40 and -1) from public.matches where id in (select match_id from v25)));
 
 -- ===================== 0026: DAMEO Coins for finished games (win +20, loss +10, draw 0)
 reset role;
@@ -1814,6 +1816,54 @@ set role authenticated;
 create temp table q44 as select public.quick_match(300) r;
 reset role;
 select pg_temp.check('0044: 3000 vs much lower rating, same time → paired at once', (select (r ->> 'match_id') is not null from q44), (select r::text from q44));
+
+-- ===================== 0045: Elo, 12-move rule, early-quit cooldown, admin list
+reset role;
+select pg_temp.check('0045 Elo: equal ratings → +20 / −20', public._elo_delta(1, 1200, 1200) = 20 and public._elo_delta(0, 1200, 1200) = -20);
+select pg_temp.check('0045 Elo: 5000 beats 100 → +1; 5000 loses to 100 → −40', public._elo_delta(1, 5000, 100) = 1 and public._elo_delta(0, 5000, 100) = -40);
+select pg_temp.check('0045 Elo: 100 beats 5000 → +40; 100 loses to 5000 → −1', public._elo_delta(1, 100, 5000) = 40 and public._elo_delta(0, 100, 5000) = -1);
+select pg_temp.check('0045 Elo: 300 points weaker opponent → about +6 / −34', public._elo_delta(1, 1500, 1200) between 5 and 8 and public._elo_delta(0, 1500, 1200) between -35 and -32);
+select pg_temp.check('0045 Elo: draw with equals → 0, lower-rated gains (≤ 10)', public._elo_delta(0.5, 1200, 1200) = 0 and public._elo_delta(0.5, 1000, 1400) between 1 and 10);
+insert into auth.users (id, email, raw_user_meta_data) values
+  ('f0450045-0000-4000-8000-000000000001', 'q1@x.io', '{"username":"fp_quitter"}'),
+  ('f0450045-0000-4000-8000-000000000002', 'q2@x.io', '{"username":"fp_other"}'),
+  ('f0450045-0000-4000-8000-000000000003', 'q3@x.io', '{"username":"fp_third"}');
+-- 11 moves: nobody's rating changes; 12 moves: rating changes
+create temp table s45 as select pg_temp.g26('f0450045-0000-4000-8000-000000000002', 'f0450045-0000-4000-8000-000000000001', 'white', 11) id;
+grant all on s45 to public;
+select pg_temp.check('0045: 11 moves → nobody''s rating changes', (select white_delta = 0 and black_delta = 0 and rating_note = 'short' from public.matches where id = (select id from s45)));
+create temp table l45 as select pg_temp.g26('f0450045-0000-4000-8000-000000000003', 'f0450045-0000-4000-8000-000000000001', 'white', 12) id;
+grant all on l45 to public;
+select pg_temp.check('0045: 12 moves → rating changes', (select white_delta > 0 and black_delta < 0 and rating_note is null from public.matches where id = (select id from l45)));
+-- 3 early losses (resign / time before move 12) within an hour → 10 minutes without quick match
+update public.matches set result_reason = 'resign', timeout_kind = 'move', ended_at = now() - interval '3 minutes' where id = (select id from s45);
+insert into public.matches (white_id, black_id, status, rated, started_at, ended_at, result, result_reason, timeout_kind, move_count, rating_applied)
+values ('f0450045-0000-4000-8000-000000000001', 'f0450045-0000-4000-8000-000000000003', 'finished', true, now(), now() - interval '2 minutes', 'black', 'resign', null, 3, true);
+set role authenticated;
+select set_config('request.jwt.claim.sub', 'f0450045-0000-4000-8000-000000000001', false);
+select pg_temp.check('0045: 2 early losses → still free to search', (public.quick_match(180) ->> 'blocked_until') is null);
+reset role;
+insert into public.matches (white_id, black_id, status, rated, started_at, ended_at, result, result_reason, timeout_kind, move_count, rating_applied)
+values ('f0450045-0000-4000-8000-000000000001', 'f0450045-0000-4000-8000-000000000002', 'finished', true, now(), now() - interval '1 minute', 'black', 'resign', 'move', 0, true);
+set role authenticated;
+select set_config('request.jwt.claim.sub', 'f0450045-0000-4000-8000-000000000001', false);
+create temp table b45 as select public.quick_match(180) r;
+select pg_temp.check('0045: 3rd early loss → quick match answers blocked_until (~9 min left)',
+  (select (r ->> 'match_id') is null and (r ->> 'blocked_until')::timestamptz between now() + interval '8 minutes' and now() + interval '10 minutes' from b45), (select r::text from b45));
+select pg_temp.check('0045: … virtual opponent blocked too', (public.virtual_match(180) ->> 'reason') = 'blocked');
+reset role;
+select pg_temp.check('0045: … and nobody can be paired with the blocked player', (select last_seen = '-infinity' from public.matchmaking_queue where user_id = 'f0450045-0000-4000-8000-000000000001'));
+select pg_temp.check('0045: a won short game does not block the winner', public._early_quit_block('f0450045-0000-4000-8000-000000000002') is null);
+update public.matches set ended_at = ended_at - interval '15 minutes' where 'f0450045-0000-4000-8000-000000000001' in (white_id, black_id);
+select pg_temp.check('0045: 10 minutes after the last early loss → free again', public._early_quit_block('f0450045-0000-4000-8000-000000000001') is null);
+-- admin list
+set role authenticated;
+select set_config('request.jwt.claim.sub', 'f0450045-0000-4000-8000-000000000002', false);
+do $$ begin
+  perform public.admin_suspicious(7);
+  perform pg_temp.check('0045: non-admin can NOT read the suspicious list', false);
+exception when others then perform pg_temp.check('0045: non-admin can NOT read the suspicious list', true, sqlerrm); end $$;
+reset role;
 
 \set QUIET off
 select case when ok then 'PASS' else 'FAIL' end as status, name, left(detail, 70) as detail from results order by 1 desc, 2;

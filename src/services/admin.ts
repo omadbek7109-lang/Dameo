@@ -102,6 +102,12 @@ export interface Prize {
 export const adminMe = () => db.rpc<AdminMe>('admin_me');
 export const adminDashboard = () => db.rpc<Dashboard>('admin_dashboard');
 export const adminUsers = (q: string, offset = 0) => db.rpc<AdminUser[]>('admin_users', { p_query: q, p_limit: 30, p_offset: offset });
+export interface SuspiciousUser {
+  id: string; username: string; rating: number; games: number; losses: number; early_losses: number; never_moved: number;
+  top_winner: string | null; top_winner_games: number; banned_until: string | null;
+}
+/** accounts that look like they lose on purpose (last N days) — read-only (0045) */
+export const adminSuspicious = (days = 7) => db.rpc<SuspiciousUser[]>('admin_suspicious', { p_days: days });
 export const adminUserDetail = (id: string) => db.rpc<any>('admin_user_detail', { p_user: id });
 export const adminBan = (id: string, until: string, reason: string) => db.rpc('admin_ban', { p_user: id, p_until: until, p_reason: reason });
 export const adminUnban = (id: string, reason: string) => db.rpc('admin_unban', { p_user: id, p_reason: reason });

@@ -181,6 +181,17 @@ export function LiveQuickPanel({ autoStart = 0 }: { autoStart?: number }) {
         const t1 = Date.now();
         if (run.current !== my) return;
         if (r.match_id) return go(r.match_id);
+        if (r.blocked_until) {
+          // 3 games left early (resign / time before move 12) in the last hour → a short break from quick match
+          const server = r.server_now ? Date.parse(r.server_now) : Date.now();
+          const mins = Math.max(1, Math.ceil((Date.parse(r.blocked_until!) - server) / 60_000));
+          run.current++;
+          stopPair.current();
+          setPhase('idle');
+          haptic('error');
+          toast('error', t('quick.blocked', { n: mins }));
+          return;
+        }
         if (deadline.current === null) {
           const since = r.searching_since ? Date.parse(r.searching_since) : NaN;
           const server = r.server_now ? Date.parse(r.server_now) : NaN;
@@ -196,6 +207,14 @@ export function LiveQuickPanel({ autoStart = 0 }: { autoStart?: number }) {
           const v = await virtualMatch(timeControl).catch(() => null);
           if (run.current !== my) return;
           if (v?.match_id) return go(v.match_id, v.virtual ?? null);
+          if (v?.reason === 'blocked') {
+            run.current++;
+            stopPair.current();
+            await cancelQuickMatch().catch(() => {});
+            setPhase('idle');
+            toast('error', t('quick.blocked', { n: Math.max(1, Math.ceil((Date.parse(v.blocked_until ?? '') - Date.now()) / 60_000) || 10) }));
+            return;
+          }
           // switched off → keep searching as before; asked too early (server clock) → try again a little later
           virtualAt = v?.reason === 'too-early' ? Date.now() + 2500 : Infinity;
         }

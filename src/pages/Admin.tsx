@@ -243,6 +243,12 @@ function UsersTab({ can, superAdmin }: { can: (p: string) => boolean; superAdmin
   const [q, setQ] = useState('');
   const [rows, setRows] = useState<A.AdminUser[] | null>(null);
   const [open, setOpen] = useState<string | null>(null);
+  const [sus, setSus] = useState<A.SuspiciousUser[] | null | 'closed'>('closed');
+  const toggleSus = () => {
+    if (sus !== 'closed') return setSus('closed');
+    setSus(null);
+    A.adminSuspicious(7).then(setSus, () => setSus([]));
+  };
   const search = useCallback(async (offset = 0) => {
     const r = await A.adminUsers(q, offset);
     setRows((cur) => (offset ? [...(cur ?? []), ...r] : r));
@@ -257,6 +263,43 @@ function UsersTab({ can, superAdmin }: { can: (p: string) => boolean; superAdmin
         <LuSearch />
         <input value={q} onChange={(e: any) => setQ(e.target.value)} placeholder={L('Username, Telegram ID yoki user ID', 'Username, Telegram ID or user ID')} />
       </label>
+      <button className="btn btn-ghost btn-sm" onClick={toggleSus}>
+        {sus === 'closed' ? L("⚠️ Shubhali akkauntlar (7 kun)", '⚠️ Suspicious accounts (7 days)') : L('Yopish', 'Close')}
+      </button>
+      {sus !== 'closed' &&
+        (sus === null ? (
+          <Spinner />
+        ) : sus.length === 0 ? (
+          <EmptyState title={L('Shubhali akkaunt topilmadi', 'No suspicious accounts')} />
+        ) : (
+          <div className="card admin-sus">
+            <p className="muted small">
+              {L(
+                "Erta = 12 yurishgacha taslim/vaqt tugashi bilan yutqazgan; yurmagan = birorta ham yurish qilmay vaqt tugagan; ko'p yutgan = shu o'yinchini eng ko'p yutgan raqib.",
+                'Early = lost by resigning / time before move 12; never moved = time ran out without a single move; top winner = who beat them most.',
+              )}
+            </p>
+            <ul className="admin-list">
+              {sus.map((u) => (
+                <li key={u.id}>
+                  <button className="admin-row" onClick={() => setOpen(u.id)}>
+                    <span className="admin-row-main">
+                      <strong>
+                        {u.username} · {u.rating}
+                        {u.banned_until && Date.parse(u.banned_until) > Date.now() && <span className="badge badge-danger">{L('Bloklangan', 'Restricted')}</span>}
+                      </strong>
+                      <span className="muted small">
+                        {L('O\'yin', 'Games')} {u.games} · {L('mag\'lub', 'lost')} {u.losses} · {L('erta', 'early')} {u.early_losses} · {L('yurmagan', 'never moved')} {u.never_moved}
+                        {u.top_winner ? ` · ${L("ko'p yutgan", 'top winner')}: ${u.top_winner} ×${u.top_winner_games}` : ''}
+                      </span>
+                    </span>
+                    <LuChevronRight />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
       {!rows ? (
         <Spinner />
       ) : rows.length === 0 ? (

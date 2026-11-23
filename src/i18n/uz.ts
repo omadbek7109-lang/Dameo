@@ -158,6 +158,7 @@ export const uz = {
   'quick.opponent': 'Raqib',
   'quick.demoOpponent': "Demo: raqibni kompyuter boshqaradi.",
   'quick.failed': "Raqib qidirishni boshlab bo'lmadi.",
+  'quick.blocked': "Bir soat ichida 3 ta o'yinni erta tark etdingiz. Tezkor qidiruv {n} daqiqadan keyin ochiladi. Do'stingiz bilan xonada o'ynashingiz mumkin.",
   'quick.needAccount': "Onlayn raqib qidirish uchun tizimga kiring.",
 
   'friendsPlay.demoNotice': "Xonalar va kodlar uchun server kerak — u hozir ulanmagan, shuning uchun soxta xona yaratilmaydi.",
@@ -314,7 +315,7 @@ export const uz = {
   'level.expert': 'Ekspert',
   'level.master': 'Usta',
   'rating.how': 'Reyting qanday hisoblanadi?',
-  'rating.explain': "Boshlang'ich reyting 1200 (Level 1). Har bir reytingli o'yindan keyin server hisoblaydi: g'alaba +10 dan +30 gacha, mag'lubiyat −10 dan −30 gacha (tasodifiy), durangda reytingi pastroq o'yinchi biroz qo'shadi (ko'pi bilan ±5). 6 ta yurishdan oldin tugagan o'yinda yutgan ball olmaydi, yutqazgan esa baribir yo'qotadi. Bir raqib bilan kuniga faqat 5 ta o'yin reytingga ta'sir qiladi. Mashq botidagi o'yinlar reytingsiz. Darajalar: 1300 dan har 100 ochkoda yangi Level, 2200 — Level 11, 4100 — Level 30, … 11100+ — eng yuqori Level 100. Level oshgani sari belgi ham boyib boradi.",
+  'rating.explain': "Boshlang'ich reyting 1200 (Level 1). Har bir reytingli o'yindan keyin server Elo bo'yicha hisoblaydi: teng raqiblar ±20; o'zingizdan kuchliroqni yutsangiz ko'proq (40 gacha), kuchsizroqni yutsangiz kamroq (kamida +1) olasiz, kuchsizroqqa yutqazsangiz ko'proq yo'qotasiz. Durangda reytingi pastroq o'yinchi biroz qo'shadi (ko'pi bilan ±10). 12 yurishdan oldin tugagan o'yin hech kimning reytingini o'zgartirmaydi. Bir soat ichida 3 ta o'yinni 12 yurishgacha taslim bo'lib yoki vaqtni tugatib tark etgan o'yinchi 10 daqiqa tezkor qidiruvdan foydalana olmaydi. Bir raqib bilan kuniga faqat 5 ta o'yin reytingga ta'sir qiladi. Mashq botidagi o'yinlar reytingsiz. Darajalar: 1300 dan har 100 ochkoda yangi Level, 2200 — Level 11, 4100 — Level 30, … 11100+ — eng yuqori Level 100. Level oshgani sari belgi ham boyib boradi.",
   'chart.summary': "Reyting {n} nuqta: {from} dan {to} gacha",
 
   'ach.firstWin': "Birinchi g'alaba",
@@ -802,7 +803,7 @@ export const uz = {
   'help.q.rules': "Qoidalar qanday?",
   'help.a.rules': "Rus shashkasi: oddiy donacha oldinga yuradi, urish majburiy, orqaga ham uriladi; oxirgi qatorga yetgan donacha dama bo'ladi va uzoq yuradi.",
   'help.q.rating': "Reyting qanday hisoblanadi?",
-  'help.a.rating': "Reytingli o'yinda g'alaba +10…+30, mag'lubiyat −10…−30 (har safar tasodifiy), durang ±5 gacha. Hisobni faqat server qiladi. 6 yurishdan oldin tugagan o'yinda yutgan ball olmaydi; bir raqib bilan kuniga 5 tadan ortiq o'yin reytingga ta'sir qilmaydi.",
+  'help.a.rating': "Reytingli o'yinlarda ball Elo bo'yicha hisoblanadi: teng raqiblar ±20, kuchliroqni yutish ko'proq, kuchsizroqni yutish kamroq beradi. Hisobni faqat server qiladi. 12 yurishdan oldin tugagan o'yin reytingga ta'sir qilmaydi; bir soatda 3 marta erta chiqib ketgan o'yinchi 10 daqiqa tezkor qidiruvga kira olmaydi; bir raqib bilan kuniga 5 tadan ortiq o'yin hisobga olinmaydi.",
   'help.q.clock': "O'yin vaqti qanday ishlaydi?",
   'help.a.clock': "3, 5 yoki 8 daqiqa tanlanadi; har bir o'yinchining o'z soati bor, har yurishga ko'pi bilan 30 soniya. Vaqt tugasa raqib yutadi.",
   'help.q.weekly': "Kunlik reyting nima?",
