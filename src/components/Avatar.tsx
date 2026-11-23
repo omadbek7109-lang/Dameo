@@ -5,6 +5,10 @@ import type { Player } from '../types/models.ts';
 import { levelOf, levelTier } from '../services/levels.ts';
 import { useFrames } from '../cosmetics/FramesProvider.tsx';
 import { isArtFrame, type FrameId } from '../services/frames.ts';
+import { PassFrame } from './PassArt.tsx';
+
+/** DAMEO Pass frames are 'f-…'; shop frames are 'dameo', 'champion' and the art slugs */
+const isPassFrame = (f: string | null | undefined): f is string => !!f && f.startsWith('f-');
 
 function hueOf(seed: string): number {
   const h = Number(seed.split(':')[0]);
@@ -37,6 +41,17 @@ export function Avatar({ name, seed, size = 40, online, ring, className = '', us
   const photo = isPhoto(seed) && !broken;
   const hue = hueOf(photo ? name : (seed ?? name));
   const initial = (name.trim()[0] ?? '?').toUpperCase();
+  if (isPassFrame(fr)) {
+    // one frame only: the Pass frame art sits around a slightly smaller avatar, in the same box
+    const inner = Math.round(size * 0.875);
+    return (
+      <span className={`avatar-passframe ${className}`} style={{ width: size, height: size }} aria-hidden="true">
+        <PassFrame id={fr} size={inner}>
+          <Avatar name={name} seed={seed} size={inner} frame={null} />
+        </PassFrame>
+      </span>
+    );
+  }
   return (
     <span
       className={`avatar ${photo ? 'avatar-photo' : ''} ${ring && !fr ? `avatar-${ring}` : ''} ${fr ? 'avatar-framed' : ''} ${className}`}

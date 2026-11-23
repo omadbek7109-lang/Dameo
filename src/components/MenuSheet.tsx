@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { IconType } from 'react-icons';
-import { NameEmoji, PassFrame, useWorn } from './PassArt.tsx';
+import { NameEmoji, useWorn } from './PassArt.tsx';
 import {
   LuArchive, LuBackpack, LuBan, LuChevronRight, LuCircleHelp, LuFrame, LuInfo, LuLogIn, LuLogOut,
   LuMessageSquareWarning, LuMoon, LuPlus, LuRadio, LuSettings, LuShieldCheck, LuSun, LuUsers, LuX,
@@ -98,9 +98,7 @@ export function MenuSheet() {
         <header className="sheet-head">
           {me && (live ? signedIn : true) ? (
             <Link to="/profile" className="sheet-me sheet-me-link" onClick={onClose}>
-              <PassFrame id={worn.frame} size={worn.frame ? 46 : 56}>
-                <Avatar name={me.username} seed={me.avatar} size={worn.frame ? 46 : 56} userId={me.id} />
-              </PassFrame>
+              <Avatar name={me.username} seed={me.avatar} size={56} userId={me.id} frame={worn.frame ?? undefined} />
               <span className="sheet-me-text">
                 <strong>
                   {me.username}

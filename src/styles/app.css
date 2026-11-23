@@ -8072,3 +8072,6 @@ html.calm .pf-f-crown-wings::before, html.calm .pf-f-crown-wings .pf-art { anima
 .ps-pay-stars { border-color: rgba(251,191,36,.7); background: rgba(251,191,36,.08); }
 .ps-pay-id { border: 1px dashed rgba(124,58,237,.5); border-radius: 10px; padding: 6px 8px; background: none; font: inherit; font-size: .75rem; cursor: pointer; color: inherit; overflow-wrap: anywhere; }
 .ps-pay-id code { font-size: .72rem; }
+
+/* an avatar wearing a DAMEO Pass frame keeps its box; the frame art may reach outside it */
+.avatar-passframe { position: relative; display: inline-grid; place-items: center; flex: none; overflow: visible; vertical-align: middle; }

@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import { useAuth } from '../auth/AuthProvider.tsx';
 import { framesActive, type FrameId } from '../services/frames.ts';
 import { appActive } from '../services/telegram.ts';
+import { PASS_EVENT } from '../services/pass/index.ts';
 
 /**
  * Which avatars wear a frame right now (one small list for the whole app, refreshed every few minutes and after
@@ -26,7 +27,11 @@ export function FramesProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     refresh();
     const t = setInterval(() => appActive() && refresh(), 3 * 60_000);
-    return () => clearInterval(t);
+    window.addEventListener(PASS_EVENT, refresh); // a Pass frame was put on / taken off
+    return () => {
+      clearInterval(t);
+      window.removeEventListener(PASS_EVENT, refresh);
+    };
     // re-check when my rating changes (I may have taken or lost #1)
   }, [refresh, me?.rating]);
   const frameOf = useCallback((id?: string | null) => (id ? (map.get(id) ?? null) : null), [map]);

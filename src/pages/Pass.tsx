@@ -19,7 +19,7 @@ import {
 } from 'react-icons/lu';
 import { useAuth } from '../auth/AuthProvider.tsx';
 import { Avatar } from '../components/Avatar.tsx';
-import { BadgeArt, EmojiArt, PassFrame, ProfileBg, RewardArt, TitleTag } from '../components/PassArt.tsx';
+import { BadgeArt, EmojiArt, ProfileBg, RewardArt, TitleTag } from '../components/PassArt.tsx';
 import { ErrorState, Spinner } from '../components/States.tsx';
 import { useToast } from '../components/Toast.tsx';
 import { SignInPrompt } from '../components/ui.tsx';
@@ -481,9 +481,7 @@ export function Pass() {
             <h2 className="pv-sub">{t('pass.myStyle')}</h2>
             <div className={`ps-preview ${w.background ? 'has-pbg' : ''}`}>
               <ProfileBg id={w.background} />
-              <PassFrame id={w.frame} size={w.frame ? 56 : 72}>
-                <Avatar name={me?.username ?? 'DAMEO'} seed={me?.avatar} size={w.frame ? 56 : 72} userId={me?.id} />
-              </PassFrame>
+              <Avatar name={me?.username ?? 'DAMEO'} seed={me?.avatar} size={64} userId={me?.id} frame={w.frame ?? undefined} />
               <div className="ps-preview-id">
                 <strong>
                   {me?.username ?? 'DAMEO'} {w.emoji && <EmojiArt id={w.emoji} size={20} className="pa-name-emoji" />}

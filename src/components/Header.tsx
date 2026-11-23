@@ -7,7 +7,7 @@ import { useTheme } from '../theme/ThemeProvider.tsx';
 import { inTelegram } from '../services/telegram.ts';
 import { LevelBadge } from './Avatar.tsx';
 import { Avatar } from './Avatar.tsx';
-import { PassFrame, useWorn } from './PassArt.tsx';
+import { useWorn } from './PassArt.tsx';
 import { useAuthDialog } from './AuthDialog.tsx';
 import { Logo } from './Logo.tsx';
 import { Popover } from './Popover.tsx';
@@ -149,9 +149,7 @@ export function Header() {
           {signedIn && me ? (
             // the avatar opens my profile page; the menu lives on the bottom "Profil" tab and the ☰ button
             <Link to="/profile" className="user-btn" aria-label={t('menu.myProfile')}>
-              <PassFrame id={worn.frame} size={worn.frame ? 30 : 34}>
-                <Avatar name={me.username} seed={me.avatar} size={worn.frame ? 30 : 34} userId={me.id} />
-              </PassFrame>
+              <Avatar name={me.username} seed={me.avatar} size={34} userId={me.id} frame={worn.frame ?? undefined} />
             </Link>
           ) : (
             <>

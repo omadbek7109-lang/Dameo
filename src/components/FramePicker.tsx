@@ -6,6 +6,7 @@ import { useCosmetics } from '../cosmetics/CosmeticsProvider.tsx';
 import { useFrames } from '../cosmetics/FramesProvider.tsx';
 import { useI18n } from '../i18n/index.tsx';
 import { navigate, useRoute } from '../router.tsx';
+import { PASS_EVENT } from '../services/pass/index.ts';
 import { frameBuy, frameCatalog, frameEquip, framesMine, type FrameId, type FrameItem } from '../services/frames.ts';
 import { coins, newKey } from '../services/shop.ts';
 import { SbError } from '../services/supabase.ts';
@@ -62,6 +63,7 @@ export function FramePicker({ variant = 'profile' }: { variant?: 'profile' | 'sh
       const r = await frameEquip(f);
       setMine({ ...mine, equipped: r.equipped });
       frames?.refresh();
+      window.dispatchEvent(new Event(PASS_EVENT)); // the Pass frame came off on the server
       haptic('move');
       toast('success', t(f ? 'frame.on' : 'frame.off'));
     } catch (e) {
