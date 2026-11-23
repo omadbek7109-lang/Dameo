@@ -1802,6 +1802,19 @@ do $$ begin
   perform pg_temp.check('0030: other durations are refused by the table itself', false);
 exception when others then perform pg_temp.check('0030: other durations are refused by the table itself', sqlstate = '23514', sqlerrm); end $$;
 
+-- 0044: quick match pairs any rating (same time control only)
+update public.profiles set rating = 3000 where id = 'f0300030-0000-4000-8000-0000000000a1';
+delete from public.matchmaking_queue;
+select set_config('request.jwt.claim.sub', 'f0300030-0000-4000-8000-0000000000a1', false);
+set role authenticated;
+select public.quick_match(300);
+reset role;
+select set_config('request.jwt.claim.sub', 'f0300030-0000-4000-8000-0000000000b1', false);
+set role authenticated;
+create temp table q44 as select public.quick_match(300) r;
+reset role;
+select pg_temp.check('0044: 3000 vs much lower rating, same time → paired at once', (select (r ->> 'match_id') is not null from q44), (select r::text from q44));
+
 \set QUIET off
 select case when ok then 'PASS' else 'FAIL' end as status, name, left(detail, 70) as detail from results order by 1 desc, 2;
 select count(*) filter (where not ok) as failures, count(*) as total from results;
