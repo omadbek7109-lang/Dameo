@@ -230,7 +230,7 @@ export async function wornOf(userId: string | null | undefined, fresh = false): 
   if (!userId) return {};
   const hit = wornCache.get(userId);
   if (!fresh && hit && Date.now() - hit.at < 60_000) return hit.p;
-  const p = db.rpc<Worn>('pass_worn', { p_user: userId }).catch(() => ({}) as Worn);
+  const p = db.rpc<Worn>('pass_worn', { p_user: userId }).then((w) => w ?? ({} as Worn), () => ({}) as Worn); // an empty answer must not crash the app
   wornCache.set(userId, { at: Date.now(), p });
   return p;
 }

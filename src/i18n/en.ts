@@ -255,6 +255,7 @@ export const en: Record<TKey, string> = {
   'online.moveRejected': "The move was not saved because of a server error. Position refreshed.",
   'online.resignFailed': 'Could not send the resignation.',
   'online.reconnecting': 'Connection lost — reconnecting…',
+  'online.resending': 'Slow internet — sending your move again…',
   'online.finalizing': 'The server is confirming the result…',
 
   'rules.button': 'Rules',

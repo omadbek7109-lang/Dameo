@@ -7,6 +7,9 @@
 // - Virtual opponents (matches.virtual_id): timed on both sides. After the player's move the server plans the bot's move
 //   AND its thinking time (bot_pending / bot_due_at); action 'bot' commits it when due (SQL virtual_commit charges exactly
 //   the planned time to the bot's clock). If the app is gone, the 15 s sweep commits it instead.
+// - Slow internet: the app sends think_ms (how long the player really thought) and the expected ply. The clock is
+//   charged up to the moment the request ARRIVED here (not after our own work), and up to 3 s of network delay per move
+//   is given back (SQL clock_take_turn_lag). A retried request for a move that is already stored answers ok (idempotent).
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 import { playMove, replay } from '../_shared/engine/index.ts';
 import type { GameResult, GameState } from '../_shared/engine/index.ts';
@@ -23,6 +26,7 @@ const BOT_TIME: Record<Difficulty, number> = { easy: 150, medium: 450, hard: 700
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
   if (req.method !== 'POST') return json({ ok: false, error: 'method' }, 405);
+  const arrivedAt = new Date().toISOString(); // the move reached the server now; our own work below is not the player's time
 
   const url = Deno.env.get('SUPABASE_URL')!;
   const userClient = createClient(url, Deno.env.get('SUPABASE_ANON_KEY')!, { global: { headers: { Authorization: req.headers.get('Authorization') ?? '' } } });
@@ -93,6 +97,23 @@ Deno.serve(async (req) => {
   }
   const { data: rows } = await admin.from('match_moves').select('ply, from_sq, path').eq('match_id', match_id).order('ply', { ascending: true });
   const stored = (rows ?? []).map((r: any) => ({ from: r.from_sq, path: r.path as number[] }));
+  // a retry (slow internet: the first request got through but its answer was lost) → the same move is already stored
+  const wantPly = Number.isInteger(body.ply) ? Number(body.ply) : null;
+  if (wantPly !== null && wantPly >= 0 && wantPly < stored.length) {
+    const s = stored[wantPly];
+    const mine = (wantPly % 2 === 0 ? 'w' : 'b') === myColor;
+    if (mine && s.from === from && s.path.join() === path.join()) {
+      const next = stored[wantPly + 1];
+      const botReply = match.vs_bot && !match.virtual_id && next ? { ply: wantPly + 1, from: next.from, path: next.path } : null;
+      const again = replay(stored);
+      return json({
+        ok: true, duplicate: true, bot: botReply, pending: match.bot_due_at ? { due_at: match.bot_due_at } : null,
+        result: again.ok ? again.state.result : undefined,
+        clock: match.turn_started_at ? { white_ms: match.white_ms, black_ms: match.black_ms, turn_started_at: match.turn_started_at } : null,
+      });
+    }
+    return json({ ok: false, error: 'conflict' }, 409);
+  }
   const replayed = replay(stored);
   if (!replayed.ok) return json({ ok: false, error: 'corrupt-game' }, 500);
   if (replayed.state.turn !== myColor) return json({ ok: false, error: 'not-your-turn' }, 409);
@@ -102,7 +123,10 @@ Deno.serve(async (req) => {
   let ply = stored.length;
   let clock: { white_ms?: number; black_ms?: number; turn_started_at?: string } | null = null;
   if (!match.vs_bot || match.virtual_id) {
-    const { data: ct, error: ctErr } = await admin.rpc('clock_take_turn', { p_match: match_id, p_ply: ply });
+    const think = Number(body.think_ms);
+    const { data: ct, error: ctErr } = await admin.rpc('clock_take_turn_lag', {
+      p_match: match_id, p_ply: ply, p_think_ms: Number.isFinite(think) && think >= 0 ? Math.min(Math.round(think), 3_600_000) : null, p_at: arrivedAt,
+    });
     if (ctErr || !ct) return json({ ok: false, error: 'server' }, 500);
     if (!ct.ok) return json({ ok: false, error: ct.error ?? 'conflict' }, 409); // 'timeout' | 'conflict' | 'not-active'
     clock = ct;

@@ -253,6 +253,7 @@ export const uz = {
   'online.moveRejected': "Server xatosi tufayli yurish saqlanmadi. Pozitsiya yangilandi.",
   'online.resignFailed': "Taslim bo'lishni yuborib bo'lmadi.",
   'online.reconnecting': "Aloqa uzildi — qayta ulanmoqda…",
+  'online.resending': "Internet sekin — yurishingiz qayta yuborilmoqda…",
   'online.finalizing': "Natija server tomonidan tasdiqlanmoqda…",
 
   'rules.button': 'Qoidalar',

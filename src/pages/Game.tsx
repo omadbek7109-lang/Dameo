@@ -15,8 +15,8 @@ import { countPieces, type Color, type GameResult } from '../engine/index.ts';
 import { useI18n, type TKey } from '../i18n/index.tsx';
 import { navigate, useRoute } from '../router.tsx';
 import { DEMO_PLAYERS } from '../services/demoData.ts';
-import { clockView, formatClock, GRACE_MS } from '../services/clock.ts';
-import { claimTimeout, commitBotMove, getMatch, getMoves, resignOnline, startBotMatch, submitMove, toLocalMs, watchMatch, type OnlineMatch } from '../services/online.ts';
+import { clockView, formatClock, GRACE_MS, LAG_COMP_MS } from '../services/clock.ts';
+import { claimTimeout, isTransient, commitBotMove, getMatch, getMoves, resignOnline, startBotMatch, submitMove, toLocalMs, watchMatch, type OnlineMatch } from '../services/online.ts';
 import { Link } from '../router.tsx';
 import { AchievementUnlocked } from '../components/Achievements.tsx';
 import { achievementsForMatch, type StreakCode } from '../services/achievements.ts';
@@ -192,11 +192,23 @@ function OnlineGame({ matchId }: { matchId: string }) {
   }, [matchId]);
 
   const [waitingServer, setWaitingServer] = useState(false);
+  const [sendTry, setSendTry] = useState(0); // >0: the move is being sent again (slow internet)
+  // when this device first showed that it is my turn (local clock) — the server gives back network delay with it
+  const turnSeen = useRef(Date.now());
+  const sending = useRef(false);
+  const loadedOnce = useRef(false);
+  const lastLive = useRef(Date.now());
   const g = useCheckers(cfg, {
     onHumanMove: async (mv) => {
       setWaitingServer(true);
+      setSendTry(0);
+      sending.current = true;
+      const myParity = humanColorRef.current === 'w' ? 0 : 1;
+      const len = gRef.current.game.history.length; // the local copy may or may not include this move yet
+      const ply = len % 2 === myParity ? len : len - 1;
+      const thinkMs = Date.now() - turnSeen.current;
       try {
-        const r = await submitMove(matchId, mv.from, mv.path);
+        const r = await submitMove(matchId, mv.from, mv.path, { ply, thinkMs }, (n) => setSendTry(n));
         if (!r.ok) throw new Error(r.error);
         // sound only once the server has accepted the move
         const mineRec = gRef.current.game.history.find((h, i) => i >= 0 && h.from === mv.from && h.path.join() === mv.path.join());
@@ -220,7 +232,7 @@ function OnlineGame({ matchId }: { matchId: string }) {
         }
       } catch (e) {
         // Say exactly why the server refused the move, then re-sync the board from the server's copy.
-        const code = e instanceof SbError ? e.message : e instanceof TypeError ? 'network' : 'server';
+        const code = e instanceof SbError ? e.message : isTransient(e) ? 'network' : 'server';
         const key = (
           {
             'not-your-turn': 'online.err.notYourTurn',
@@ -238,22 +250,36 @@ function OnlineGame({ matchId }: { matchId: string }) {
         console.warn('[DAMEO] move rejected by server:', code);
         await resync(gRef.current.loadMoves).catch(() => {});
       } finally {
+        sending.current = false;
         setWaitingServer(false);
+        setSendTry(0);
       }
     },
   });
   const gRef = useRef(g);
   gRef.current = g;
+  const humanColorRef = useRef(humanColor);
+  humanColorRef.current = humanColor;
+  // my turn just appeared on this screen (opponent's move arrived, or the game was (re)loaded) → start my think time
+  const plies = g.game.history.length;
+  useEffect(() => {
+    if (g.game.turn === humanColor) turnSeen.current = Date.now();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [plies, humanColor]);
 
   const load = useCallback(async () => {
     try {
       setError(false);
       const m = await getMatch(matchId);
       if (!m) return setError(true);
+      loadedOnce.current = true;
       setMatch(m);
-      await resync(gRef.current.loadMoves);
+      // my move is still on its way: don't replace the board with the server's copy that doesn't have it yet
+      if (!sending.current) await resync(gRef.current.loadMoves);
     } catch {
-      setError(true);
+      // slow / lost internet: keep the game on screen and try again shortly (error page only if nothing was loaded)
+      if (!loadedOnce.current) setError(true);
+      else lastLive.current = Date.now() - 1_000;
     }
   }, [matchId, resync]);
 
@@ -277,12 +303,18 @@ function OnlineGame({ matchId }: { matchId: string }) {
     if (!ticking) return;
     return everyActive(() => setNow(Date.now()), 250);
   }, [ticking]);
-  const view = match?.clock ? clockView(match.clock, match.status === 'active' ? now : match.clock.turnStartedAt) : null;
+  // my turn: count my 30 s from when the opponent's move appeared here (up to 3 s later than the server's start —
+  // exactly what the server gives back for network delay)
+  const shownClock =
+    match?.clock && match.status === 'active' && match.clock.moveCount === plies && (match.clock.moveCount % 2 === 0 ? 'w' : 'b') === humanColor
+      ? { ...match.clock, turnStartedAt: Math.min(match.clock.turnStartedAt + LAG_COMP_MS, Math.max(match.clock.turnStartedAt, turnSeen.current)) }
+      : match?.clock;
+  const view = shownClock ? clockView(shownClock, match!.status === 'active' ? now : shownClock.turnStartedAt) : null;
   // the side to move is out of time → ask the server to end the game (either player may ask; the server re-checks)
   const claimed = useRef(-1);
   useEffect(() => {
     if (!view || !match?.clock || match.status !== 'active') return;
-    if (now < view.deadline + GRACE_MS + 400 || claimed.current === match.clock.moveCount) return;
+    if (now < view.deadline + GRACE_MS + LAG_COMP_MS + 400 || claimed.current === match.clock.moveCount) return;
     claimed.current = match.clock.moveCount;
     claimTimeout(matchId)
       .then(async (r) => {
@@ -344,18 +376,27 @@ function OnlineGame({ matchId }: { matchId: string }) {
 
   // Broadcast mode safety net: a live notification can be lost (e.g. a network blip) — if an active game has been
   // quiet for 20 s, re-read it from the server (2 small reads; the old postgres_changes path is unaffected)
-  const lastLive = useRef(Date.now());
+  // Slow / dropping internet: while the live connection is down, re-read the game every ~3 s; the internet coming back
+  // re-reads at once.
   const activeGame = match?.status === 'active';
+  const connRef = useRef(conn);
+  connRef.current = conn;
   useEffect(() => {
     if (!activeGame) return;
     const id = setInterval(() => {
-      if (currentRtMode() !== 'broadcast' || !appActive()) return;
-      if (Date.now() - lastLive.current > 20_000) {
+      if (!appActive()) return;
+      const quiet = Date.now() - lastLive.current;
+      if ((connRef.current !== 'open' && quiet > 3_000) || (currentRtMode() === 'broadcast' && quiet > 20_000)) {
         lastLive.current = Date.now();
         void load();
       }
-    }, 5_000);
-    return () => clearInterval(id);
+    }, 1_000);
+    const back = () => void load();
+    window.addEventListener('online', back);
+    return () => {
+      clearInterval(id);
+      window.removeEventListener('online', back);
+    };
   }, [activeGame, load]);
 
   useEffect(() => {
@@ -365,6 +406,7 @@ function OnlineGame({ matchId }: { matchId: string }) {
         lastLive.current = Date.now();
         const have = gRef.current.game.history.length;
         if (mv.ply === have) {
+          turnSeen.current = Date.now();
           gRef.current.applyRemote(mv.from, mv.path);
           setTimeout(() => playSound(moveSound(gRef.current.game.history[mv.ply], false)), 30);
         }
@@ -540,9 +582,9 @@ function OnlineGame({ matchId }: { matchId: string }) {
           : undefined
       }
       banner={
-        conn !== 'open' ? (
+        conn !== 'open' || sendTry > 0 ? (
           <div className="notice notice-warn" role="status">
-            <LuWifiOff /> <span>{t('online.reconnecting')}</span>
+            <LuWifiOff /> <span>{t(sendTry > 0 ? 'online.resending' : 'online.reconnecting')}</span>
           </div>
         ) : (
           clockNote

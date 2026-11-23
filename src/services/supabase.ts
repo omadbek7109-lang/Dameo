@@ -136,7 +136,13 @@ export const auth = {
 
 /* ----------------------------- REST ----------------------------- */
 
-async function request<T>(path: string, init: RequestInit & { prefer?: string } = {}): Promise<T> {
+/** A request that takes longer than this is given up (slow / stalled mobile internet); callers retry or re-read. */
+export class TimeoutError extends Error {
+  constructor() {
+    super('timeout-net');
+  }
+}
+async function request<T>(path: string, init: RequestInit & { prefer?: string; timeoutMs?: number } = {}): Promise<T> {
   await ensureFreshToken();
   const headers: Record<string, string> = {
     apikey: SUPABASE_ANON_KEY,
@@ -144,7 +150,18 @@ async function request<T>(path: string, init: RequestInit & { prefer?: string } 
     'Content-Type': 'application/json',
   };
   if (init.prefer) headers.Prefer = init.prefer;
-  const res = await fetch(`${SUPABASE_URL}${path}`, { ...init, headers: { ...headers, ...(init.headers as any) } });
+  const { timeoutMs, prefer: _p, ...rest } = init;
+  const ctl = timeoutMs ? new AbortController() : null;
+  const timer = ctl ? setTimeout(() => ctl.abort(), timeoutMs) : null;
+  let res: Response;
+  try {
+    res = await fetch(`${SUPABASE_URL}${path}`, { ...rest, signal: ctl?.signal ?? rest.signal, headers: { ...headers, ...(init.headers as any) } });
+  } catch (e) {
+    if (ctl?.signal.aborted) throw new TimeoutError();
+    throw e;
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
   if (!res.ok) throw await parseError(res);
   if (res.status === 204) return undefined as T;
   const text = await res.text();
@@ -171,8 +188,8 @@ function qs(o: QueryOpts): string {
 }
 
 export const db = {
-  select<T>(table: string, o: QueryOpts = {}): Promise<T[]> {
-    return request<T[]>(`/rest/v1/${table}?${qs(o)}`);
+  select<T>(table: string, o: QueryOpts & { timeoutMs?: number } = {}): Promise<T[]> {
+    return request<T[]>(`/rest/v1/${table}?${qs(o)}`, { timeoutMs: o.timeoutMs });
   },
   /** returns rows plus the exact total (for pagination) */
   async selectWithCount<T>(table: string, o: QueryOpts = {}): Promise<{ rows: T[]; total: number }> {
@@ -203,11 +220,11 @@ export const db = {
   delete(table: string, filter: Record<string, string>): Promise<void> {
     return request<void>(`/rest/v1/${table}?${new URLSearchParams(filter)}`, { method: 'DELETE' });
   },
-  rpc<T>(fn: string, args: object = {}): Promise<T> {
-    return request<T>(`/rest/v1/rpc/${fn}`, { method: 'POST', body: JSON.stringify(args) });
+  rpc<T>(fn: string, args: object = {}, opts: { timeoutMs?: number } = {}): Promise<T> {
+    return request<T>(`/rest/v1/rpc/${fn}`, { method: 'POST', body: JSON.stringify(args), timeoutMs: opts.timeoutMs });
   },
-  async invokeFunction<T>(name: string, body: object): Promise<T> {
-    return request<T>(`/functions/v1/${name}`, { method: 'POST', body: JSON.stringify(body) });
+  async invokeFunction<T>(name: string, body: object, opts: { timeoutMs?: number } = {}): Promise<T> {
+    return request<T>(`/functions/v1/${name}`, { method: 'POST', body: JSON.stringify(body), timeoutMs: opts.timeoutMs });
   },
 };
 

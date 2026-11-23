@@ -12,8 +12,10 @@ export const TIME_CONTROLS = [180, 300, 480] as const;
 export type TimeControl = (typeof TIME_CONTROLS)[number];
 export const DEFAULT_TIME_CONTROL: TimeControl = 180;
 export const MOVE_LIMIT_MS = 30_000;
-/** the server accepts a move up to this long after the deadline (network) */
-export const GRACE_MS = 1_000;
+/** the server accepts a move up to this long after the deadline (0043: 2 s) */
+export const GRACE_MS = 2_000;
+/** network delay the server gives back per move (0043, SQL _lag_comp_max_ms) */
+export const LAG_COMP_MS = 3_000;
 
 export interface ClockState {
   timeControl: number;

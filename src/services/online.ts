@@ -7,7 +7,7 @@
  * The browser never inserts moves directly and never submits a rating or a result.
  */
 import type { ClockState, TimeControl } from './clock.ts';
-import { db, subscribeChanges, subscribeBroadcast, subscribeLive, onMyTopic, type ConnectionState } from './supabase.ts';
+import { db, SbError, TimeoutError, subscribeChanges, subscribeBroadcast, subscribeLive, onMyTopic, type ConnectionState } from './supabase.ts';
 
 export type OnlineStatus = 'waiting' | 'active' | 'finished' | 'aborted';
 export interface OnlineMatch {
@@ -135,14 +135,14 @@ export const joinRoom = (code: string) => db.rpc<{ match_id: string }>('join_roo
 export const quickMatch = (timeControl: TimeControl) =>
   db.rpc<{ match_id: string | null; searching_since?: string; server_now?: string; time_control?: number }>('quick_match', { p_time: timeControl });
 /** Ask the server to end the game because the side to move ran out of time (the server checks the clock itself). */
-export const claimTimeout = (matchId: string) => db.rpc<{ ended: boolean; status: OnlineStatus }>('claim_timeout', { p_match: matchId });
+export const claimTimeout = (matchId: string) => db.rpc<{ ended: boolean; status: OnlineStatus }>('claim_timeout', { p_match: matchId }, { timeoutMs: 12_000 });
 export const cancelQuickMatch = () => db.rpc('cancel_quick_match');
 /** Game against the server-side bot ('random' = server picks the level). Bot games never change the rating. */
 export const startBotMatch = (level: 'easy' | 'medium' | 'hard' | 'random') => db.rpc<{ match_id: string; level: string; rated: boolean; rated_left: number }>('start_bot_match', { p_level: level });
 
 export async function getMatch(id: string): Promise<OnlineMatch | null> {
   const t0 = Date.now();
-  const rows = await db.select<MatchRow>('match_view', { filter: { id: `eq.${id}` }, limit: 1 });
+  const rows = await db.select<MatchRow>('match_view', { filter: { id: `eq.${id}` }, limit: 1, timeoutMs: 15_000 });
   return rows[0] ? mapMatch(rows[0], (t0 + Date.now()) / 2) : null;
 }
 
@@ -150,18 +150,37 @@ export async function getMoves(id: string): Promise<OnlineMove[]> {
   const rows = await db.select<{ ply: number; from_sq: number; path: number[] }>('match_moves', {
     filter: { match_id: `eq.${id}` },
     order: 'ply.asc',
+    timeoutMs: 15_000,
   });
   return rows.map((r) => ({ ply: r.ply, from: r.from_sq, path: r.path }));
 }
 
 type ClockReply = { white_ms?: number; black_ms?: number; turn_started_at?: string } | null;
-export const submitMove = (matchId: string, from: number, path: number[]) =>
-  db.invokeFunction<{ ok: boolean; error?: string; bot?: OnlineMove | null; pending?: { due_at: string } | null; clock?: ClockReply }>('match-action', {
-    action: 'move',
-    match_id: matchId,
-    from,
-    path,
-  });
+type MoveReply = { ok: boolean; error?: string; duplicate?: boolean; bot?: OnlineMove | null; pending?: { due_at: string } | null; clock?: ClockReply };
+/** a network problem worth trying again (not an answer from the server) */
+export const isTransient = (e: unknown) =>
+  e instanceof TimeoutError || e instanceof TypeError || (e instanceof SbError && [0, 502, 503, 504, 520, 522, 524, 546].includes(e.status));
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+/**
+ * Send a move. `ply` makes it safe to send again (the server answers ok if this exact move is already stored), so on a
+ * slow or dropping connection it is retried for up to ~30 s. `thinkMs` = how long the player thought on this device
+ * (the server gives back up to 3 s of network delay with it).
+ */
+export async function submitMove(
+  matchId: string, from: number, path: number[], extra?: { ply: number; thinkMs: number }, onRetry?: (attempt: number) => void,
+): Promise<MoveReply> {
+  const body = { action: 'move', match_id: matchId, from, path, ...(extra ? { ply: extra.ply, think_ms: Math.max(0, Math.round(extra.thinkMs)) } : {}) };
+  const started = Date.now();
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await db.invokeFunction<MoveReply>('match-action', body, { timeoutMs: 12_000 });
+    } catch (e) {
+      if (!extra || !isTransient(e) || attempt >= 5 || Date.now() - started > 30_000) throw e;
+      onRetry?.(attempt + 1);
+      await sleep(Math.min(3_000, 600 * 2 ** attempt));
+    }
+  }
+}
 /** Virtual opponent: commit its planned move (the server refuses before it is due and charges its clock itself). */
 export const commitBotMove = (matchId: string) =>
   db.invokeFunction<{ ok: boolean; error?: string; due_at?: string; bot?: OnlineMove; clock?: ClockReply }>('match-action', { action: 'bot', match_id: matchId });
