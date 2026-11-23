@@ -8075,3 +8075,5 @@ html.calm .pf-f-crown-wings::before, html.calm .pf-f-crown-wings .pf-art { anima
 
 /* an avatar wearing a DAMEO Pass frame keeps its box; the frame art may reach outside it */
 .avatar-passframe { position: relative; display: inline-grid; place-items: center; flex: none; overflow: visible; vertical-align: middle; }
+.inv-frame-view { display: grid; place-items: center; height: 104px; margin: 4px 0 2px; }
+.inv-frame-more { display: flex; justify-content: center; margin: 14px auto 0; width: fit-content; }

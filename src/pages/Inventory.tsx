@@ -15,10 +15,11 @@ import { haptic } from '../services/telegram.ts';
 import { equipCosmetic, getBoosters, getPass, activateBooster, type BoosterState, type PassState } from '../services/pass/index.ts';
 import { PASS_EVENT } from '../services/pass/index.ts';
 import { COSMETIC_ART } from '../services/pass/core.ts';
+import { Avatar } from '../components/Avatar.tsx';
 import { VictoryFx } from '../components/VictoryFx.tsx';
 import { playSound } from '../services/sound.ts';
 
-type PassTab = 'combo' | 'victory' | 'boost';
+type PassTab = 'frame' | 'combo' | 'victory' | 'boost';
 const UZ_MONTHS = ['yanvar', 'fevral', 'mart', 'aprel', 'may', 'iyun', 'iyul', 'avgust', 'sentabr', 'oktabr', 'noyabr', 'dekabr'];
 /** "22-dekabr" / "22 December" (Uzbek month names written out: browsers' uz locale prints "M12") */
 const dayMonth = (ms: number, lang: string) => {
@@ -26,14 +27,14 @@ const dayMonth = (ms: number, lang: string) => {
   return lang === 'en' ? d.toLocaleDateString('en-GB', { day: 'numeric', month: 'long' }) : `${d.getDate()}-${UZ_MONTHS[d.getMonth()]}`;
 };
 type Tab = Slot | PassTab;
-const PASS_TABS: PassTab[] = ['boost', 'combo', 'victory'];
+const PASS_TABS: PassTab[] = ['frame', 'boost', 'combo', 'victory'];
 
 const SLOTS: Slot[] = ['piece', 'board', 'effect'];
 
 /** Everything the player owns, by slot; one active piece set, board and move effect at a time. */
 export function Inventory() {
   const { t, lang } = useI18n();
-  const { signedIn } = useAuth();
+  const { signedIn, me } = useAuth();
   const { toast } = useToast();
   const cos = useCosmetics();
   const [tab, setTab] = useState<Tab>('piece');
@@ -107,6 +108,14 @@ export function Inventory() {
   const passNote = (k: PassTab, id: string) => {
     const r = pass?.rewards.find((x) => x.kind === k && x.value === id);
     return r ? ((lang === 'en' ? r.note_en : r.note_uz) ?? '') : '';
+  };
+  const wearFrame = async (id: string | null) => {
+    setBusy(id ?? 'off');
+    if (await equipCosmetic('frame', id)) {
+      haptic('move');
+      toast('success', t(id ? 'inv.frame.on' : 'inv.frame.off'));
+    } else toast('error', t('shop.err.generic'));
+    setBusy(null);
   };
   const wearVictory = async (id: string | null) => {
     setBusy(id ?? 'off');
@@ -185,6 +194,39 @@ export function Inventory() {
                 </div>
               ))}
             </div>
+          </>
+        )
+      ) : tab === 'frame' ? (
+        passOwned('frame').length === 0 ? (
+          <EmptyState title={t('inv.passEmpty.frame')} action={<Link to="/pass" className="btn btn-primary">DAMEO Pass</Link>} />
+        ) : (
+          <>
+            <p className="muted small inv-pass-note">{t('inv.frameHow')}</p>
+            <div className="shop-grid">
+              {passOwned('frame').map((o) => {
+                const on = pass?.equipped.frame === o.id;
+                const days = o.until ? Math.max(0, Math.ceil((o.until - Date.now()) / 86_400_000)) : null;
+                return (
+                  <div key={o.id} className={`shop-card inv-card inv-pass inv-frame rarity-edge-legendary ${on ? 'shop-card-on' : ''}`}>
+                    <span className="inv-frame-view">
+                      <Avatar name={me?.username ?? 'DAMEO'} seed={me?.avatar} size={64} frame={o.id} />
+                    </span>
+                    <span className="shop-card-name">{passName('frame', o.id)}</span>
+                    {days !== null && <span className="muted small">{t('pass.daysLeft', { n: days })}</span>}
+                    {on ? (
+                      <button className="btn btn-secondary btn-sm btn-block" onClick={() => wearFrame(null)} disabled={busy !== null}>
+                        {busy === 'off' ? <LuLoader className="spin" /> : <LuCheck />} {t('shop.unequip')}
+                      </button>
+                    ) : (
+                      <button className="btn btn-primary btn-sm btn-block" onClick={() => wearFrame(o.id)} disabled={busy !== null}>
+                        {busy === o.id ? <LuLoader className="spin" /> : null} {t('shop.equip')}
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+            <Link to="/profile" className="btn btn-ghost btn-sm inv-frame-more">{t('inv.frameMore')}</Link>
           </>
         )
       ) : tab === 'combo' || tab === 'victory' ? (
