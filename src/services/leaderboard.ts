@@ -1,3 +1,4 @@
+import { cached, invalidateCache } from './cache.ts';
 import type { Player } from '../types/models.ts';
 import { appActive } from './telegram.ts';
 import { backendConfigured } from './config.ts';
@@ -72,10 +73,11 @@ export async function fetchLeaderboard(q: LeaderboardQuery, ctx: LeaderboardCont
     const start = q.page * q.pageSize;
     return { rows: ranked.slice(start, start + q.pageSize), total: ranked.length, updatedAt: Date.now(), source: 'demo', me };
   }
-  const { rows, total } = await liveRows(q);
+  // the same page for 15 s (leaderboard_page is one of the heavier reads; a rating change invalidates it)
+  const { rows, total } = await cached(`lb:${q.scope}:${q.search.trim()}:${q.page}:${q.pageSize}`, 15_000, () => liveRows(q));
   let me: RankedPlayer | undefined;
   if (ctx.me) {
-    const mine = await db.select<DbRow>('leaderboard', { filter: { id: `eq.${ctx.me.id}` }, limit: 1 });
+    const mine = await cached(`lb:me:${ctx.me.id}:${ctx.me.rating}`, 15_000, () => db.select<DbRow>('leaderboard', { filter: { id: `eq.${ctx.me!.id}` }, limit: 1 }));
     if (mine[0]) me = { ...fromRow(mine[0]), rank: mine[0].rank };
   }
   return { rows, total, updatedAt: Date.now(), source: 'live', me };
@@ -96,7 +98,11 @@ async function liveRows(q: LeaderboardQuery): Promise<{ rows: RankedPlayer[]; to
 }
 
 /** Subscribe to rating changes; callback is debounced. Returns an unsubscribe function. */
-export function subscribeLeaderboard(onUpdate: () => void, onStatus?: (s: ConnectionState) => void, relevant?: (r: { id: string; rating: number }) => boolean): () => void {
+export function subscribeLeaderboard(onUpdate0: () => void, onStatus?: (s: ConnectionState) => void, relevant?: (r: { id: string; rating: number }) => boolean): () => void {
+  const onUpdate = () => {
+    invalidateCache('lb:');
+    onUpdate0();
+  };
   if (!backendConfigured) return () => {};
   let t: any;
   let last = 0;

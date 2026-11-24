@@ -322,7 +322,7 @@ export const en: Record<TKey, string> = {
   'level.expert': 'Expert',
   'level.master': 'Master',
   'rating.how': 'How is the rating calculated?',
-  'rating.explain': "Everyone starts at 1200 (Level 1). After every rated game the server applies: win +10 to +30, loss −10 to −30 (random); in a draw the lower-rated player gains a little (at most ±5). A game that ends before 12 moves changes nobody's rating. Leaving games at the start (resigning or running out of time before move 12) 3 times in 24 hours gives a warning; doing it again closes quick match for a while (15 min → 1 hour → 24 hours). Only 5 games per day against the same opponent count. Practice-bot games are unrated. Levels: a new level every 100 points from 1300, 2200 is Level 11, 4100 is Level 30, … 11100+ is the top, Level 100. The badge gets richer as you climb.",
+  'rating.explain': "Everyone starts at 1200 (Level 1). After every rated game the server applies Elo: the winner gains exactly what the loser loses. Equal players ±20; beating a stronger player gives more (up to 40), beating a weaker one less (about +10 against someone 200 points lower), and losing to a weaker player costs more. In a draw the lower-rated player gains a little (at most ±10). The rating never goes below 100. A game that ends before 12 moves changes nobody's rating. Leaving games at the start (resigning or running out of time before move 12) 3 times in 24 hours gives a warning; doing it again closes quick match for a while (15 min → 1 hour → 24 hours). Only 5 games per day against the same opponent count. Practice-bot games are unrated. Levels: a new level every 100 points from 1300, 2200 is Level 11, 4100 is Level 30, … 11100+ is the top, Level 100. The badge gets richer as you climb.",
   'chart.summary': 'Rating over {n} points: from {from} to {to}',
 
   'ach.firstWin': 'First win',
@@ -810,7 +810,7 @@ export const en: Record<TKey, string> = {
   'help.q.rules': "What are the rules?",
   'help.a.rules': "Russian draughts: men move forward, capturing is compulsory and also backwards; a man reaching the last row becomes a flying king.",
   'help.q.rating': "How does the rating work?",
-  'help.a.rating': "Rated games: win +10…+30, loss −10…−30 (random each time), draw up to ±5. Only the server calculates it. A game ending before 12 moves doesn't change the rating; players who keep leaving games at the start get a warning, then a temporary quick-match restriction; more than 5 games a day against the same opponent don't count.",
+  'help.a.rating': "Rating uses Elo: the winner gains exactly what the loser loses. Equal players ±20, beating a stronger player gives more (up to 40), beating a weaker one less; losing to a weaker player costs more. Only the server calculates it. A game ending before 12 moves doesn't change the rating; players who keep leaving games at the start get a warning, then a temporary quick-match restriction; more than 5 games a day against the same opponent don't count.",
   'help.q.clock': "How does the clock work?",
   'help.a.clock': "Pick 3, 5 or 8 minutes; each player has their own clock, at most 30 seconds per move. Run out of time and your opponent wins.",
   'help.q.weekly': "What is the daily rating?",

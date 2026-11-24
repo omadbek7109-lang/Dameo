@@ -33,7 +33,7 @@ import { useSettings } from '../settings/SettingsProvider.tsx';
 import { botLevelFor } from './Play.tsx';
 import { useWorn } from '../components/PassArt.tsx';
 import { VictoryFx } from '../components/VictoryFx.tsx';
-import { getPass } from '../services/pass/index.ts';
+import { getPass, getPassRecent } from '../services/pass/index.ts';
 import { levelOf } from '../services/pass/core.ts';
 
 /* ------------------------------------------------------------------ */
@@ -384,11 +384,16 @@ function OnlineGame({ matchId }: { matchId: string }) {
   connRef.current = conn;
   useEffect(() => {
     if (!activeGame) return;
+    let downReads = 0; // re-reads while the live connection is down: 3 s → 6 s → 12 s (server load)
     const id = setInterval(() => {
       if (!appActive()) return;
       const quiet = Date.now() - lastLive.current;
-      if ((connRef.current !== 'open' && quiet > 3_000) || (currentRtMode() === 'broadcast' && quiet > 20_000)) {
+      const down = connRef.current !== 'open';
+      if (!down) downReads = 0;
+      const wait = down ? Math.min(12_000, 3_000 * 2 ** Math.min(downReads, 2)) : 20_000;
+      if ((down && quiet > wait) || (currentRtMode() === 'broadcast' && quiet > 20_000)) {
         lastLive.current = Date.now();
+        if (down) downReads++;
         void load();
       }
     }, 1_000);
@@ -659,7 +664,7 @@ function GameScreen({ g, kind, humanColor, top, bottom, canRestart, canUndo, can
   useEffect(() => {
     if (over) return;
     setGameXp(null);
-    getPass().then((p) => (xpBefore.current = p.earned ?? p.xp), () => undefined);
+    getPassRecent(120_000).then((p) => (xpBefore.current = p.earned ?? p.xp), () => undefined);
   }, [over]);
   useEffect(() => {
     if (!result || xpBefore.current === null) return;

@@ -4,7 +4,7 @@ create temp table results (name text, ok boolean, detail text);
 grant all on results to public;
 create function pg_temp.check(n text, cond boolean, d text default '') returns void language plpgsql as $$ begin insert into results values (n, coalesce(cond, false), d); end $$;
 -- the older tests below expect exact points: use a fixed ±5 instead of 0019's random +15…+30 (restored + tested at the end)
-create or replace function public._rand_delta(p_score numeric, p_me int, p_opp int) returns int
+create or replace function public._elo_delta(p_score numeric, p_me int, p_opp int) returns int
 language sql volatile as $$ select case when p_score = 1 then 5 when p_score = 0 then -5 else 0 end; $$;
 
 -- three users (the signup trigger creates their profiles)
@@ -1086,12 +1086,14 @@ select pg_temp.check('a fresh untimed game is left alone', (select status = 'act
 
 -- ===================== 0019: rating rules, anti-abuse, achievements, virtual v2
 reset role;
--- the real random rule back in place (0025: ±10…30)
-create or replace function public._rand_delta(p_score numeric, p_me int, p_opp int) returns int
-language sql volatile as $$
-  select case when p_score = 1 then 10 + floor(random() * 21)::int
-              when p_score = 0 then -(10 + floor(random() * 21)::int)
-              else greatest(-5, least(5, round((coalesce(p_opp, 1200) - p_me) / 50.0)::int)) end;
+-- the real rule back in place (0046: Elo, K = 40)
+create or replace function public._elo_delta(p_score numeric, p_me int, p_opp int) returns int
+language sql immutable set search_path = public as $$
+  select case
+    when p_score = 1 then greatest(1, round(40 * (1 - e))::int)
+    when p_score = 0 then least(-1, round(-40 * e)::int)
+    else greatest(-10, least(10, round(40 * (0.5 - e))::int)) end
+  from (select 1 / (1 + power(10::numeric, (coalesce(p_opp, 1200) - p_me) / 400.0)) as e) x
 $$;
 insert into auth.users (id, email, raw_user_meta_data) values
   ('f019f019-0000-4000-8000-000000000001', 'r1@x.io', '{"username":"rr_one"}'),
@@ -1104,17 +1106,17 @@ create temp table rg as
   select pg_temp.pvp('f019f019-0000-4000-8000-000000000001', 'f019f019-0000-4000-8000-000000000002', 'white', now() - (i || ' days')::interval - interval '2 days') as id
   from generate_series(1, 40) i;
 grant all on rg to public;
-select pg_temp.check('rating: every win is +10…+30', (select bool_and(m.white_delta between 10 and 30) from public.matches m join rg on rg.id = m.id));
-select pg_temp.check('rating: every loss is −10…−30', (select bool_and(m.black_delta between -30 and -10) from public.matches m join rg on rg.id = m.id));
-select pg_temp.check('rating: points are random (not one fixed value)', (select count(distinct m.white_delta) >= 6 from public.matches m join rg on rg.id = m.id));
+select pg_temp.check('0046 Elo: first game between equals is +20 / −20', (select white_delta = 20 and black_delta = -20 from public.matches m join rg on rg.id = m.id order by m.ended_at desc limit 1));
+select pg_temp.check('0046 Elo: winner gets exactly what the loser loses (every game)', (select bool_and(m.white_delta = -m.black_delta and m.white_delta between 1 and 40) from public.matches m join rg on rg.id = m.id));
+select pg_temp.check('0046 Elo: the further ahead, the less a win gives', (select (array_agg(m.white_delta order by m.ended_at desc))[1] > (array_agg(m.white_delta order by m.ended_at desc))[40] from public.matches m join rg on rg.id = m.id));
 select pg_temp.check('rating: history keeps every change with source and delta',
-  (select count(*) = 40 and bool_and(source = 'pvp' and delta between 10 and 30) from public.rating_history where user_id = 'f019f019-0000-4000-8000-000000000001' and match_id is not null));
+  (select count(*) = 40 and bool_and(source = 'pvp' and delta between 1 and 40) from public.rating_history where user_id = 'f019f019-0000-4000-8000-000000000001' and match_id is not null));
 select pg_temp.check('rating: profile = sum of the changes', (select p.rating = 1200 + (select sum(white_delta) from public.matches m join rg on rg.id = m.id) from public.profiles p where p.id = 'f019f019-0000-4000-8000-000000000001'));
 -- draws: small and balanced (the lower-rated player gains)
 create temp table dg as select pg_temp.pvp('f019f019-0000-4000-8000-000000000002', 'f019f019-0000-4000-8000-000000000001', 'draw', now() - interval '60 days') as id;
 grant all on dg to public;
-select pg_temp.check('rating: draw — lower-rated gains, higher-rated loses, max 5',
-  (select white_delta between 1 and 5 and black_delta between -5 and -1 from public.matches where id = (select id from dg)));
+select pg_temp.check('rating: draw — lower-rated gains, higher-rated loses the same, max 10',
+  (select white_delta between 1 and 10 and black_delta = -white_delta from public.matches where id = (select id from dg)));
 -- the same pair: 5 rated games per 24 h (0038), then nothing changes
 create temp table pl as
   select i, pg_temp.pvp('f019f019-0000-4000-8000-000000000003', 'f019f019-0000-4000-8000-000000000004', 'white', now() - (i || ' minutes')::interval) as id
@@ -1466,7 +1468,7 @@ reset role;
 
 -- ===================== 0025: one game per virtual opponent, no virtual rematch, ±10…30 for every rated game
 reset role;
-select pg_temp.check('0025: the migration''s rating rule is ±10…30', (select prosrc like '%10 + floor(random() * 21)%' from pg_proc where proname = '_rand_delta'));
+select pg_temp.check('0046: the migration''s rating rule is Elo K=40', (select prosrc like '%40 * (1 - e)%' from pg_proc where proname = '_elo_delta'));
 insert into auth.users (id, email, raw_user_meta_data) values ('f0250025-0000-4000-8000-000000000001', 'once@x.io', '{"username":"once_only"}');
 update public.virtual_settings set enabled = true, auto_off = false, pool_size = 4 where id;
 create temp table v25 (n int primary key, match_id uuid, virtual_id uuid);
@@ -1502,8 +1504,8 @@ select pg_temp.check('0025: … and creates no new game', (select count(*) from 
 -- virtual games use the same ±10…30 as player-vs-player
 update public.matches set rated = true, move_count = 40, rating_applied = false where id in (select match_id from v25);
 select public.apply_match_result(match_id) from v25;
-select pg_temp.check('0025: virtual wins give +10…+30 too', (select bool_and(white_delta between 10 and 30) from public.matches where id in (select match_id from v25)));
-select pg_temp.check('0025: … and the virtual loser −10…−30', (select bool_and(black_delta between -30 and -10) from public.matches where id in (select match_id from v25)));
+select pg_temp.check('0046: virtual wins use Elo too (+1…+40)', (select bool_and(white_delta between 1 and 40) from public.matches where id in (select match_id from v25)));
+select pg_temp.check('0046: … and the virtual loser loses exactly as much', (select bool_and(black_delta = -white_delta) from public.matches where id in (select match_id from v25)));
 
 -- ===================== 0026: DAMEO Coins for finished games (win +20, loss +10, draw 0)
 reset role;
@@ -1900,6 +1902,25 @@ select pg_temp.check('0045: admin sees the banned player in the list', (select b
 select public.admin_fair_play_clear('f0450045-0000-4000-8000-000000000001', 'test');
 reset role;
 select pg_temp.check('0045: admin clear lifts the ban and the warning', (select ban_until is null and warned_at is null from public.fair_play where user_id = 'f0450045-0000-4000-8000-000000000001'));
+
+-- ===================== 0046: symmetric Elo
+select pg_temp.check('0046 Elo: equals ±20', public._elo_delta(1, 1200, 1200) = 20 and public._elo_delta(0, 1200, 1200) = -20);
+select pg_temp.check('0046 Elo: 200 stronger wins ≈ +10, loses ≈ −30', public._elo_delta(1, 1400, 1200) between 9 and 11 and public._elo_delta(0, 1400, 1200) between -31 and -29);
+select pg_temp.check('0046 Elo: far stronger wins +1, loses −40', public._elo_delta(1, 5000, 100) = 1 and public._elo_delta(0, 5000, 100) = -40);
+insert into auth.users (id, email, raw_user_meta_data) values
+  ('f0460046-0000-4000-8000-000000000001', 'e1@x.io', '{"username":"elo_strong"}'),
+  ('f0460046-0000-4000-8000-000000000002', 'e2@x.io', '{"username":"elo_floor"}');
+update public.profiles set rating = 150 where id = 'f0460046-0000-4000-8000-000000000001';
+update public.profiles set rating = 110 where id = 'f0460046-0000-4000-8000-000000000002';
+create temp table e46 as select pg_temp.g26('f0460046-0000-4000-8000-000000000002', 'f0460046-0000-4000-8000-000000000001', 'black', 30) id;
+select pg_temp.check('0046: a player at the floor loses only down to 100, the winner gains exactly that (zero-sum)',
+  (select white_delta = -10 and black_delta = 10 from public.matches where id = (select id from e46)) and (select rating = 100 from public.profiles where id = 'f0460046-0000-4000-8000-000000000002'),
+  (select white_delta || '/' || black_delta from public.matches where id = (select id from e46)));
+create temp table e46b as select pg_temp.g26('f0460046-0000-4000-8000-000000000002', 'f0460046-0000-4000-8000-000000000001', 'black', 30) id;
+select pg_temp.check('0046: beating someone stuck at 100 gives nothing', (select white_delta = 0 and black_delta = 0 from public.matches where id = (select id from e46b)));
+create temp table e46c as select pg_temp.g26('f0460046-0000-4000-8000-000000000002', 'f0460046-0000-4000-8000-000000000001', 'white', 30) id;
+select pg_temp.check('0046: the 100 player beats the 160 one → more than +20, the same minus for the other', (select white_delta > 20 and black_delta = -white_delta from public.matches where id = (select id from e46c)));
+select pg_temp.check('0046: a far stronger player gains only +1 for a win', public._elo_delta(1, 1600, 105) = 1);
 
 \set QUIET off
 select case when ok then 'PASS' else 'FAIL' end as status, name, left(detail, 70) as detail from results order by 1 desc, 2;

@@ -123,7 +123,18 @@ interface ServerPass {
   perks: Perk[];
 }
 
+let lastPass: { at: number; p: PassState } | null = null;
+/** the last DAMEO Pass state if it is younger than maxAgeMs, otherwise a fresh one (pass_me is a heavier read) */
+export async function getPassRecent(maxAgeMs: number): Promise<PassState> {
+  if (lastPass && Date.now() - lastPass.at < maxAgeMs) return lastPass.p;
+  return getPass();
+}
 export async function getPass(): Promise<PassState> {
+  const p = await getPassFresh();
+  lastPass = { at: Date.now(), p };
+  return p;
+}
+async function getPassFresh(): Promise<PassState> {
   const r = await db.rpc<ServerPass>('pass_me');
   const now = Date.now();
   const done = new Set(r.claims);

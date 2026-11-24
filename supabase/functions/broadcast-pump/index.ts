@@ -2,7 +2,7 @@
 // (status 'sending', created in the last 6 hours, recipient list frozen in broadcast_deliveries). It cannot create a
 // broadcast or change its text, so it needs no user JWT (like `daily-winner`, it is woken by pg_net). Each recipient is
 // claimed in SQL before sending and marked after (broadcast_claim / broadcast_mark), so nobody gets a message twice.
-// ≈ 25 messages per second (Telegram allows 30). The bot token stays a Supabase secret.
+// 5 messages per second, so recipients open the app gradually (Nano server). The bot token stays a Supabase secret.
 // Deployed with verify_jwt = false.
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
@@ -42,7 +42,7 @@ Deno.serve(async (req) => {
   const started = Date.now();
   let sent = 0;
   while (Date.now() - started < 40_000) {
-    const { data: batch, error: e } = await service.rpc('broadcast_claim', { p_id: b.id, p_n: 25 });
+    const { data: batch, error: e } = await service.rpc('broadcast_claim', { p_id: b.id, p_n: 5 }); // 5 a second: people open the app gradually (server load)
     if (e) return json({ ok: false, error: 'server' }, 500);
     const ids = ((batch ?? []) as Array<{ tg_id: number }>).map((x) => Number(x.tg_id));
     if (ids.length === 0) break;

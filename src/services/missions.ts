@@ -1,3 +1,4 @@
+import { cached, primeCache } from './cache.ts';
 /**
  * DAMEO missions (server: supabase/migrations/0032_missions.sql, edge function `missions`).
  * Progress and rewards are computed on the server; the client only asks to claim a mission by its key.
@@ -51,7 +52,13 @@ export interface ChannelResult {
   reward?: number;
 }
 
-export const missionsOverview = () => db.rpc<MissionsOverview>('missions_overview');
+export const missionsOverview = () =>
+  db.rpc<MissionsOverview>('missions_overview').then((o) => {
+    primeCache('missions', o);
+    return o;
+  });
+/** for the home card: the same answer for 60 s (missions_overview is one of the heavier reads) */
+export const missionsOverviewCached = () => cached('missions', 60_000, () => db.rpc<MissionsOverview>('missions_overview'));
 export const missionClaim = (key: string) => db.rpc<ClaimResult>('mission_claim', { p_mission: key });
 export const channelCheck = (id: number) => db.invokeFunction<ChannelResult>('missions', { action: 'check', channel_id: id });
 export const channelClaim = (id: number) => db.invokeFunction<ChannelResult>('missions', { action: 'claim', channel_id: id });

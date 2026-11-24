@@ -12,6 +12,7 @@ import {
   channelClaim,
   missionClaim,
   missionsOverview,
+  missionsOverviewCached,
   type ChannelState,
   type MissionChannel,
   type MissionRow,
@@ -408,7 +409,7 @@ export function MissionsHomeCard() {
   const [ready, setReady] = useState(false);
   useEffect(() => {
     if (!signedIn || mode !== 'live') return;
-    missionsOverview().then(
+    missionsOverviewCached().then(
       (o) => setReady([...(o.daily ?? []), ...(o.once ?? [])].some((m) => m.done && !m.claimed)),
       () => setReady(false),
     );

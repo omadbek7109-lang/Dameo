@@ -467,13 +467,29 @@ export function subscribeBroadcast(topicName: string, onEvent: (event: string, p
 }
 
 export type RtMode = 'changes' | 'broadcast';
-let rtModeNow: RtMode = 'changes';
+const RT_KEY = 'dameo.rtmode';
+const storedRtMode = (): RtMode | null => {
+  try {
+    const v = localStorage.getItem(RT_KEY);
+    return v === 'broadcast' || v === 'changes' ? v : null;
+  } catch {
+    return null;
+  }
+};
+// last known mode (a slow server must not push everyone back onto the heavier postgres_changes path)
+let rtModeNow: RtMode = storedRtMode() ?? 'broadcast';
 let rtModeReady: Promise<RtMode> | null = null;
 const rtModeListeners = new Set<(m: RtMode) => void>();
 async function fetchRtMode(): Promise<RtMode> {
   try {
     const m = await Promise.race([db.rpc<string>('rt_mode'), new Promise<string>((_, rej) => setTimeout(() => rej(new Error('timeout')), 4000))]);
-    return m === 'broadcast' ? 'broadcast' : 'changes';
+    const mode: RtMode = m === 'broadcast' ? 'broadcast' : 'changes';
+    try {
+      localStorage.setItem(RT_KEY, mode);
+    } catch {
+      /* private mode */
+    }
+    return mode;
   } catch {
     return rtModeNow; // keep what we have (the old path by default)
   }

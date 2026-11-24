@@ -35,7 +35,8 @@ export const SEARCH_WINDOW_S = 60;
 /** a virtual opponent may be found at a random moment in this range (s) — the 60 s search window itself is unchanged */
 export const VIRTUAL_AFTER_S: [number, number] = [20, 35];
 const virtualDelayMs = () => Math.round((VIRTUAL_AFTER_S[0] + Math.random() * (VIRTUAL_AFTER_S[1] - VIRTUAL_AFTER_S[0])) * 1000);
-const POLL_MS = 4000;
+const POLL_MS = 4000; // while searching
+const LOBBY_IDLE_MS = 15_000; // the list of players when not searching (server load)
 
 type Phase = 'idle' | 'searching' | 'timeout' | 'found';
 
@@ -104,7 +105,7 @@ export function LiveQuickPanel({ autoStart = 0 }: { autoStart?: number }) {
   }, []);
   useEffect(() => {
     void refreshLobby();
-    return everyActive(refreshLobby, POLL_MS);
+    return everyActive(refreshLobby, LOBBY_IDLE_MS);
   }, [refreshLobby]);
 
   /* ---- 1 s clock for countdowns ---- */
