@@ -1197,7 +1197,7 @@ insert into auth.users (id, email, raw_user_meta_data) values
   ('bbbbbbbb-0000-4000-8000-000000000004', 'lb4@x.io', '{"username":"collector_four"}');
 select public._wallet_apply(('bbbbbbbb-0000-4000-8000-00000000000' || n)::uuid, 20000, 'admin_credit', 'test', null, 'seed-lb-' || n, 'seed', null) from generate_series(1, 4) n;
 select pg_temp.check('lb: 8 Limited boards on sale', (select count(*) = 8 from public.shop_items where collection = 'limited' and active and not retired));
-select pg_temp.check('lb: old boards hidden + off sale, not deleted', (select count(*) >= 12 and bool_and(not active and retired) from public.shop_items where slot = 'board' and collection <> 'limited'));
+select pg_temp.check('lb: old boards hidden + off sale, not deleted', (select count(*) >= 12 and bool_and(not active and retired) from public.shop_items where slot = 'board' and collection not in ('limited', 'pass')));  -- Pass boards (0041) are rewards, not sold
 select pg_temp.check('lb: backup of the old boards kept', (select count(*) >= 12 from public._backup_v32_board_items));
 select pg_temp.check('lb: supplies 200/100/80/30, first four not set', (select string_agg(coalesce(supply::text, '-'), ',' order by c.sort) = '-,-,-,-,200,100,80,30' from public.board_inventory s join public.board_catalog c using (slug) join public.shop_items i using (slug) where i.slot = 'board'));
 select pg_temp.check('lb: prices 0/500/1200/1800/2200/3000/4000/5000', (select string_agg(price::text, ',' order by sort) = '0,500,1200,1800,2200,3000,4000,5000' from public.shop_items where collection = 'limited'));
@@ -1330,12 +1330,13 @@ insert into auth.users (id, email, raw_user_meta_data) values
   ('dddddddd-0000-4000-8000-000000000002', 'st2@x.io', '{"username":"stone_two"}');
 select public._wallet_apply(('dddddddd-0000-4000-8000-00000000000' || n)::uuid, 9000, 'admin_credit', 'test', null, 'seed-st-' || n, 'seed', null) from generate_series(1, 2) n;
 select pg_temp.check('st: 8 stones in the Stones category', (select count(*) = 8 and string_agg(price::text, ',' order by sort) = '0,500,1200,1800,2200,3000,4000,5000'
-  from public.shop_items where category_id = 'stones' and active));
+  from public.shop_items where category_id = 'stones' and active and collection <> 'pass'));  -- + Pass stones (0041), not sold
 select pg_temp.check('st: Limited stones 200/100/80/30', (select string_agg(s.supply::text, ',' order by c.sort) = '200,100,80,30'
   from public.board_inventory s join public.board_catalog c using (slug) join public.shop_items i using (slug) where i.slot = 'piece'));
 select pg_temp.check('st: older piece sets kept in the database (off sale, not deleted)', (select count(*) >= 48 from public.shop_items where slot = 'piece' and collection <> 'stones'));
 select pg_temp.check('st: backup of the older piece sets', (select count(*) >= 48 from public._backup_v32_piece_items));
-select pg_temp.check('st: only the Stones (and the test fixtures) on sale', (select count(*) filter (where collection = 'stones') = 8 and count(*) filter (where collection <> 'stones') <= 5 from public.shop_items where slot = 'piece' and active));
+select pg_temp.check('st: only the Stones (and the test fixtures) on sale', (select count(*) filter (where collection = 'stones') = 8 and count(*) filter (where collection not in ('stones', 'pass')) <= 5 from public.shop_items where slot = 'piece' and active));
+select pg_temp.check('st: DAMEO Pass items are rewards only — retired, never for sale', (select count(*) >= 4 and bool_and(retired) from public.shop_items where collection = 'pass'));
 select pg_temp.check('st: Football / Donachalar tabs hidden', (select bool_and(not visible) from public.shop_categories where id in ('football', 'trend')));
 select pg_temp.check('st: board shop still lists boards only', (select count(*) = 8 from json_array_elements(public.board_catalog_list())));
 set role authenticated;
