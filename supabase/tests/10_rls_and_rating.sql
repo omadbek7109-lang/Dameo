@@ -330,7 +330,7 @@ update public.matches set turn_started_at = clock_timestamp() - interval '32.5 s
 select pg_temp.check('move after 30 s (+2 s grace) is refused', (public.clock_take_turn((select id from tmid), 3) ->> 'error') = 'timeout');
 select pg_temp.check('… and Black loses on the move limit',
   (select status = 'finished' and result = 'white' and timeout_kind = 'move' and rating_applied from public.matches where id = (select id from tmid)));
-select pg_temp.check('timeout after 2 moves: loser −5, winner gains nothing (short game)', (select white_delta = 0 and black_delta = -5 and rating_note = 'short' from public.matches where id = (select id from tmid)));
+select pg_temp.check('0045: timeout after 2 moves: nobody''s rating changes (short game)', (select white_delta = 0 and black_delta = 0 and rating_note = 'short' from public.matches where id = (select id from tmid)));
 reset role;
 
 -- clock (not the 30 s limit) runs out → claim by the opponent
@@ -1042,8 +1042,8 @@ select pg_temp.check('virtual: bot without enough clock loses on time', public.v
 reset role;
 select pg_temp.check('… game finished, the player won on the clock',
   (select status = 'finished' and result = 'white' and timeout_kind = 'clock' from public.matches where id = (select v::uuid from vt where k = 'm1')));
-select pg_temp.check('… the virtual player''s own stats/rating updated (loss, −5)',
-  (select v.losses >= 1 and v.rating = (select v2::int from (select v as v2 from vt where k = 'rating_before') z) - 5
+select pg_temp.check('… the virtual player''s own stats updated (loss; 4 moves → rating unchanged, 0045)',
+  (select v.losses >= 1 and v.rating = (select v2::int from (select v as v2 from vt where k = 'rating_before') z)
      from public.virtual_players v where v.id = (select virtual_id from public.matches where id = (select v::uuid from vt where k = 'm1'))));
 select pg_temp.check('… rated, but after 4 moves the winner gains nothing (short game)', (select white_delta = 0 and rating_applied and rating_note = 'short' from public.matches where id = (select v::uuid from vt where k = 'm1')));
 select pg_temp.check('… gone from the live list', not exists (select 1 from json_array_elements(public.live_list(50, 0)) x where x->>'id' = (select v from vt where k = 'm1')));
@@ -1814,6 +1814,92 @@ set role authenticated;
 create temp table q44 as select public.quick_match(300) r;
 reset role;
 select pg_temp.check('0044: 3000 vs much lower rating, same time → paired at once', (select (r ->> 'match_id') is not null from q44), (select r::text from q44));
+
+-- ===================== 0045: fair play — 12-move rule, early quits, warning, playban
+reset role;
+insert into auth.users (id, email, raw_user_meta_data) values
+  ('f0450045-0000-4000-8000-000000000001', 'q1@x.io', '{"username":"fp_quitter"}'),
+  ('f0450045-0000-4000-8000-000000000002', 'q2@x.io', '{"username":"fp_other"}'),
+  ('f0450045-0000-4000-8000-000000000003', 'q3@x.io', '{"username":"fp_third"}'),
+  ('f0450045-0000-4000-8000-000000000004', 'q4@x.io', '{"username":"fp_fourth"}'),
+  ('f0450045-0000-4000-8000-000000000005', 'q5@x.io', '{"username":"fp_fifth"}'),
+  ('f0450045-0000-4000-8000-000000000006', 'q6@x.io', '{"username":"fp_sixth"}');
+-- an early quit: the quitter (white) resigns / times out after a couple of moves
+create function pg_temp.quit(opp uuid, moves int, how text default 'resign') returns uuid language plpgsql as $$
+declare mid uuid := gen_random_uuid();
+begin
+  insert into public.matches (id, white_id, black_id, status, rated, started_at, time_control, white_ms, black_ms, turn_started_at, move_count)
+  values (mid, 'f0450045-0000-4000-8000-000000000001', opp, 'active', true, now(), 180, 180000, 180000, now(), moves);
+  update public.matches set status = 'finished', result = 'black', result_reason = 'resign', ended_at = now(),
+         timeout_kind = case when how = 'time' then 'move' end where id = mid;
+  perform public.apply_match_result(mid);
+  return mid;
+end $$;
+create temp table fp_r as select (select rating from public.profiles where id = 'f0450045-0000-4000-8000-000000000001') r1;
+grant all on fp_r to public;
+select pg_temp.quit('f0450045-0000-4000-8000-000000000002', 1);
+select pg_temp.check('0045: resign after 1 move → nobody''s rating changes', (select rating from public.profiles where id = 'f0450045-0000-4000-8000-000000000001') = (select r1 from fp_r));
+select pg_temp.quit('f0450045-0000-4000-8000-000000000003', 2, 'time');
+set role authenticated;
+select set_config('request.jwt.claim.sub', 'f0450045-0000-4000-8000-000000000001', false);
+select pg_temp.check('0045: 2 early quits → counted, no warning yet', (select (s ->> 'early_24h')::int = 2 and not (s ->> 'warned')::boolean from (select public.fair_play_status() s) z));
+reset role;
+select pg_temp.quit('f0450045-0000-4000-8000-000000000004', 0, 'time');
+set role authenticated;
+select set_config('request.jwt.claim.sub', 'f0450045-0000-4000-8000-000000000001', false);
+select pg_temp.check('0045: 3rd early quit → warning (no ban)', (select (s ->> 'warned')::boolean and s ->> 'ban_until' is null from (select public.fair_play_status() s) z));
+select pg_temp.check('0045: warned player can still search', (public.quick_match(180) ->> 'blocked_until') is null);
+reset role;
+-- a full game lost after the warning does not count
+create temp table fp_full as select pg_temp.quit('f0450045-0000-4000-8000-000000000005', 30) id;
+select pg_temp.check('0045: a lost game played out (30 moves) is not an early quit', (select count(*) = 3 from public.fair_play_events where user_id = 'f0450045-0000-4000-8000-000000000001'));
+select pg_temp.quit('f0450045-0000-4000-8000-000000000006', 1);
+set role authenticated;
+select set_config('request.jwt.claim.sub', 'f0450045-0000-4000-8000-000000000001', false);
+create temp table fp_s as select public.fair_play_status() s;
+select pg_temp.check('0045: early quit after the warning → 15-minute playban', (select (s ->> 'ban_minutes')::int = 15 and (s ->> 'ban_until')::timestamptz between now() + interval '14 minutes' and now() + interval '16 minutes' from fp_s), (select s::text from fp_s));
+create temp table fp_q as select public.quick_match(180) r;
+select pg_temp.check('0045: quick match refused with the reason and the end time', (select (r ->> 'match_id') is null and r ->> 'reason' = 'early-quit' and r ->> 'blocked_until' is not null from fp_q), (select r::text from fp_q));
+select pg_temp.check('0045: … virtual opponent refused too', (public.virtual_match(180) ->> 'reason') = 'blocked');
+reset role;
+select pg_temp.check('0045: the banned player is out of the queue', (select last_seen = '-infinity' from public.matchmaking_queue where user_id = 'f0450045-0000-4000-8000-000000000001'));
+-- nobody gets paired with a banned player: another player searching does not pick them
+update public.matchmaking_queue set last_seen = now() where user_id = 'f0450045-0000-4000-8000-000000000001';
+set role authenticated;
+select set_config('request.jwt.claim.sub', 'f0450045-0000-4000-8000-000000000002', false);
+select pg_temp.check('0045: … and is never paired even if still in the queue', (public.quick_match(180) ->> 'match_id') is null);
+reset role;
+-- ban over; next early quit → 1 h, then → 24 h
+update public.fair_play set ban_until = now() - interval '1 second' where user_id = 'f0450045-0000-4000-8000-000000000001';
+select pg_temp.quit('f0450045-0000-4000-8000-000000000003', 1);
+select pg_temp.check('0045: 2nd playban in 7 days → 1 hour', (select ban_minutes = 60 and ban_until between now() + interval '59 minutes' and now() + interval '61 minutes' from public.fair_play where user_id = 'f0450045-0000-4000-8000-000000000001'));
+update public.fair_play set ban_until = now() - interval '1 second' where user_id = 'f0450045-0000-4000-8000-000000000001';
+select pg_temp.quit('f0450045-0000-4000-8000-000000000004', 2, 'time');
+select pg_temp.check('0045: 3rd playban in 7 days → 24 hours', (select ban_minutes = 1440 from public.fair_play where user_id = 'f0450045-0000-4000-8000-000000000001'));
+select pg_temp.check('0045: the winner of a short game is never counted', (select count(*) = 0 from public.fair_play_events where user_id <> 'f0450045-0000-4000-8000-000000000001' and user_id::text like 'f0450045%'));
+-- clients can not read or write the tables; admins only via RPC
+set role authenticated;
+select set_config('request.jwt.claim.sub', 'f0450045-0000-4000-8000-000000000001', false);
+do $$ begin
+  perform 1 from public.fair_play;
+  perform pg_temp.check('0045: client can NOT read fair_play directly', false);
+exception when others then perform pg_temp.check('0045: client can NOT read fair_play directly', true); end $$;
+do $$ begin
+  update public.fair_play set ban_until = null;
+  perform pg_temp.check('0045: client can NOT lift own ban', false);
+exception when others then perform pg_temp.check('0045: client can NOT lift own ban', true); end $$;
+do $$ begin
+  perform public.admin_fair_play_clear('f0450045-0000-4000-8000-000000000001');
+  perform pg_temp.check('0045: non-admin can NOT clear a ban', false);
+exception when others then perform pg_temp.check('0045: non-admin can NOT clear a ban', sqlerrm like '%forbidden%', sqlerrm); end $$;
+reset role;
+insert into public.admin_roles (user_id, role) values ('f0450045-0000-4000-8000-000000000006', 'admin') on conflict do nothing;
+set role authenticated;
+select set_config('request.jwt.claim.sub', 'f0450045-0000-4000-8000-000000000006', false);
+select pg_temp.check('0045: admin sees the banned player in the list', (select bool_or(e ->> 'username' = 'fp_quitter' and e ->> 'ban_until' is not null) from json_array_elements(public.admin_fair_play_list()) e));
+select public.admin_fair_play_clear('f0450045-0000-4000-8000-000000000001', 'test');
+reset role;
+select pg_temp.check('0045: admin clear lifts the ban and the warning', (select ban_until is null and warned_at is null from public.fair_play where user_id = 'f0450045-0000-4000-8000-000000000001'));
 
 \set QUIET off
 select case when ok then 'PASS' else 'FAIL' end as status, name, left(detail, 70) as detail from results order by 1 desc, 2;

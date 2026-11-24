@@ -13,6 +13,7 @@ import {
   quickMatch,
   respondChallenge,
   sendChallenge,
+  pokeFairPlay,
   startBotMatch,
   virtualMatch,
   watchIncomingChallenges,
@@ -27,6 +28,7 @@ import { SbError } from '../services/supabase.ts';
 import { haptic, tg, everyActive } from '../services/telegram.ts';
 import { Avatar, LevelBadge } from './Avatar.tsx';
 import { Modal } from './Modal.tsx';
+import { FairPlayNotice } from './FairPlayNotice.tsx';
 import { useToast } from './Toast.tsx';
 
 export const SEARCH_WINDOW_S = 60;
@@ -151,6 +153,7 @@ export function LiveQuickPanel({ autoStart = 0 }: { autoStart?: number }) {
      re-activated Telegram WebApp cannot make it drift or restart. */
   const remainingNow = () => (deadline.current === null ? SEARCH_WINDOW_S : Math.max(0, Math.ceil((deadline.current - Date.now()) / 1000)));
 
+  const [fpBanned, setFpBanned] = useState(false); // fair play: quick match closed for a while
   const search = async (pick?: TimeControl) => {
     if (!me) return;
     // one search at a time: ignore repeated taps while searching / matched
@@ -181,6 +184,18 @@ export function LiveQuickPanel({ autoStart = 0 }: { autoStart?: number }) {
         const t1 = Date.now();
         if (run.current !== my) return;
         if (r.match_id) return go(r.match_id);
+        if (r.blocked_until) {
+          // fair play (0045): quick match closed for a while — the notice above shows the reason and a countdown
+          const server = r.server_now ? Date.parse(r.server_now) : (t0 + t1) / 2;
+          const mins = Math.max(1, Math.ceil((Date.parse(r.blocked_until) - server) / 60_000));
+          run.current++;
+          stopPair.current();
+          setPhase('idle');
+          haptic('error');
+          toast('error', t('quick.blocked', { n: mins }));
+          pokeFairPlay();
+          return;
+        }
         if (deadline.current === null) {
           const since = r.searching_since ? Date.parse(r.searching_since) : NaN;
           const server = r.server_now ? Date.parse(r.server_now) : NaN;
@@ -196,6 +211,16 @@ export function LiveQuickPanel({ autoStart = 0 }: { autoStart?: number }) {
           const v = await virtualMatch(timeControl).catch(() => null);
           if (run.current !== my) return;
           if (v?.match_id) return go(v.match_id, v.virtual ?? null);
+          if (v?.reason === 'blocked') {
+            run.current++;
+            stopPair.current();
+            await cancelQuickMatch().catch(() => {});
+            setPhase('idle');
+            haptic('error');
+            toast('error', t('quick.blocked', { n: Math.max(1, Math.ceil((Date.parse(v.blocked_until ?? '') - Date.now()) / 60_000) || 15) }));
+            pokeFairPlay();
+            return;
+          }
           // switched off → keep searching as before; asked too early (server clock) → try again a little later
           virtualAt = v?.reason === 'too-early' ? Date.now() + 2500 : Infinity;
         }
@@ -304,13 +329,14 @@ export function LiveQuickPanel({ autoStart = 0 }: { autoStart?: number }) {
       <h2>{t('mode.quick')}</h2>
       <p className="muted">{t('quick.desc60')}</p>
 
+      <FairPlayNotice onBanChange={setFpBanned} />
       <div className="match-stage" aria-live="polite" ref={stage}>
         {phase === 'idle' && (
           <div className="tc-pick">
             <p className="search-title">{t('quick.pickTime')}</p>
             <div className="tc-options" role="group" aria-label={t('quick.pickTime')}>
               {TIME_CONTROLS.map((n) => (
-                <button key={n} className={`tc-option ${n === tc ? 'tc-last' : ''}`} onClick={() => void search(n)}>
+                <button key={n} className={`tc-option ${n === tc ? 'tc-last' : ''}`} disabled={fpBanned} onClick={() => void search(n)}>
                   <LuClock />
                   <strong>{n / 60}</strong>
                   <span>{t('tc.minLabel')}</span>

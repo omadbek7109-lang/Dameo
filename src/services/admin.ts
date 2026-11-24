@@ -102,6 +102,13 @@ export interface Prize {
 export const adminMe = () => db.rpc<AdminMe>('admin_me');
 export const adminDashboard = () => db.rpc<Dashboard>('admin_dashboard');
 export const adminUsers = (q: string, offset = 0) => db.rpc<AdminUser[]>('admin_users', { p_query: q, p_limit: 30, p_offset: offset });
+export interface FairPlayRow {
+  id: string; username: string; rating: number; warned_at: string | null; ban_until: string | null; ban_minutes: number | null;
+  bans_7d: number; early_24h: number; early_7d: number;
+}
+/** fair play (0045): warned / playbanned players (last 7 days) */
+export const adminFairPlayList = () => db.rpc<FairPlayRow[]>('admin_fair_play_list');
+export const adminFairPlayClear = (id: string, reason?: string) => db.rpc('admin_fair_play_clear', { p_user: id, p_reason: reason ?? null });
 export const adminUserDetail = (id: string) => db.rpc<any>('admin_user_detail', { p_user: id });
 export const adminBan = (id: string, until: string, reason: string) => db.rpc('admin_ban', { p_user: id, p_until: until, p_reason: reason });
 export const adminUnban = (id: string, reason: string) => db.rpc('admin_unban', { p_user: id, p_reason: reason });

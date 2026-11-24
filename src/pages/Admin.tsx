@@ -243,6 +243,12 @@ function UsersTab({ can, superAdmin }: { can: (p: string) => boolean; superAdmin
   const [q, setQ] = useState('');
   const [rows, setRows] = useState<A.AdminUser[] | null>(null);
   const [open, setOpen] = useState<string | null>(null);
+  const [fp, setFp] = useState<A.FairPlayRow[] | null | 'closed'>('closed');
+  const { toast } = useToast();
+  const loadFp = () => {
+    setFp(null);
+    A.adminFairPlayList().then((r) => setFp(r ?? []), () => setFp([]));
+  };
   const search = useCallback(async (offset = 0) => {
     const r = await A.adminUsers(q, offset);
     setRows((cur) => (offset ? [...(cur ?? []), ...r] : r));
@@ -257,6 +263,46 @@ function UsersTab({ can, superAdmin }: { can: (p: string) => boolean; superAdmin
         <LuSearch />
         <input value={q} onChange={(e: any) => setQ(e.target.value)} placeholder={L('Username, Telegram ID yoki user ID', 'Username, Telegram ID or user ID')} />
       </label>
+      <button className="btn btn-ghost btn-sm" onClick={() => (fp === 'closed' ? loadFp() : setFp('closed'))}>
+        {fp === 'closed' ? L('⚠️ Halol o\'yin: ogohlantirish / cheklovlar', '⚠️ Fair play: warnings / restrictions') : L('Yopish', 'Close')}
+      </button>
+      {fp !== 'closed' &&
+        (fp === null ? (
+          <Spinner />
+        ) : fp.length === 0 ? (
+          <EmptyState title={L('7 kunda hech kim yo\'q', 'Nobody in the last 7 days')} />
+        ) : (
+          <ul className="admin-list">
+            {fp.map((u) => {
+              const banned = !!u.ban_until && Date.parse(u.ban_until) > Date.now();
+              return (
+                <li key={u.id} className="admin-row">
+                  <span className="admin-row-main" onClick={() => setOpen(u.id)}>
+                    <strong>
+                      {u.username} · {u.rating}{' '}
+                      <span className={`badge ${banned ? 'badge-danger' : ''}`}>
+                        {banned ? `${L('Cheklangan', 'Restricted')} ${u.ban_minutes} ${L('daq', 'min')} → ${when(u.ban_until!)}` : L('Ogohlantirilgan', 'Warned')}
+                      </span>
+                    </strong>
+                    <span className="muted small">
+                      {L('Erta chiqish', 'Early quits')}: 24h {u.early_24h} · 7d {u.early_7d} · {L('cheklovlar 7 kunda', 'bans in 7 days')} {u.bans_7d}
+                    </span>
+                  </span>
+                  <button
+                    className="btn btn-ghost btn-sm"
+                    onClick={async () => {
+                      await A.adminFairPlayClear(u.id, 'admin');
+                      toast('success', L('Olib tashlandi', 'Cleared'));
+                      loadFp();
+                    }}
+                  >
+                    {L('Olib tashlash', 'Clear')}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        ))}
       {!rows ? (
         <Spinner />
       ) : rows.length === 0 ? (

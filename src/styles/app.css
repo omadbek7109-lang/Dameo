@@ -8077,3 +8077,16 @@ html.calm .pf-f-crown-wings::before, html.calm .pf-f-crown-wings .pf-art { anima
 .avatar-passframe { position: relative; display: inline-grid; place-items: center; flex: none; overflow: visible; vertical-align: middle; }
 .inv-frame-view { display: grid; place-items: center; height: 104px; margin: 4px 0 2px; }
 .inv-frame-more { display: flex; justify-content: center; margin: 14px auto 0; width: fit-content; }
+
+/* fair play (0045): warning / playban notice */
+.notice-danger {
+  background: color-mix(in srgb, var(--danger, #ff4d6d) 14%, transparent);
+  border-color: color-mix(in srgb, var(--danger, #ff4d6d) 40%, transparent);
+  color: var(--danger, #ff4d6d);
+}
+.fair-play p { margin: 4px 0 0; color: var(--text); font-size: 0.82rem; line-height: 1.4; }
+.fair-play p.muted { color: var(--muted); }
+.fair-play strong { display: block; }
+.result .fair-play { text-align: left; margin: 0 0 12px; }
+
+.tc-option:disabled { opacity: 0.45; cursor: not-allowed; filter: grayscale(0.6); }

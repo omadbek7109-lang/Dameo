@@ -133,7 +133,20 @@ export const createRoom = () => db.rpc<{ match_id: string; code: string }>('crea
 export const joinRoom = (code: string) => db.rpc<{ match_id: string }>('join_room', { p_code: code.trim().toUpperCase() });
 /** match_id when paired; otherwise the server-side search start + server clock (for a server-anchored countdown). */
 export const quickMatch = (timeControl: TimeControl) =>
-  db.rpc<{ match_id: string | null; searching_since?: string; server_now?: string; time_control?: number }>('quick_match', { p_time: timeControl });
+  db.rpc<{ match_id: string | null; searching_since?: string; server_now?: string; time_control?: number; blocked_until?: string; reason?: string }>('quick_match', { p_time: timeControl });
+/** Fair play (0045): early quits in 24 h, an active warning, a playban (quick match closed until ban_until). */
+export interface FairPlay {
+  early_24h: number;
+  warned: boolean;
+  warned_at: string | null;
+  ban_until: string | null;
+  ban_minutes: number | null;
+  server_now: string;
+}
+export const fairPlayStatus = () => db.rpc<FairPlay>('fair_play_status');
+/** something changed (a game ended, a search was refused): fair-play notices re-read the status */
+export const FAIR_PLAY_EVENT = 'dameo:fairplay';
+export const pokeFairPlay = () => window.dispatchEvent(new Event(FAIR_PLAY_EVENT));
 /** Ask the server to end the game because the side to move ran out of time (the server checks the clock itself). */
 export const claimTimeout = (matchId: string) => db.rpc<{ ended: boolean; status: OnlineStatus }>('claim_timeout', { p_match: matchId }, { timeoutMs: 12_000 });
 export const cancelQuickMatch = () => db.rpc('cancel_quick_match');
@@ -186,7 +199,7 @@ export const commitBotMove = (matchId: string) =>
   db.invokeFunction<{ ok: boolean; error?: string; due_at?: string; bot?: OnlineMove; clock?: ClockReply }>('match-action', { action: 'bot', match_id: matchId });
 /** Asked ~20–35 s into a search with nobody found: a virtual opponent (null when they are switched off). */
 export const virtualMatch = (timeControl: TimeControl) =>
-  db.rpc<{ match_id: string | null; virtual?: VirtualPlayer | null; reason?: string }>('virtual_match', { p_time: timeControl });
+  db.rpc<{ match_id: string | null; virtual?: VirtualPlayer | null; reason?: string; blocked_until?: string }>('virtual_match', { p_time: timeControl });
 export const virtualRematch = (matchId: string) => db.rpc<{ accepted: boolean; match_id?: string | null }>('virtual_rematch', { p_match: matchId });
 export const virtualProfile = (id: string) =>
   db.rpc<(VirtualPlayer & { enabled: boolean; recent: Array<{ id: string; ended_at: string; result: 'white' | 'black' | 'draw'; time_control: number | null; opponent: string }> }) | null>('virtual_profile', { p_id: id });

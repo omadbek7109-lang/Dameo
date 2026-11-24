@@ -6,6 +6,7 @@ import { Avatar } from '../components/Avatar.tsx';
 import { Board } from '../components/Board.tsx';
 import { Confetti } from '../components/Confetti.tsx';
 import { Modal } from '../components/Modal.tsx';
+import { FairPlayNotice } from '../components/FairPlayNotice.tsx';
 import { RulesDialog } from '../components/RulesDialog.tsx';
 import { ErrorState, Spinner } from '../components/States.tsx';
 import { useToast } from '../components/Toast.tsx';
@@ -896,6 +897,7 @@ function ResultDialog({ open, onClose, result, onPlayAgain, onExit, kind, onRema
       {open && win && victory && <VictoryFx />}
       <div className={`result ${win ? 'result-win' : ''}`}>
         {win && <Confetti />}
+        {kind === 'online' && result.rated && <FairPlayNotice delayMs={1200} />}
         <div className={`result-crown ${win ? 'result-crown-win' : ''}`}>
           <LuCrown />
         </div>
