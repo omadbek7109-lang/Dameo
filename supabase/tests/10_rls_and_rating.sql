@@ -1923,6 +1923,26 @@ create temp table e46c as select pg_temp.g26('f0460046-0000-4000-8000-0000000000
 select pg_temp.check('0046: the 100 player beats the 160 one → more than +20, the same minus for the other', (select white_delta > 20 and black_delta = -white_delta from public.matches where id = (select id from e46c)));
 select pg_temp.check('0048: a far stronger player still gains +10 for a win', public._elo_delta(1, 1600, 105) = 10);
 
+-- ===================== 0049: daily rating = arena points (win 2, draw 1, loss 0; ≥ 12 moves; 5 games per opponent)
+insert into auth.users (id, email, raw_user_meta_data) values
+  ('f0490049-0000-4000-8000-00000000000a', 'da@x.io', '{"username":"day_a"}'),
+  ('f0490049-0000-4000-8000-00000000000b', 'db@x.io', '{"username":"day_b"}'),
+  ('f0490049-0000-4000-8000-00000000000c', 'dc@x.io', '{"username":"day_c"}');
+select pg_temp.g26('f0490049-0000-4000-8000-00000000000a', 'f0490049-0000-4000-8000-00000000000b', 'white', 30);
+select pg_temp.g26('f0490049-0000-4000-8000-00000000000b', 'f0490049-0000-4000-8000-00000000000a', 'black', 30);
+select pg_temp.g26('f0490049-0000-4000-8000-00000000000a', 'f0490049-0000-4000-8000-00000000000b', 'white', 11);   -- short: nothing
+select pg_temp.g26('f0490049-0000-4000-8000-00000000000a', 'f0490049-0000-4000-8000-00000000000b', 'white', 30);
+select pg_temp.g26('f0490049-0000-4000-8000-00000000000a', 'f0490049-0000-4000-8000-00000000000b', 'white', 30);
+select pg_temp.g26('f0490049-0000-4000-8000-00000000000a', 'f0490049-0000-4000-8000-00000000000b', 'white', 30);   -- 6th vs B: not counted
+select pg_temp.g26('f0490049-0000-4000-8000-00000000000c', 'f0490049-0000-4000-8000-00000000000a', 'draw', 30);
+create temp table d49 as select * from public._daily_live(public._daily_today()) where user_id::text like 'f0490049%';
+select pg_temp.check('0049: wins 2, draw 1, a short game 0, only the first 5 games vs one opponent → 9 points',
+  (select points = 9 from d49 where user_id = 'f0490049-0000-4000-8000-00000000000a'), (select points::text from d49 where user_id = 'f0490049-0000-4000-8000-00000000000a'));
+select pg_temp.check('0049: losses give 0 (not minus)', (select points = 0 and rank is null from d49 where user_id = 'f0490049-0000-4000-8000-00000000000b'));
+select pg_temp.check('0049: a draw gives 1', (select points = 1 from d49 where user_id = 'f0490049-0000-4000-8000-00000000000c'));
+select pg_temp.check('0049: more points → higher place', (select (select rank from d49 where user_id = 'f0490049-0000-4000-8000-00000000000a') < (select rank from d49 where user_id = 'f0490049-0000-4000-8000-00000000000c')));
+select pg_temp.check('0049: days before 2026-11-25 keep the old rule', (select prosrc like '%2026-11-25%' and prosrc like '%greatest(g0.d, 0)%' from pg_proc where proname = '_daily_live'));
+
 \set QUIET off
 select case when ok then 'PASS' else 'FAIL' end as status, name, left(detail, 70) as detail from results order by 1 desc, 2;
 select count(*) filter (where not ok) as failures, count(*) as total from results;
