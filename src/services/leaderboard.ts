@@ -165,7 +165,7 @@ export function startPresence(): () => void {
     if (appActive() && navigator.onLine) db.rpc('touch_presence').catch(() => {});
   };
   beat();
-  const id = setInterval(beat, 60_000);
+  const id = setInterval(beat, 90_000); // online window is 2 min
   document.addEventListener('visibilitychange', beat);
   window.addEventListener('online', beat);
   return () => {

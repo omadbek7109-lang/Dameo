@@ -36,7 +36,7 @@ export const SEARCH_WINDOW_S = 60;
 export const VIRTUAL_AFTER_S: [number, number] = [20, 35];
 const virtualDelayMs = () => Math.round((VIRTUAL_AFTER_S[0] + Math.random() * (VIRTUAL_AFTER_S[1] - VIRTUAL_AFTER_S[0])) * 1000);
 const POLL_MS = 4000; // while searching
-const LOBBY_IDLE_MS = 15_000; // the list of players when not searching (server load)
+const LOBBY_IDLE_MS = 30_000; // the list of players when not searching (server load)
 
 type Phase = 'idle' | 'searching' | 'timeout' | 'found';
 
@@ -495,7 +495,7 @@ export function ChallengeInbox() {
     if (mode !== 'live' || !signedIn || !me) return;
     void load();
     const stop = watchIncomingChallenges(me.id, () => void load());
-    const off = everyActive(load, 30_000); // safety net if realtime drops
+    const off = everyActive(load, 60_000); // safety net if realtime drops
     return () => {
       stop();
       off();

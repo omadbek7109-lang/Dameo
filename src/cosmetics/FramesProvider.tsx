@@ -26,7 +26,7 @@ export function FramesProvider({ children }: { children: ReactNode }) {
   }, [mode]);
   useEffect(() => {
     refresh();
-    const t = setInterval(() => appActive() && refresh(), 3 * 60_000);
+    const t = setInterval(() => appActive() && refresh(), 6 * 60_000);
     window.addEventListener(PASS_EVENT, refresh); // a Pass frame was put on / taken off
     return () => {
       clearInterval(t);
