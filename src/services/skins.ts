@@ -313,9 +313,10 @@ export function skinClasses(c: { piece?: string | null; board?: string | null; e
 /**
  * Cosmetics of a two-player game:
  *  - pieces: every player sees each side in its OWNER's set (a player without a set keeps the standard pieces),
- *  - board: each PLAYER sees the board they equipped themselves (v3.2) — the opponent's choice never replaces it;
- *    a player without a board sees the standard board. SPECTATORS (viewer = null) see one board for both: the
- *    higher-rated player's when both own one (white on a tie), else the only one, else the standard board,
+ *  - board (v4.13, "show it off"): BOTH players and spectators see the same board — the only one when one player owns
+ *    a board, the rarer one when both do (boardRank: Limited tier, Pass / New Year boards placed among them), the
+ *    higher-rated player's on equal rank (white on a tie); no board at all → the standard board.
+ *    (`viewer` is kept for the callers; it no longer changes the board.)
  *  - move effect: plays only on the moves of the player who owns it.
  * Pure and deterministic.
  */
@@ -334,11 +335,24 @@ export function matchSkin(
   const out: string[] = [];
   if (w?.piece) out.push(`sk-pw-${safeSlug(w.piece.slug)}`);
   if (b?.piece) out.push(`sk-pb-${safeSlug(b.piece.slug)}`);
+  void viewer;
   const wb = w?.board ?? null;
   const bb = b?.board ?? null;
-  const board = viewer === 'w' ? wb : viewer === 'b' ? bb : wb && bb ? ((blackRating ?? 0) > (whiteRating ?? 0) ? bb : wb) : (wb ?? bb);
+  let board = wb ?? bb;
+  if (wb && bb) {
+    const rw = boardRank(wb.slug);
+    const rb = boardRank(bb.slug);
+    board = rb > rw ? bb : rw > rb ? wb : (blackRating ?? 0) > (whiteRating ?? 0) ? bb : wb;
+  }
   if (board) out.push(`sk-b-${safeSlug(board.slug)}`);
   const fx = (l: Loadout | null) => (l?.effect ? `fx-${fxOf(l.effect.style)} fxs-${safeSlug(l.effect.slug)}` : undefined);
   return { cls: out.join(' '), fx: { w: fx(w), b: fx(b) } };
 }
+/** How rare a board is (higher wins when both players own one): Limited Collection tiers, Pass boards placed among
+ * them; any other board 0. */
+const BOARD_RANK: Record<string, number> = {
+  'midnight-blue': 1, graphite: 2, 'royal-wood': 3, 'emerald-board': 4, 'cyber-purple': 5, 'royal-marble': 6, 'obsidian-gold': 7, 'celestial-crown': 8,
+  'pass-violet': 3.5, 'pass-royal-gold': 6.5,
+};
+export const boardRank = (slug: string) => BOARD_RANK[safeSlug(slug)] ?? 0;
 export const fxOf = (style: unknown): FxKind => oneOf((style as EffectStyle | undefined)?.fx, FX_KINDS, 'sparkle');

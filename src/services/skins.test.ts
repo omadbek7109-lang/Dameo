@@ -57,22 +57,23 @@ describe('skins', () => {
     expect(matchSkin({ piece: { slug: 'a' } }, { piece: { slug: 'b' } }).cls).toBe('sk-pw-a sk-pb-b');
     expect(matchSkin(null, null).cls).toBe('');
   });
-  test('players: each one sees their own board, never the opponent\'s', () => {
+  test('board: both players (and spectators) see the same board — the only one, else the rarer one', () => {
     const W = { board: { slug: 'royal-marble' } };
     const B = { board: { slug: 'cyber-purple' } };
-    expect(matchSkin(W, B, 1200, 1900, 'w').cls).toBe('sk-b-royal-marble');
-    expect(matchSkin(W, B, 1900, 1200, 'b').cls).toBe('sk-b-cyber-purple');
-    expect(matchSkin({}, B, 1200, 1200, 'w').cls).toBe('');      // no board of my own → standard, not the opponent's
-    expect(matchSkin(W, {}, 1200, 1200, 'b').cls).toBe('');
+    for (const v of ['w', 'b', null] as const) {
+      expect(matchSkin(W, B, 1200, 1900, v).cls).toBe('sk-b-royal-marble'); // rarer board wins whatever the ratings
+      expect(matchSkin({}, B, 1200, 1200, v).cls).toBe('sk-b-cyber-purple'); // a sole owner shows it to everyone
+      expect(matchSkin(W, {}, 1200, 1200, v).cls).toBe('sk-b-royal-marble');
+      expect(matchSkin({}, {}, 1200, 1200, v).cls).toBe('');
+    }
+    expect(matchSkin({ board: { slug: 'midnight-blue' } }, { board: { slug: 'celestial-crown' } }, 2000, 1200, 'w').cls).toBe('sk-b-celestial-crown');
   });
-  test('spectators: higher rating wins when both own one; a sole owner always wins', () => {
+  test('equal rank: the higher-rated player\'s board, white on a tie', () => {
     const W = { board: { slug: 'gold' } };
     const B = { board: { slug: 'neon' } };
-    expect(matchSkin(W, B, 1300, 1200).cls).toBe('sk-b-gold');
-    expect(matchSkin(W, B, 1200, 1300).cls).toBe('sk-b-neon');
+    expect(matchSkin(W, B, 1300, 1200, 'b').cls).toBe('sk-b-gold');
+    expect(matchSkin(W, B, 1200, 1300, 'w').cls).toBe('sk-b-neon');
     expect(matchSkin(W, B, 1250, 1250).cls).toBe('sk-b-gold');
-    expect(matchSkin(W, {}, 900, 2000).cls).toBe('sk-b-gold');
-    expect(matchSkin({}, B, 2000, 900).cls).toBe('sk-b-neon');
   });
   test('move effect belongs to its owner\'s moves only', () => {
     const r = matchSkin({ effect: { slug: 'fx-fire', style: { fx: 'fire' } } }, null);
