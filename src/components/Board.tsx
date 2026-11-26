@@ -147,7 +147,7 @@ function BoardImpl({ board, ids, flipped, selected, targets, pathMarks, mustMove
 
   return (
     <div className={`board-wrap fx-premium ${skinClass} ${lively === 'live' ? '' : lively === 'rest' ? 'st-rest' : 'st-rest st-off'}`}>
-      <div key={shake} className={`board ${shake > 0 ? 'board-shake' : ''} ${disabled ? 'board-disabled' : ''}`} role="grid" aria-label={t('board.label')}>
+      <div className={`board ${shake > 0 ? (shake % 2 ? 'board-shake' : 'board-shake board-shake-2') : ''} ${disabled ? 'board-disabled' : ''}`} role="grid" aria-label={t('board.label')}>
         {squares.map((i) => {
           const [r, c] = rc(i);
           const dark = isDark(r, c);

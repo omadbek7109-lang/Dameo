@@ -8090,3 +8090,21 @@ html.calm .pf-f-crown-wings::before, html.calm .pf-f-crown-wings .pf-art { anima
 .result .fair-play { text-align: left; margin: 0 0 12px; }
 
 .tc-option:disabled { opacity: 0.45; cursor: not-allowed; filter: grayscale(0.6); }
+
+/* invalid-move shake restarts by switching between two identical animations (the board used to be re-mounted with
+   key={shake}, which also replayed the last move's effect and combo whenever a piece was tapped out of turn) */
+.board-shake.board-shake-2 { animation-name: shake-2; }
+@keyframes shake-2 {
+  20% {
+    transform: translateX(-5px);
+  }
+  40% {
+    transform: translateX(5px);
+  }
+  60% {
+    transform: translateX(-3px);
+  }
+  80% {
+    transform: translateX(3px);
+  }
+}
