@@ -86,8 +86,12 @@ export function Pass() {
     const seen = Number(readString(key) ?? '0');
     const lv = data.level.level;
     if (seen && lv > seen) {
-      haptic('win');
-      setLevelUp({ level: lv, items: data.rewards.filter((r) => r.level > seen && r.level <= lv && (r.track === 'free' || data.elite)) });
+      // only rewards still waiting to be taken (an older level's unclaimed frame too), never ones already claimed
+      const items = data.rewards.filter((r) => r.state === 'ready' && r.level <= lv).sort((a, b) => a.level - b.level);
+      if (items.length) {
+        haptic('win');
+        setLevelUp({ level: lv, items });
+      }
     }
     if (lv !== seen) writeString(key, String(lv));
   }, [data]);
