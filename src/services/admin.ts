@@ -171,6 +171,9 @@ export interface VirtualOverview {
 export const adminVirtual = () => db.rpc<VirtualOverview>('admin_virtual_overview');
 export const adminVirtualSave = (id: string, enabled: boolean | null, level: string | null, reason: string) =>
   db.rpc('admin_virtual_save', { p_id: id, p_enabled: enabled, p_level: level, p_reason: reason });
+/** rename a virtual opponent (3–20 characters, no spaces, not a real player's name) */
+export const adminVirtualRename = (id: string, nickname: string, reason: string) =>
+  db.rpc('admin_virtual_rename', { p_id: id, p_nickname: nickname, p_reason: reason });
 export const adminVirtualSettings = (enabled: boolean | null, autoOff: boolean | null, threshold: number | null, reason: string) =>
   db.rpc('admin_virtual_settings_save', { p_enabled: enabled, p_auto_off: autoOff, p_threshold: threshold, p_reason: reason });
 export const adminVirtualSettings2 = (p: { enabled?: boolean | null; autoOff?: boolean | null; off?: number | null; on?: number | null; pool?: number | null }, reason: string) =>

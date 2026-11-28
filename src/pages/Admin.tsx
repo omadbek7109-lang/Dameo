@@ -1704,6 +1704,19 @@ function VirtualTab() {
               <button className={`btn btn-sm ${p.enabled ? 'btn-ghost' : 'btn-primary'}`} onClick={() => ask(`${p.nickname}: ${p.enabled ? L("o'chirish", 'switch off') : L('yoqish', 'switch on')}`, (r) => A.adminVirtualSave(p.id, !p.enabled, null, r), p.enabled)}>
                 {p.enabled ? L("O'chirish", 'Off') : L('Yoqish', 'On')}
               </button>
+              <button
+                className="btn btn-sm btn-ghost"
+                onClick={() =>
+                  ask(
+                    `${p.nickname}: ${L("nomini o'zgartirish", 'rename')}`,
+                    (r) => A.adminVirtualRename(p.id, (document.getElementById('vadm-rename') as HTMLInputElement | null)?.value.trim() ?? '', r),
+                    false,
+                    <input id="vadm-rename" className="input" defaultValue={p.nickname} maxLength={20} aria-label={L('Yangi nom', 'New name')} />,
+                  )
+                }
+              >
+                {L('Nomi', 'Name')}
+              </button>
             </span>
           </li>
         ))}
